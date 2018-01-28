@@ -1,0 +1,7 @@
+[package]
+name = "dragit"
+version = "0.1.0"
+authors = ["sireliah <sajuukk@gmail.com>"]
+
+[dependencies]
+blurz = "0.2.3"
