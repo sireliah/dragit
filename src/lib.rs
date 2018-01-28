@@ -4,3 +4,7 @@ mod tests {
     fn it_works() {
     }
 }
+
+extern crate dbus;
+
+pub mod bluetooth;

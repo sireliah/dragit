@@ -1,6 +1,8 @@
 extern crate blurz;
 
+use std::process;
 use blurz::{BluetoothAdapter, BluetoothDevice};
+mod bluetooth;
 
 
 fn connect(device: BluetoothDevice) {
@@ -12,15 +14,25 @@ fn connect(device: BluetoothDevice) {
     device.connect().ok();
     let push_func_found: bool = uuids.unwrap().contains(&obex_push_uuid);
     println!("Push file functionality found: {}", push_func_found);
-    println!("Connected: {:?}", device.is_connected());
-
+    match device.is_connected() {
+        Ok(_) => println!("Connected!"),
+        Err(err) => process::exit(1)
+    }
     std::thread::sleep(std::time::Duration::from_millis(1000));
 
     let services = device.get_gatt_services();
     let services_vec: Vec<String> = services.unwrap();
     println!("{:?}", services_vec);
 
-    device.connect_profile(obex_push_uuid);
+    // device.connect_profile(obex_push_uuid);
+
+    let device_id: String = device.get_id();
+
+    let session = bluetooth::create_session(&device_id);
+    println!("{}", session.unwrap());
+
+    // let result = bluetooth::call_obex(&device.get_id());
+    // println!("{}", result.unwrap());
 
 }
 
@@ -29,22 +41,15 @@ fn main() {
     let devices = adapter.get_device_list().unwrap(); 
 
     for device_id in devices {
-        println!("Device: {}", device_id);
+        println!("Device_id: {}", device_id);
 
         let device = BluetoothDevice::new(device_id.clone());
 
-        //let device_name = match device.get_name() {
-        //    Ok(value) => value,
-        //    Err(_) => println!("Failed connecting to device {}.", device_id),
-        //};
+        match device_id.as_ref() {
+            "/org/bluez/hci0/dev_B4_EB_F0_DB_9C_FB" => connect(device),
+            _ => println!("Wrong device {}", device_id)
+        }
 
-        let device_name: String = device.get_name().unwrap();
-
-        println!("{}", device_name);
-        match device_name.as_ref() {
-            "Kocham kota" => connect(device),
-            _ => println!("Wrong device {}", device_name),
-        };
     }
 }
 
