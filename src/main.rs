@@ -24,8 +24,6 @@ fn connect(device: BluetoothDevice) {
     let services_vec: Vec<String> = services.unwrap();
     println!("{:?}", services_vec);
 
-    // device.connect_profile(obex_push_uuid);
-
     let device_id: String = device.get_id();
 
     let session = bluetooth::create_session(&device_id);
@@ -46,7 +44,7 @@ fn main() {
         let device = BluetoothDevice::new(device_id.clone());
 
         match device_id.as_ref() {
-            "/org/bluez/hci0/dev_B4_EB_F0_DB_9C_FB" => connect(device),
+            "/org/bluez/hci0/dev_00_00_00_00_5A_AD" => connect(device),
             _ => println!("Wrong device {}", device_id)
         }
 

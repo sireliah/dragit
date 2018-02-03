@@ -1,31 +1,36 @@
 extern crate dbus;
 use std::error::Error;
 use std::collections::HashMap;
-use self::dbus::{Connection, BusType, Message};
-use self::dbus::arg::{Dict};
+use self::dbus::{Connection, BusType, Message, Path};
+use self::dbus::arg::{Array, Dict, Variant};
 
-static OBEX_SERVICE_NAME: &'static str = "org.bluez.obex";
+static OBEX_BUS: &'static str = "org.bluez.obex";
+static OBEX_PATH: &'static str = "/org/bluez/obex";
 static OBEX_INTERFACE: &'static str = "org.bluez.obex.ObjectPush1";
 static CLIENT_INTERFACE: &'static str = "org.bluez.obex.Client1";
 
 
-pub fn create_session(object_path: &str) -> Result<bool, Box<Error>> {
+pub fn create_session(object_path: &str) -> Result<Path, Box<Error>> {
     let mut map = HashMap::new();
-    map.insert("Target", "opp");
+
+    map.insert("Target", Variant("opp"));
+
+    let args: Dict<&str, Variant<&str>, _> = Dict::new(map);
 
     let c = try!(Connection::get_private(BusType::Session));
-    let m = try!(Message::new_method_call(OBEX_SERVICE_NAME, "/org/bluez/obex", CLIENT_INTERFACE, "CreateSession"))
-        .append2("B4:EB:F0:DB:9C:FB", Dict::new(&map));
+    let m = try!(Message::new_method_call(OBEX_BUS, OBEX_PATH, CLIENT_INTERFACE, "CreateSession"))
+        .append2("00:00:00:00:5A:AD", args);
 
-    try!(c.send_with_reply_and_block(m, 1000));
-    println!("Session established");
-    Ok(true)
+    let r = try!(c.send_with_reply_and_block(m, 1000));
+    let p: Path = r.get1().unwrap();
+    println!("Session established! {}", p);
+    Ok(p)
 }
 
 
 pub fn call_obex(object_path: &str) -> Result<bool, Box<Error>> {
     let c = try!(Connection::get_private(BusType::Session));
-    let m = try!(Message::new_method_call(OBEX_SERVICE_NAME, object_path, OBEX_INTERFACE, "PutFile")).append1("./file.txt");;
+    let m = try!(Message::new_method_call(OBEX_BUS, object_path, OBEX_INTERFACE, "PutFile")).append1("./file.txt");;
 
     try!(c.send_with_reply_and_block(m, 1000));
     //let (data1, data2): (&str, i32) = try!(c.read());
