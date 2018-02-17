@@ -8,3 +8,4 @@ mod tests {
 extern crate dbus;
 
 pub mod bluetooth;
+pub mod transfer_states;

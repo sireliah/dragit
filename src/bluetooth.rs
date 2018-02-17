@@ -1,8 +1,12 @@
 extern crate dbus;
+use std::thread::sleep;
+use std::time::Duration;
 use std::error::Error;
 use std::collections::HashMap;
 use self::dbus::{Connection, BusType, Message, MessageItem, Path, Props};
 use self::dbus::arg::{Dict, Variant};
+
+pub use transfer_states;
 
 static OBEX_BUS: &'static str = "org.bluez.obex";
 static OBEX_PATH: &'static str = "/org/bluez/obex";
@@ -13,13 +17,11 @@ static TRANSFER_INTERFACE: &'static str = "org.bluez.obex.Transfer1";
 
 pub fn open_bus_connection() -> Result<Connection, Box<Error>> {
     let c = try!(Connection::get_private(BusType::Session));
-
     Ok(c)
 }
 
 
 pub fn create_session<'z>(connection: &Connection, object_path: &str) -> Result<Path<'z>, Box<Error>> {
-
     println!("Trying to open session.");
     let device_address: &str = &object_path.replace("/org/bluez/hci0/dev_", "").replace("_", ":");
     let mut map = HashMap::new();
@@ -43,16 +45,24 @@ pub fn send_file<'z>(connection: &Connection, object_path: Path) -> Result<Path<
     let r = try!(connection.send_with_reply_and_block(m, 1000));
     let transfer_path: Path = try!(r.read1());
     println!("Sent something {:?}", transfer_path);
-
     Ok(transfer_path)
 }
 
 
-pub fn check_transfer_status<'z>(connection: &Connection, object_path: Path) -> Result<bool, Box<Error>> {
+pub fn check_transfer_status<'z>(connection: &Connection, object_path: &str) -> Result<String, Box<Error>> {
     let p = Props::new(connection, OBEX_BUS, object_path, TRANSFER_INTERFACE, 1000);
     let status: MessageItem = try!(p.get("Status"));
+    let transfer_status: String = status.inner::<&str>().unwrap().to_string();
+    Ok(transfer_status)
+}
 
-    println!("Status {:?}", status);
 
-    Ok(true)
+pub fn wait_until_transfer_completed(connection: &Connection, transper_path: &Path) {
+    let mut transfer_status: String = check_transfer_status(&connection, transper_path).unwrap();
+
+    while transfer_status != transfer_states::COMPLETE {
+        println!("{}", transfer_status);
+        sleep(Duration::from_millis(500));
+        transfer_status = check_transfer_status(&connection, transper_path).unwrap();
+    }
 }

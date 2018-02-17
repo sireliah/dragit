@@ -4,15 +4,7 @@ use std::process;
 use std::error::Error;
 use blurz::{BluetoothAdapter, BluetoothDevice};
 mod bluetooth;
-
-
-// fn wait_until_transfer_completed(transfer_status: &str) {
-
-//     while transfer_status != "complete" {
-//         std::thread::sleep(std::time::Duration::from_millis(500));
-//         transfer_status: &str = try!(bluetooth::check_transfer_status(&connection, transfer_path));
-//     }
-// }
+pub mod transfer_states;
 
 
 fn connect(device: BluetoothDevice) -> Result<(), Box<Error>>{
@@ -35,17 +27,13 @@ fn connect(device: BluetoothDevice) -> Result<(), Box<Error>>{
 
     let device_id: String = device.get_id();
 
-    // TODO: handle error here
-
     let connection = try!(bluetooth::open_bus_connection());
     let session_path = try!(bluetooth::create_session(&connection, &device_id));
     let transfer_path = try!(bluetooth::send_file(&connection, session_path));
 
-    try!(bluetooth::check_transfer_status(&connection, transfer_path));
-
     std::thread::sleep(std::time::Duration::from_millis(5000));
 
-    // wait_until_transfer_completed(transfer_status);
+    bluetooth::wait_until_transfer_completed(&connection, &transfer_path);
 
     Ok(())
 }
