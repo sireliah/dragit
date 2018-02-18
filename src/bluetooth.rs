@@ -1,8 +1,8 @@
 extern crate dbus;
+use std::collections::HashMap;
+use std::error::Error;
 use std::thread::sleep;
 use std::time::Duration;
-use std::error::Error;
-use std::collections::HashMap;
 use self::dbus::{Connection, BusType, Message, MessageItem, Path, Props};
 use self::dbus::arg::{Dict, Variant};
 
@@ -37,8 +37,9 @@ pub fn create_session<'z>(connection: &Connection, object_path: &str) -> Result<
 }
 
 
-pub fn send_file<'z>(connection: &Connection, object_path: Path) -> Result<Path<'z>, Box<Error>> {
-    let file_path: &str = "/home/sir/Pobrane/ss.pdf";
+pub fn send_file<'z>(connection: &Connection, object_path: Path, file_path: &str) -> Result<Path<'z>, Box<Error>> {
+
+    /// TODO: check if the file exists.
     let m = try!(Message::new_method_call(OBEX_BUS, object_path, OBJECT_PUSH_INTERFACE, "SendFile"))
         .append1(file_path);
     println!("Trying to send file...");
