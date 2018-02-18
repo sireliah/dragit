@@ -21,19 +21,19 @@ fn connect(device: BluetoothDevice) -> Result<(), Box<Error>>{
     }
     std::thread::sleep(std::time::Duration::from_millis(1000));
 
-    // let services = device.get_gatt_services();
-    // let services_vec: Vec<String> = services.unwrap();
-    // println!("{:?}", services_vec);
-
     let device_id: String = device.get_id();
 
-    let connection = try!(bluetooth::open_bus_connection());
-    let session_path = try!(bluetooth::create_session(&connection, &device_id));
-    let transfer_path = try!(bluetooth::send_file(&connection, session_path));
+    let connection = bluetooth::open_bus_connection()?;
+    let session_path = bluetooth::create_session(&connection, &device_id)?;
+
+    let transfer_path = bluetooth::send_file(&connection, session_path)?;
 
     std::thread::sleep(std::time::Duration::from_millis(5000));
 
-    bluetooth::wait_until_transfer_completed(&connection, &transfer_path);
+    match bluetooth::wait_until_transfer_completed(&connection, &transfer_path) {
+        Ok(_) => println!("Ok"),
+        Err(error) => println!("{:?}", error)
+    }
 
     Ok(())
 }
@@ -48,7 +48,10 @@ fn main() {
         let device = BluetoothDevice::new(device_id.clone());
 
         match device_id.as_ref() {
-            "/org/bluez/hci0/dev_00_00_00_00_5A_AD" => connect(device).unwrap(),
+            "/org/bluez/hci0/dev_00_00_00_00_5A_AD" => match connect(device) {
+                Ok(_) => println!("Ok!"),
+                Err(err) => println!("{:?}", err)
+            },
             _ => println!("Wrong device {}", device_id)
         }
 
