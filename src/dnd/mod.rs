@@ -16,14 +16,13 @@ use bluetooth;
 
 
 fn spawn_send_job(file_path: &str) {
-    let short_path = file_path.replace("file://", "");
-    let trimmed_path = short_path.trim().to_string();
-    let new_arc = Arc::new(trimmed_path);
-    let copy = Arc::clone(&new_arc);
+    let trimmed_path = file_path.replace("file://", "").trim().to_string();
+    let path_arc = Arc::new(trimmed_path);
+    let path_clone = Arc::clone(&path_arc);
 
     thread::spawn(move || {
         println!("Spawning thread");
-        bluetooth::transfer_file(&copy);
+        bluetooth::transfer_file(&path_clone);
     });    
 }
 
@@ -39,7 +38,7 @@ pub fn build_window(application: &gtk::Application) -> Result<(), Box<Error>> {
         w.set_text(path);
 
         if let Some(file_path) = Path::new(path).to_str() {
-            spawn_send_job(&file_path)
+            spawn_send_job(&file_path);
         } else {
             println!("Problem with the file path");   
         }

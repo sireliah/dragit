@@ -8,31 +8,33 @@ use std::time::Duration;
 use self::blurz::{BluetoothAdapter, BluetoothDevice};
 use super::obex;
 
+static TARGET_DEVICE: &'static str = "/org/bluez/hci0/dev_00_00_00_00_5A_AD";
+
 
 pub fn transfer_file(file_path: &str) -> Result<(), Box<Error>> {
     println!("Received file to transfer: '{}'", file_path);
     let adapter: BluetoothAdapter = BluetoothAdapter::init().unwrap();
-    let devices = adapter.get_device_list().unwrap();
+    let devices: Vec<String> = adapter.get_device_list().unwrap();
 
-    for device_id in devices {
-        println!("Device_id: {}", device_id);
+    let filtered_devices = devices.iter()
+                                  .filter(|&device| *device == TARGET_DEVICE)
+                                  .cloned()
+                                  .collect::<Vec<String>>();
 
-        let device = BluetoothDevice::new(device_id.clone());
+    let device_id: &str = filtered_devices.iter().nth(0).expect("No device found!");
 
-        match device_id.as_ref() {
-            "/org/bluez/hci0/dev_00_00_00_00_5A_AD" => match connect(&device) {
-                Ok(_) => {
-                    match send_file_to_device(&device, file_path) {
-                        Ok(_) => println!("File sent to the device successfully."),
-                        Err(err) => println!("{:?}", err)
-                    }
-                }
+    let device = BluetoothDevice::new(device_id.to_string());
+
+    match connect(&device) {
+        Ok(_) => {
+            match send_file_to_device(&device, file_path) {
+                Ok(_) => println!("File sent to the device successfully."),
                 Err(err) => println!("{:?}", err)
-            },
-            _ => println!("Wrong device {}", device_id)
+            }
         }
-
+        Err(err) => println!("{:?}", err)
     }
+
     Ok(())
 }
 
