@@ -8,4 +8,6 @@ mod tests {
 extern crate dbus;
 
 pub mod bluetooth;
-pub mod transfer_states;
+pub mod dnd;
+
+pub use self::bluetooth::adapter;

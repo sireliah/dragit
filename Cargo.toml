@@ -6,3 +6,7 @@ authors = ["sireliah <sajuukk@gmail.com>"]
 [dependencies]
 blurz = "0.2.3"
 dbus = "0.6"
+gtk = { git = "https://github.com/gtk-rs/gtk.git" }
+gio = { git = "https://github.com/gtk-rs/gio.git" }
+gdk = { git = "https://github.com/gtk-rs/gdk.git" }
+

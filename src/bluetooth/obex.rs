@@ -1,12 +1,12 @@
 extern crate dbus;
+use self::dbus::arg::{Dict, Variant};
+use self::dbus::{Connection, BusType, Message, MessageItem, Path, Props};
 use std::collections::HashMap;
 use std::error::Error;
 use std::thread::sleep;
 use std::time::Duration;
-use self::dbus::{Connection, BusType, Message, MessageItem, Path, Props};
-use self::dbus::arg::{Dict, Variant};
 
-pub use transfer_states;
+pub use super::transfer_states;
 
 static OBEX_BUS: &'static str = "org.bluez.obex";
 static OBEX_PATH: &'static str = "/org/bluez/obex";
