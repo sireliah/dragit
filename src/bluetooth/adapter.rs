@@ -8,8 +8,6 @@ use std::time::Duration;
 use self::blurz::{BluetoothAdapter, BluetoothDevice};
 use super::obex;
 
-static TARGET_DEVICE: &'static str = "/org/bluez/hci0/dev_00_00_00_00_5A_AD";
-
 
 pub fn transfer_file(file_path: &str) -> Result<(), Box<Error>> {
     println!("Received file to transfer: '{}'", file_path);
@@ -17,12 +15,11 @@ pub fn transfer_file(file_path: &str) -> Result<(), Box<Error>> {
     let devices: Vec<String> = adapter.get_device_list().unwrap();
 
     let filtered_devices = devices.iter()
-                                  .filter(|&device| *device == TARGET_DEVICE)
+                                  .filter(|&device_id| is_ready_to_receive(device_id).unwrap())
                                   .cloned()
                                   .collect::<Vec<String>>();
 
     let device_id: &str = filtered_devices.iter().nth(0).expect("No device found!");
-
     let device = BluetoothDevice::new(device_id.to_string());
 
     match connect(&device) {
@@ -69,4 +66,25 @@ fn send_file_to_device(device: &BluetoothDevice, file_path: &str) -> Result<(), 
         Err(error) => println!("{:?}", error)
     }
     Ok(())
+}
+
+
+fn is_ready_to_receive(device_id: &str) -> Option<bool> {
+    /// Check if the device is paired and currently connected
+    let device = BluetoothDevice::new(device_id.to_string());
+    let is_connected: bool = match device.is_connected() {
+        Ok(value) => value,
+        Err(err) => {
+            println!("{:?}", err);
+            false
+        }
+    };
+    let is_paired: bool = match device.is_paired() {
+        Ok(value) => value,
+        Err(err) => {
+            println!("{:?}", err);
+            false
+        }
+    };
+    Some(is_paired & is_connected)
 }
