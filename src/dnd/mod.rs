@@ -22,7 +22,10 @@ fn spawn_send_job(file_path: &str) {
 
     thread::spawn(move || {
         println!("Spawning thread");
-        bluetooth::transfer_file(&path_clone);
+        match bluetooth::transfer_file(&path_clone) {
+            Ok(value) => (),
+            Err(err) => println!("{}", err)
+        }
     });    
 }
 

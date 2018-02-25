@@ -19,7 +19,10 @@ pub fn transfer_file(file_path: &str) -> Result<(), Box<Error>> {
                                   .cloned()
                                   .collect::<Vec<String>>();
 
-    let device_id: &str = filtered_devices.iter().nth(0).expect("No device found!");
+    let device_id: &str = match filtered_devices.iter().nth(0) {
+        Some(value) => value,
+        None => return Err(From::from("No device found!".to_string()))
+    };
     let device = BluetoothDevice::new(device_id.to_string());
 
     match connect(&device) {
