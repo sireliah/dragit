@@ -36,11 +36,18 @@ pub fn build_window(application: &gtk::Application) -> Result<(), Box<Error>> {
     label.drag_dest_set(gtk::DestDefaults::ALL, &targets, gdk::DragAction::COPY);
 
     label.connect_drag_data_received(|w, _, _, _, s, _, _| {
+        // println!("s: {:?},", &s.get_uris());
 
-        let path: &str = &s.get_text().expect("Couldn't get text");
-        w.set_text(path);
+        let path: String = match s.get_text() {
+            Some(value) => value,
+            None => {
+                s.get_uris().pop().unwrap()
+            }
+        };
 
-        if let Some(file_path) = Path::new(path).to_str() {
+        w.set_text(&path);
+
+        if let Some(file_path) = Path::new(&path).to_str() {
             spawn_send_job(&file_path);
         } else {
             println!("Problem with the file path");   
