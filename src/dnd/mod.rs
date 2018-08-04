@@ -1,4 +1,3 @@
-
 extern crate cairo;
 extern crate gdk;
 extern crate gio;
@@ -6,19 +5,19 @@ extern crate gtk;
 
 use std::env::args;
 use std::error::Error;
-use std::thread;
 use std::sync::Arc;
+use std::thread;
 
-use std::path::Path;
-use self::gtk::{ApplicationWindow, ContainerExt, BoxExt, GtkWindowExt, Inhibit, WidgetExtManual, WidgetExt, LabelExt};
+use self::gdk::ScreenExt;
 use self::gio::{ApplicationExt, ApplicationExtManual};
-
-use self::gdk::{ScreenExt, WindowExt};
-
+use self::gtk::{
+    ApplicationWindow, BoxExt, ContainerExt, GtkWindowExt, Inhibit, LabelExt, WidgetExt,
+    WidgetExtManual,
+};
 use bluetooth;
+use std::path::Path;
 
-
-fn spawn_send_job(file_path: &str) {
+fn spawn_send_job(file_path: &str) -> thread::Result<()> {
     let trimmed_path = file_path.replace("file://", "").trim().to_string();
     let path_arc = Arc::new(trimmed_path);
     let path_clone = Arc::clone(&path_arc);
@@ -27,34 +26,39 @@ fn spawn_send_job(file_path: &str) {
         println!("Spawning thread");
         match bluetooth::transfer_file(&path_clone) {
             Ok(_) => (),
-            Err(err) => println!("{}", err)
+            Err(err) => println!("{}", err),
         }
-    });    
+    }).join()
 }
 
 pub fn build_window(application: &gtk::Application) -> Result<(), Box<Error>> {
-    let targets = vec![gtk::TargetEntry::new("STRING", gtk::TargetFlags::OTHER_APP, 0),
-                       gtk::TargetEntry::new("text/uri-list", gtk::TargetFlags::OTHER_APP, 0)];
+    let targets = vec![
+        gtk::TargetEntry::new("STRING", gtk::TargetFlags::OTHER_APP, 0),
+        gtk::TargetEntry::new("text/uri-list", gtk::TargetFlags::OTHER_APP, 0),
+    ];
     let label = gtk::Label::new("D");
     label.drag_dest_set(gtk::DestDefaults::ALL, &targets, gdk::DragAction::COPY);
 
-    label.connect_drag_data_received(|w, _, _, _, s, _, _| {
-        // println!("s: {:?},", &s.get_uris());
+    label.connect_drag_motion(|w, _, _, _, _| {
+        w.set_text("New file");
+        gtk::Inhibit(false)
+    });
 
+    label.connect_drag_data_received(|w, _, _, _, s, _, _| {
         let path: String = match s.get_text() {
             Some(value) => value,
-            None => {
-                s.get_uris().pop().unwrap()
-            }
+            None => s.get_uris().pop().unwrap(),
         };
 
-        w.set_text(&path);
-
         if let Some(file_path) = Path::new(&path).to_str() {
-            spawn_send_job(&file_path);
+            match spawn_send_job(&file_path) {
+                Ok(_) => println!("Thread finished."),
+                Err(_) => println!("Thread panicked!"),
+            }
         } else {
-            println!("Problem with the file path");   
+            println!("Problem with the file path");
         }
+        w.set_text("D");
     });
 
     // Stack the button and label horizontally
@@ -88,29 +92,25 @@ pub fn build_window(application: &gtk::Application) -> Result<(), Box<Error>> {
     Ok(())
 }
 
-
 fn set_visual(window: &ApplicationWindow, _screen: &Option<gdk::Screen>) {
     if let Some(screen) = window.get_screen() {
         if let Some(visual) = screen.get_rgba_visual() {
-            window.set_visual(&visual); // crucial for transparency
+            window.set_visual(&visual);
         }
     }
 }
 
-
 fn draw(_window: &ApplicationWindow, ctx: &cairo::Context) -> Inhibit {
-    // crucial for transparency
     ctx.set_source_rgba(0.0, 0.0, 0.0, 0.4);
     ctx.set_operator(cairo::enums::Operator::Screen);
     ctx.paint();
     Inhibit(false)
 }
 
-
 pub fn start_window() -> Result<(), Box<Error>> {
-    let application = gtk::Application::new("com.github.drag_and_drop",
-                                            gio::ApplicationFlags::empty())
-                                       .expect("Initialization failed...");
+    let application =
+        gtk::Application::new("drag_and_drop", gio::ApplicationFlags::empty())
+            .expect("Initialization failed...");
 
     application.connect_startup(move |app| {
         build_window(app);
