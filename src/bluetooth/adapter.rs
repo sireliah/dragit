@@ -5,25 +5,28 @@ use std::process;
 use std::thread::sleep;
 use std::time::Duration;
 
-use self::blurz::{BluetoothAdapter, BluetoothDevice};
-use super::obex;
-
+use self::blurz::BluetoothAdapter as Adapter;
+use self::blurz::BluetoothDevice as Device;
+use self::blurz::bluetooth_obex::open_bus_connection;
+use self::blurz::bluetooth_obex::{
+    BluetoothOBEXSession as OBEXSession, BluetoothOBEXTransfer as OBEXTransfer,
+};
 
 pub fn transfer_file(file_path: &str) -> Result<(), Box<Error>> {
     println!("Received file to transfer: '{}'", file_path);
-    let adapter: BluetoothAdapter = BluetoothAdapter::init().unwrap();
+    let adapter: Adapter = Adapter::init().unwrap();
     let devices: Vec<String> = adapter.get_device_list().unwrap();
 
-    let filtered_devices = devices.iter()
-                                  .filter(|&device_id| is_ready_to_receive(device_id).unwrap())
-                                  .cloned()
-                                  .collect::<Vec<String>>();
+    let filtered_devices = devices
+        .iter()
+        .filter(|&device_id| {
+            let device = Device::new(device_id.to_string());
+            device.is_ready_to_receive().unwrap()
+        }).cloned()
+        .collect::<Vec<String>>();
 
-    let device_id: &str = match filtered_devices.iter().nth(0) {
-        Some(value) => value,
-        None => return Err(From::from("No device found!".to_string()))
-    };
-    let device = BluetoothDevice::new(device_id.to_string());
+    let device_id: &str = &filtered_devices[0];
+    let device = Device::new(device_id.to_string());
 
     match connect(&device) {
         Ok(_) => {
@@ -39,7 +42,7 @@ pub fn transfer_file(file_path: &str) -> Result<(), Box<Error>> {
 }
 
 
-fn connect(device: &BluetoothDevice) -> Result<(), Box<Error>> {
+fn connect(device: &Device) -> Result<(), Box<Error>> {
     let obex_push_uuid: String = "00001105-0000-1000-8000-00805f9b34fb".to_string().to_lowercase();
     println!("Device name {:?}, Paired {:?}", device.get_name(), device.is_paired());
     let uuids = device.get_uuids();
@@ -56,36 +59,14 @@ fn connect(device: &BluetoothDevice) -> Result<(), Box<Error>> {
 }
 
 
-fn send_file_to_device(device: &BluetoothDevice, file_path: &str) -> Result<(), Box<Error>> {
-    let device_id: String = device.get_id();
-    let connection = obex::open_bus_connection()?;
-    let session = obex::Session::new(&connection, &device_id)?;
-    let transfer = obex::Transfer::send_file(&session, file_path)?;
+fn send_file_to_device(device: &Device, file_path: &str) -> Result<(), Box<Error>> {
+    let connection = open_bus_connection()?;
+    let session = OBEXSession::new(connection, device)?;
+    let transfer = OBEXTransfer::send_file(&session, file_path)?;
 
     match transfer.wait_until_transfer_completed() {
         Ok(_) => println!("Ok"),
         Err(error) => println!("{:?}", error)
     }
     Ok(())
-}
-
-
-fn is_ready_to_receive(device_id: &str) -> Option<bool> {
-    /// Check if the device is paired and currently connected
-    let device = BluetoothDevice::new(device_id.to_string());
-    let is_connected: bool = match device.is_connected() {
-        Ok(value) => value,
-        Err(err) => {
-            println!("{:?}", err);
-            false
-        }
-    };
-    let is_paired: bool = match device.is_paired() {
-        Ok(value) => value,
-        Err(err) => {
-            println!("{:?}", err);
-            false
-        }
-    };
-    Some(is_paired & is_connected)
 }

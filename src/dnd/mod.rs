@@ -8,14 +8,16 @@ use std::error::Error;
 use std::sync::Arc;
 use std::thread;
 
+use self::gio::prelude::*;
+use self::gtk::prelude::*;
+
+use self::gtk::ApplicationWindow;
+
 use self::gdk::ScreenExt;
-use self::gio::{ApplicationExt, ApplicationExtManual};
-use self::gtk::{
-    ApplicationWindow, BoxExt, ContainerExt, GtkWindowExt, Inhibit, LabelExt, WidgetExt,
-    WidgetExtManual,
-};
+
 use bluetooth;
 use std::path::Path;
+
 
 fn spawn_send_job(file_path: &str) -> thread::Result<()> {
     let trimmed_path = file_path.replace("file://", "").trim().to_string();
@@ -82,11 +84,9 @@ pub fn build_window(application: &gtk::Application) -> Result<(), Box<Error>> {
     window.set_keep_above(true);
     window.show_all();
 
-    let window_clone = window.clone();
-
     // GTK & main window boilerplate
-    window.connect_delete_event(move |_, _| {
-        window_clone.destroy();
+    window.connect_delete_event(move |win, _| {
+        win.destroy();
         Inhibit(false)
     });
     Ok(())
@@ -107,16 +107,18 @@ fn draw(_window: &ApplicationWindow, ctx: &cairo::Context) -> Inhibit {
     Inhibit(false)
 }
 
-pub fn start_window() -> Result<(), Box<Error>> {
+pub fn start_window() {
     let application =
-        gtk::Application::new("drag_and_drop", gio::ApplicationFlags::empty())
+        gtk::Application::new("com.drag_and_drop", gio::ApplicationFlags::empty())
             .expect("Initialization failed...");
 
     application.connect_startup(move |app| {
-        build_window(app);
+        match build_window(app) {
+            Ok(_) => println!("Ok!"),
+            Err(e) => println!("{:?}", e)
+        };
     });
     application.connect_activate(|_| {});
 
     application.run(&args().collect::<Vec<_>>());
-    Ok(())
 }
