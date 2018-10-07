@@ -25,7 +25,9 @@ pub fn transfer_file(file_path: &str) -> Result<(), Box<Error>> {
         }).cloned()
         .collect::<Vec<String>>();
 
-    let device_id: &str = &filtered_devices[0];
+    let device_id: &str = &filtered_devices
+        .get(0)
+        .expect("No devices found!");
     let device = Device::new(device_id.to_string());
 
     match connect(&device) {
