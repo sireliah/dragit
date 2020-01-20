@@ -11,13 +11,17 @@ use std::thread;
 use self::gio::prelude::*;
 use self::gtk::prelude::*;
 
-use self::gtk::ApplicationWindow;
-
 use self::gdk::ScreenExt;
+use self::gtk::ApplicationWindow;
+use self::gtk::GtkWindowExt;
 
-use bluetooth;
+use bluetooth::BluetoothProtocol;
 use std::path::Path;
+use transfer::Protocol;
 
+fn transfer_file(protocol: impl Protocol, path: &str) -> Result<(), Box<dyn Error>> {
+    protocol.transfer_file(path)
+}
 
 fn spawn_send_job(file_path: &str) -> thread::Result<()> {
     let trimmed_path = file_path.replace("file://", "").trim().to_string();
@@ -26,27 +30,31 @@ fn spawn_send_job(file_path: &str) -> thread::Result<()> {
 
     thread::spawn(move || {
         println!("Spawning thread");
-        match bluetooth::transfer_file(&path_clone) {
+        match transfer_file(BluetoothProtocol, &path_clone) {
             Ok(_) => (),
             Err(err) => println!("{}", err),
         }
-    }).join()
+    })
+    .join()
 }
 
-pub fn build_window(application: &gtk::Application) -> Result<(), Box<Error>> {
+pub fn build_window(application: &gtk::Application) -> Result<(), Box<dyn Error>> {
+    let window = gtk::ApplicationWindow::new(application);
     let targets = vec![
         gtk::TargetEntry::new("STRING", gtk::TargetFlags::OTHER_APP, 0),
         gtk::TargetEntry::new("text/uri-list", gtk::TargetFlags::OTHER_APP, 0),
     ];
-    let label = gtk::Label::new("D");
+    let label = gtk::Label::new("[]");
     label.drag_dest_set(gtk::DestDefaults::ALL, &targets, gdk::DragAction::COPY);
 
     label.connect_drag_motion(|w, _, _, _, _| {
-        w.set_text("New file");
+        w.set_text("[FILE]>");
         gtk::Inhibit(false)
     });
 
-    label.connect_drag_data_received(|w, _, _, _, s, _, _| {
+    let weak_window = window.downgrade();
+
+    label.connect_drag_data_received(move |w, _, _, _, s, _, _| {
         let path: String = match s.get_text() {
             Some(value) => value,
             None => s.get_uris().pop().unwrap(),
@@ -60,15 +68,15 @@ pub fn build_window(application: &gtk::Application) -> Result<(), Box<Error>> {
         } else {
             println!("Problem with the file path");
         }
-        w.set_text("D");
+        w.set_text("[]");
+        if let Some(win) = weak_window.upgrade() {
+            win.resize(5, 1000);
+        }
     });
 
     // Stack the button and label horizontally
     let hbox = gtk::Box::new(gtk::Orientation::Horizontal, 0);
     hbox.pack_start(&label, true, true, 0);
-
-    // Finish populating the window and display everything
-    let window = gtk::ApplicationWindow::new(application);
 
     set_visual(&window, &None);
     window.connect_screen_changed(set_visual);
@@ -108,14 +116,13 @@ fn draw(_window: &ApplicationWindow, ctx: &cairo::Context) -> Inhibit {
 }
 
 pub fn start_window() {
-    let application =
-        gtk::Application::new("com.drag_and_drop", gio::ApplicationFlags::empty())
-            .expect("Initialization failed...");
+    let application = gtk::Application::new("com.drag_and_drop", gio::ApplicationFlags::empty())
+        .expect("Initialization failed...");
 
     application.connect_startup(move |app| {
         match build_window(app) {
             Ok(_) => println!("Ok!"),
-            Err(e) => println!("{:?}", e)
+            Err(e) => println!("{:?}", e),
         };
     });
     application.connect_activate(|_| {});
