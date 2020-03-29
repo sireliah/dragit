@@ -12,7 +12,7 @@ use self::blurz::bluetooth_obex::{
 use self::blurz::BluetoothAdapter as Adapter;
 use self::blurz::BluetoothDevice as Device;
 
-use transfer::Protocol;
+use crate::transfer::Protocol;
 
 pub struct BluetoothProtocol;
 

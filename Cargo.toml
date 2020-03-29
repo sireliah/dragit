@@ -1,13 +1,18 @@
 [package]
 name = "dragit"
 version = "0.1.0"
-authors = ["sireliah <sajuukk@gmail.com>"]
+authors = ["sireliah"]
+edition = "2018"
 
 [dependencies]
+async-std = "1.5.0"
 blurz = { git = "https://github.com/szeged/blurz.git" }
-dbus = "0.6"
-glib = "^0"
-gio = "^0"
-gdk = "^0"
-gtk = "^0"
 cairo-rs = "^0"
+dbus = "0.6"
+futures = "0.3.4"
+gdk = "^0"
+gio = "^0"
+glib = "^0"
+gtk = "^0"
+libp2p = "0.16.2"
+rust-crypto = "^0.2"
