@@ -1,4 +1,4 @@
-use async_std::{io, task};
+use async_std::{task};
 use futures::{executor, future, prelude::*};
 use libp2p::{
     build_development_transport,
@@ -94,8 +94,6 @@ async fn execute_swarm(receiver: Receiver<FileToSend>) {
         Swarm::new(transport, behaviour, local_peer_id)
     };
 
-    // let mut stdin = io::BufReader::new(io::stdin()).lines();
-
     Swarm::listen_on(
         &mut swarm,
         "/ip4/0.0.0.0/tcp/0"
@@ -104,21 +102,17 @@ async fn execute_swarm(receiver: Receiver<FileToSend>) {
     )
     .expect("Failed to listen");
     let mut listening = false;
-    task::block_on(future::poll_fn(move |context: &mut Context| {
-        // loop {
-        //     match stdin.try_poll_next_unpin(context) {
-        //         Poll::Ready(Some(line)) => match line {
-        //             Ok(value) => {
-        //                 println!("Value: {:?}", value);
-        //             }
-        //             Err(e) => eprintln!("Line error: {:?}", e),
-        //         },
-        //         Poll::Ready(None) => println!("Stdin closed"),
-        //         Poll::Pending => break,
-        //     }
-        // }
 
+    task::spawn(future::poll_fn(move |context: &mut Context| {
         loop {
+            if let Ok(message) = receiver.try_recv() {
+                match swarm.transfer_behaviour.push_file(message) {
+                    Ok(_) => {}
+                    Err(e) => eprintln!("{:?}", e),
+                }
+            };
+
+            println!("Swarm event");
             match swarm.poll_next_unpin(context) {
                 Poll::Ready(Some(event)) => println!("Some event main: {:?}", event),
                 Poll::Ready(None) => return {
@@ -132,19 +126,6 @@ async fn execute_swarm(receiver: Receiver<FileToSend>) {
                             listening = true;
                         }
                     }
-
-                    match receiver.recv() {
-                        Ok(v) => {
-                            println!("{:?}", v);
-                            match swarm.transfer_behaviour.push_file(v) {
-                                Ok(_) => {}
-                                Err(e) => eprintln!("{:?}", e),
-                            }
-                        }
-                        Err(e) => eprintln!("Failed to get message from channel: {:?}", e),
-                    };
-
-
                     break;
                 }
             }

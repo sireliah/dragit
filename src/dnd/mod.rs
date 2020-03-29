@@ -5,7 +5,7 @@ extern crate gtk;
 
 use std::env::args;
 use std::error::Error;
-use std::sync::{mpsc, Arc, Mutex};
+use std::sync::{mpsc, Arc};
 use std::thread;
 // use std::path::Path;
 

@@ -157,7 +157,6 @@ impl NetworkBehaviour for TransferBehaviour {
                 }
             }
         }
-
         Poll::Pending
     }
 }
