@@ -1,5 +1,5 @@
-use async_std::{task};
-use futures::{executor, future, prelude::*};
+use async_std::task;
+use futures::{channel::mpsc::Receiver, executor, future, pin_mut, prelude::*, stream::StreamExt};
 use libp2p::{
     build_development_transport,
     core::transport::timeout::TransportTimeout,
@@ -11,7 +11,6 @@ use libp2p::{
 
 use std::{
     error::Error,
-    sync::mpsc::Receiver,
     task::{Context, Poll},
     time::Duration,
 };
@@ -28,6 +27,7 @@ pub use protocol::FileToSend;
 #[derive(NetworkBehaviour)]
 struct MyBehaviour {
     mdns: Mdns,
+    // ping: Ping,
     transfer_behaviour: TransferBehaviour,
 }
 
@@ -103,22 +103,34 @@ async fn execute_swarm(receiver: Receiver<FileToSend>) {
     .expect("Failed to listen");
     let mut listening = false;
 
-    task::spawn(future::poll_fn(move |context: &mut Context| {
+    pin_mut!(receiver);
+    task::block_on(future::poll_fn(move |context: &mut Context| {
         loop {
-            if let Ok(message) = receiver.try_recv() {
-                match swarm.transfer_behaviour.push_file(message) {
-                    Ok(_) => {}
-                    Err(e) => eprintln!("{:?}", e),
+            match Receiver::poll_next_unpin(&mut receiver, context) {
+                Poll::Ready(Some(event)) => {
+                    println!("from queue {:?}", event);
+                    match swarm.transfer_behaviour.push_file(event) {
+                        Ok(_) => {}
+                        Err(e) => eprintln!("{:?}", e),
+                    };
+                }
+                Poll::Ready(None) => println!("nothing in queue"),
+                Poll::Pending => {
+                    println!("Not ready");
+                    break;
                 }
             };
+        }
 
-            println!("Swarm event");
+        loop {
             match swarm.poll_next_unpin(context) {
                 Poll::Ready(Some(event)) => println!("Some event main: {:?}", event),
-                Poll::Ready(None) => return {
-                    println!("Ready");
-                    Poll::Ready("aaa")
-                },
+                Poll::Ready(None) => {
+                    return {
+                        println!("Ready");
+                        Poll::Ready("aaa")
+                    }
+                }
                 Poll::Pending => {
                     if !listening {
                         for addr in Swarm::listeners(&swarm) {
@@ -126,11 +138,10 @@ async fn execute_swarm(receiver: Receiver<FileToSend>) {
                             listening = true;
                         }
                     }
+
                     break;
                 }
             }
-
-
         }
         Poll::Pending
     }));
