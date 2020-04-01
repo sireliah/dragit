@@ -3,12 +3,11 @@ extern crate gdk;
 extern crate gio;
 extern crate gtk;
 
-use futures::sink::{Sink, SinkExt};
-use futures::{channel::mpsc, pin_mut};
-use std::cell::RefCell;
+use futures::channel::mpsc::{channel, Sender};
+
 use std::env::args;
 use std::error::Error;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::thread;
 
 use self::gio::prelude::*;
@@ -18,7 +17,6 @@ use self::gdk::ScreenExt;
 use self::gtk::ApplicationWindow;
 use self::gtk::GtkWindowExt;
 
-use crate::bluetooth::BluetoothProtocol;
 use crate::p2p::{run_server, FileToSend};
 use crate::transfer::Protocol;
 
@@ -26,31 +24,33 @@ fn transfer_file(protocol: impl Protocol, path: &str) -> Result<(), Box<dyn Erro
     protocol.transfer_file(path)
 }
 
-fn spawn_send_job(file_path: &str) -> thread::Result<()> {
-    let trimmed_path = file_path.replace("file://", "").trim().to_string();
-    let path_arc = Arc::new(trimmed_path);
-    let path_clone = Arc::clone(&path_arc);
+// TODO: reintegrate Bluetooth
+// fn spawn_send_job(file_path: &str) -> thread::Result<()> {
+//     let trimmed_path = file_path.replace("file://", "").trim().to_string();
+//     let path_arc = Arc::new(trimmed_path);
+//     let path_clone = Arc::clone(&path_arc);
 
-    thread::spawn(move || {
-        println!("Spawning thread");
-        match transfer_file(BluetoothProtocol, &path_clone) {
-            Ok(_) => (),
-            Err(err) => eprintln!("{}", err),
-        }
-    })
-    .join()
-}
+//     thread::spawn(move || {
+//         println!("Spawning thread");
+//         match transfer_file(BluetoothProtocol, &path_clone) {
+//             Ok(_) => (),
+//             Err(err) => eprintln!("{}", err),
+//         }
+//     })
+//     .join()
+// }
 
-fn push_p2p_job(file_path: String, sender: mpsc::Sender<FileToSend>) -> Result<(), Box<dyn Error>> {
-    pin_mut!(sender);
-    let file = FileToSend::new(&file_path)?;
-    sender.as_mut().send(file);
-    Ok(())
-}
+// fn push_p2p_job(file_path: String, sender: Arc<Mutex<Sender<FileToSend>>>) -> Result<(), Box<dyn Error>> {
+//     let file = FileToSend::new(&file_path)?;
+//     let mut sender = sender.lock().unwrap();
+//     sender.send(file);
+
+//     Ok(())
+// }
 
 pub fn build_window(
     application: &gtk::Application,
-    sender: Arc<RefCell<mpsc::Sender<FileToSend>>>,
+    sender: Arc<Mutex<Sender<FileToSend>>>,
 ) -> Result<(), Box<dyn Error>> {
     let window = gtk::ApplicationWindow::new(application);
     let targets = vec![
@@ -66,8 +66,7 @@ pub fn build_window(
     });
 
     let weak_window = window.downgrade();
-    // let sender_copy = Arc::new(sender);
-    // let s = Arc::clone(&sender_copy);
+
     label.connect_drag_data_received(move |w, _, _, _, s, _, _| {
         let path: String = match s.get_text() {
             Some(value) => {
@@ -76,25 +75,17 @@ pub fn build_window(
             }
             None => s.get_uris().pop().unwrap(),
         };
-        println!("{:?}", path);
 
-        let file = FileToSend::new(&path).unwrap();
-        let mut s = sender.borrow_mut();
-        s.try_send(file).expect("Sending failed");
+        let file = match FileToSend::new(&path) {
+            Ok(v) => v,
+            Err(e) => {
+                eprintln!("Failed creating FileToSend {:?}", e);
+                return ();
+            }
+        };
+        let mut sender = sender.lock().unwrap();
+        sender.try_send(file).expect("Sending failed");
 
-        // match push_p2p_job(path, sender_copy) {
-        //     Ok(_) => {}
-        //     Err(e) => eprintln!("{:?}", e),
-        // };
-
-        // if let Some(file_path) = Path::new(&path).to_str() {
-        //     match spawn_send_job(&file_path) {
-        //         Ok(_) => println!("Thread finished."),
-        //         Err(_) => println!("Thread panicked!"),
-        //     }
-        // } else {
-        //     println!("Problem with the file path");
-        // }
         w.set_text("[]");
         if let Some(win) = weak_window.upgrade() {
             win.resize(5, 1000);
@@ -143,7 +134,7 @@ fn draw(_window: &ApplicationWindow, ctx: &cairo::Context) -> Inhibit {
 }
 
 pub fn start_window() {
-    let (sender, receiver) = mpsc::channel::<FileToSend>(1024);
+    let (sender, receiver) = channel::<FileToSend>(1024);
     // pin_mut!(sender);
     // Start the p2p server in separate thread
     thread::spawn(move || match run_server(receiver) {
@@ -154,7 +145,7 @@ pub fn start_window() {
     let application = gtk::Application::new("com.drag_and_drop", gio::ApplicationFlags::empty())
         .expect("Initialization failed...");
     application.connect_startup(move |app| {
-        let sender_c = Arc::new(RefCell::new(sender.clone()));
+        let sender_c = Arc::new(Mutex::new(sender.clone()));
         match build_window(app, sender_c) {
             Ok(_) => println!("Ok!"),
             Err(e) => println!("{:?}", e),

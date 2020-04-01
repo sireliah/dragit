@@ -1,5 +1,5 @@
 use async_std::task;
-use futures::{channel::mpsc::Receiver, executor, future, pin_mut, prelude::*, stream::StreamExt};
+use futures::{channel::mpsc::Receiver, executor, future, pin_mut, stream::StreamExt};
 use libp2p::{
     build_development_transport,
     core::transport::timeout::TransportTimeout,
@@ -27,7 +27,6 @@ pub use protocol::FileToSend;
 #[derive(NetworkBehaviour)]
 struct MyBehaviour {
     mdns: Mdns,
-    // ping: Ping,
     transfer_behaviour: TransferBehaviour,
 }
 
@@ -108,17 +107,13 @@ async fn execute_swarm(receiver: Receiver<FileToSend>) {
         loop {
             match Receiver::poll_next_unpin(&mut receiver, context) {
                 Poll::Ready(Some(event)) => {
-                    println!("from queue {:?}", event);
                     match swarm.transfer_behaviour.push_file(event) {
                         Ok(_) => {}
                         Err(e) => eprintln!("{:?}", e),
                     };
                 }
                 Poll::Ready(None) => println!("nothing in queue"),
-                Poll::Pending => {
-                    println!("Not ready");
-                    break;
-                }
+                Poll::Pending => break,
             };
         }
 
