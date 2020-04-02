@@ -135,7 +135,7 @@ fn draw(_window: &ApplicationWindow, ctx: &cairo::Context) -> Inhibit {
 
 pub fn start_window() {
     let (sender, receiver) = channel::<FileToSend>(1024);
-    // pin_mut!(sender);
+
     // Start the p2p server in separate thread
     thread::spawn(move || match run_server(receiver) {
         Ok(_) => {}

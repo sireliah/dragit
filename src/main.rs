@@ -1,7 +1,4 @@
-mod bluetooth;
-mod dnd;
-mod p2p;
-mod transfer;
+use dragit::dnd;
 
 fn main() {
     dnd::start_window();

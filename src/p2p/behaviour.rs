@@ -5,10 +5,13 @@ use std::task::{Context, Poll};
 use std::thread;
 use std::time::Duration;
 
-use libp2p::core::{ConnectedPoint, Multiaddr, PeerId};
-use libp2p::swarm::{NetworkBehaviour, NetworkBehaviourAction, PollParameters, SubstreamProtocol};
+use libp2p::core::{connection::ConnectionId, Multiaddr, PeerId};
+use libp2p::swarm::{
+    DialPeerCondition, NetworkBehaviour, NetworkBehaviourAction, NotifyHandler, OneShotHandler,
+    OneShotHandlerConfig, PollParameters, SubstreamProtocol,
+};
 
-use crate::p2p::handler::OneShotHandler;
+// use crate::p2p::handler::OneShotHandler;
 use crate::p2p::protocol::{FileToSend, ProtocolEvent, TransferPayload};
 
 pub struct TransferBehaviour {
@@ -40,26 +43,20 @@ impl NetworkBehaviour for TransferBehaviour {
     fn new_handler(&mut self) -> Self::ProtocolsHandler {
         let timeout = Duration::from_secs(120);
         let tp = TransferPayload::default();
+        let handler_config = OneShotHandlerConfig {
+            inactive_timeout: timeout,
+            substream_timeout: timeout,
+        };
         let proto = SubstreamProtocol::new(tp).with_timeout(timeout);
-        Self::ProtocolsHandler::new(proto, timeout, timeout)
+        Self::ProtocolsHandler::new(proto, handler_config)
     }
 
     fn addresses_of_peer(&mut self, _peer_id: &PeerId) -> Vec<Multiaddr> {
         Vec::new()
     }
 
-    fn inject_connected(&mut self, peer: PeerId, point: ConnectedPoint) {
-        println!("Connected to peer: {:?} {:?}", peer, point);
-        match point {
-            ConnectedPoint::Dialer { address: _ } => {
-                println!("I'm a dialer now.");
-            }
-            ConnectedPoint::Listener {
-                local_addr: _,
-                send_back_addr: _,
-            } => println!("I am listener now"),
-        };
-        self.connected_peers.insert(peer);
+    fn inject_connected(&mut self, peer: &PeerId) {
+        self.connected_peers.insert(peer.to_owned());
     }
 
     fn inject_dial_failure(&mut self, peer: &PeerId) {
@@ -67,13 +64,13 @@ impl NetworkBehaviour for TransferBehaviour {
         self.connected_peers.remove(peer);
     }
 
-    fn inject_disconnected(&mut self, peer: &PeerId, _: ConnectedPoint) {
+    fn inject_disconnected(&mut self, peer: &PeerId) {
         println!("Disconnected: {:?}", peer);
         self.connected_peers.remove(peer);
         self.peers.remove(peer);
     }
 
-    fn inject_node_event(&mut self, _peer: PeerId, event: ProtocolEvent) {
+    fn inject_event(&mut self, _peer: PeerId, _: ConnectionId, event: ProtocolEvent) {
         match event {
             ProtocolEvent::Received {
                 name,
@@ -107,7 +104,8 @@ impl NetworkBehaviour for TransferBehaviour {
             match self.payloads.pop() {
                 Some(value) => {
                     let event = TransferPayload::new(value.name, value.path, "".to_string(), 0);
-                    return Poll::Ready(NetworkBehaviourAction::SendEvent {
+                    return Poll::Ready(NetworkBehaviourAction::NotifyHandler {
+                        handler: NotifyHandler::All,
                         peer_id: peer.to_owned(),
                         event,
                     });
@@ -121,6 +119,7 @@ impl NetworkBehaviour for TransferBehaviour {
                     let millis = Duration::from_millis(100);
                     thread::sleep(millis);
                     return Poll::Ready(NetworkBehaviourAction::DialPeer {
+                        condition: DialPeerCondition::NotDialing,
                         peer_id: peer.to_owned(),
                     });
                 } else {
@@ -128,7 +127,8 @@ impl NetworkBehaviour for TransferBehaviour {
                         Some(value) => {
                             let event =
                                 TransferPayload::new(value.name, value.path, "".to_string(), 0);
-                            return Poll::Ready(NetworkBehaviourAction::SendEvent {
+                            return Poll::Ready(NetworkBehaviourAction::NotifyHandler {
+                                handler: NotifyHandler::All,
                                 peer_id: peer.to_owned(),
                                 event,
                             });
