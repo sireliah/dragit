@@ -70,7 +70,8 @@ impl NetworkBehaviour for TransferBehaviour {
         self.peers.remove(peer);
     }
 
-    fn inject_event(&mut self, _peer: PeerId, _: ConnectionId, event: ProtocolEvent) {
+    fn inject_event(&mut self, _peer: PeerId, _c: ConnectionId, event: ProtocolEvent) {
+        println!("Inject event: {:?}", event);
         match event {
             ProtocolEvent::Received {
                 name,
@@ -78,6 +79,7 @@ impl NetworkBehaviour for TransferBehaviour {
                 path,
                 size_bytes,
             } => {
+                println!("Received {:?}", name);
                 let event = TransferPayload::new(name, hash, path, size_bytes);
                 self.events
                     .push(NetworkBehaviourAction::GenerateEvent(event));
@@ -102,10 +104,16 @@ impl NetworkBehaviour for TransferBehaviour {
         if self.connected_peers.len() > 0 {
             let peer = self.connected_peers.iter().nth(0).unwrap();
             match self.payloads.pop() {
-                Some(value) => {
-                    let event = TransferPayload::new(value.name, value.path, "".to_string(), 0);
+                Some(message) => {
+                    let event = TransferPayload {
+                        name: message.name,
+                        path: message.path,
+                        hash: "".to_string(),
+                        size_bytes: 0,
+                    };
+                    println!("Will emit event {:?}", event);
                     return Poll::Ready(NetworkBehaviourAction::NotifyHandler {
-                        handler: NotifyHandler::All,
+                        handler: NotifyHandler::Any,
                         peer_id: peer.to_owned(),
                         event,
                     });
@@ -125,13 +133,13 @@ impl NetworkBehaviour for TransferBehaviour {
                 } else {
                     match self.payloads.pop() {
                         Some(value) => {
-                            let event =
-                                TransferPayload::new(value.name, value.path, "".to_string(), 0);
-                            return Poll::Ready(NetworkBehaviourAction::NotifyHandler {
-                                handler: NotifyHandler::All,
-                                peer_id: peer.to_owned(),
-                                event,
-                            });
+                            // let event =
+                            //     TransferPayload::new(value.name, value.path, "".to_string(), 0);
+                            // return Poll::Ready(NetworkBehaviourAction::NotifyHandler {
+                            //     handler: NotifyHandler::All,
+                            //     peer_id: peer.to_owned(),
+                            //     event,
+                            // });
                         }
                         None => return Poll::Pending,
                     }

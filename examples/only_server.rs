@@ -1,12 +1,9 @@
 use async_std::task;
+use futures::channel::mpsc::channel;
 use futures::{channel::mpsc::Receiver, executor, future, pin_mut, stream::StreamExt};
 use libp2p::{
-    build_development_transport,
-    core::transport::timeout::TransportTimeout,
-    identity,
-    mdns::{Mdns, MdnsEvent},
-    swarm::NetworkBehaviourEventProcess,
-    NetworkBehaviour, PeerId, Swarm,
+    build_development_transport, core::transport::timeout::TransportTimeout, identity, mdns::Mdns,
+    PeerId, Swarm,
 };
 
 use std::{
@@ -15,61 +12,9 @@ use std::{
     time::Duration,
 };
 
-pub mod behaviour;
-pub mod protocol;
-
-use behaviour::TransferBehaviour;
-use protocol::{ProtocolEvent, TransferPayload};
-
-pub use protocol::FileToSend;
-
-#[derive(NetworkBehaviour)]
-pub struct MyBehaviour {
-    pub mdns: Mdns,
-    pub transfer_behaviour: TransferBehaviour,
-}
-
-impl NetworkBehaviourEventProcess<MdnsEvent> for MyBehaviour {
-    fn inject_event(&mut self, event: MdnsEvent) {
-        match event {
-            MdnsEvent::Discovered(list) => {
-                for (peer, _addr) in list {
-                    self.transfer_behaviour.peers.insert(peer);
-                }
-            }
-            MdnsEvent::Expired(list) => {
-                for (peer, _addr) in list {
-                    println!("Expired: {:?}", peer);
-                    self.transfer_behaviour.peers.remove(&peer);
-                }
-            }
-        }
-    }
-}
-
-impl NetworkBehaviourEventProcess<ProtocolEvent> for MyBehaviour {
-    fn inject_event(&mut self, event: ProtocolEvent) {
-        match event {
-            ProtocolEvent::Received {
-                name,
-                path,
-                hash,
-                size_bytes,
-            } => println!("Inject: Data: {} {} {} {}", name, path, hash, size_bytes),
-            ProtocolEvent::Sent => println!("sent!"),
-        }
-    }
-}
-
-impl NetworkBehaviourEventProcess<TransferPayload> for MyBehaviour {
-    fn inject_event(&mut self, event: TransferPayload) {
-        println!("TransferPayload event: {:?}", event);
-        match event.check_file() {
-            Ok(_) => println!("File is correct"),
-            Err(e) => println!("Not correct: {:?}", e),
-        }
-    }
-}
+use dragit::p2p::behaviour::TransferBehaviour;
+use dragit::p2p::protocol::FileToSend;
+use dragit::p2p::MyBehaviour;
 
 async fn execute_swarm(receiver: Receiver<FileToSend>) {
     let local_keys = identity::Keypair::generate_ed25519();
@@ -141,7 +86,9 @@ async fn execute_swarm(receiver: Receiver<FileToSend>) {
     }));
 }
 
-pub fn run_server(receiver: Receiver<FileToSend>) -> Result<(), Box<dyn Error>> {
+fn main() -> Result<(), Box<dyn Error>> {
+    let (_sender, receiver) = channel::<FileToSend>(1024);
+
     let future = execute_swarm(receiver);
     executor::block_on(future);
     Ok(())
