@@ -19,7 +19,7 @@ pub mod behaviour;
 pub mod protocol;
 
 use behaviour::TransferBehaviour;
-use protocol::{ProtocolEvent, TransferPayload};
+use protocol::{ProtocolEvent, TransferOut, TransferPayload};
 
 pub use protocol::FileToSend;
 
@@ -47,20 +47,6 @@ impl NetworkBehaviourEventProcess<MdnsEvent> for MyBehaviour {
     }
 }
 
-impl NetworkBehaviourEventProcess<ProtocolEvent> for MyBehaviour {
-    fn inject_event(&mut self, event: ProtocolEvent) {
-        match event {
-            ProtocolEvent::Received {
-                name,
-                path,
-                hash,
-                size_bytes,
-            } => println!("Inject: Data: {} {} {} {}", name, path, hash, size_bytes),
-            ProtocolEvent::Sent => println!("sent!"),
-        }
-    }
-}
-
 impl NetworkBehaviourEventProcess<TransferPayload> for MyBehaviour {
     fn inject_event(&mut self, event: TransferPayload) {
         println!("TransferPayload event: {:?}", event);
@@ -68,6 +54,12 @@ impl NetworkBehaviourEventProcess<TransferPayload> for MyBehaviour {
             Ok(_) => println!("File is correct"),
             Err(e) => println!("Not correct: {:?}", e),
         }
+    }
+}
+
+impl NetworkBehaviourEventProcess<TransferOut> for MyBehaviour {
+    fn inject_event(&mut self, event: TransferOut) {
+        println!("TransferOut event: {:?}", event);
     }
 }
 

@@ -8,16 +8,15 @@ use std::time::Duration;
 use libp2p::core::{connection::ConnectionId, Multiaddr, PeerId};
 use libp2p::swarm::{
     DialPeerCondition, NetworkBehaviour, NetworkBehaviourAction, NotifyHandler, OneShotHandler,
-    OneShotHandlerConfig, PollParameters, SubstreamProtocol,
+    OneShotHandlerConfig, PollParameters, ProtocolsHandler, SubstreamProtocol,
 };
 
-// use crate::p2p::handler::OneShotHandler;
-use crate::p2p::protocol::{FileToSend, ProtocolEvent, TransferPayload};
+use crate::p2p::protocol::{FileToSend, ProtocolEvent, TransferOut, TransferPayload};
 
 pub struct TransferBehaviour {
     pub peers: HashSet<PeerId>,
     pub connected_peers: HashSet<PeerId>,
-    pub events: Vec<NetworkBehaviourAction<TransferPayload, TransferPayload>>,
+    pub events: Vec<NetworkBehaviourAction<TransferPayload, TransferOut>>,
     payloads: Vec<FileToSend>,
 }
 
@@ -37,7 +36,7 @@ impl TransferBehaviour {
 }
 
 impl NetworkBehaviour for TransferBehaviour {
-    type ProtocolsHandler = OneShotHandler<TransferPayload, TransferPayload, ProtocolEvent>;
+    type ProtocolsHandler = OneShotHandler<TransferPayload, TransferOut, ProtocolEvent>;
     type OutEvent = TransferPayload;
 
     fn new_handler(&mut self) -> Self::ProtocolsHandler {
@@ -70,21 +69,17 @@ impl NetworkBehaviour for TransferBehaviour {
         self.peers.remove(peer);
     }
 
-    fn inject_event(&mut self, _peer: PeerId, _c: ConnectionId, event: ProtocolEvent) {
+    fn inject_event(&mut self, peer: PeerId, c: ConnectionId, event: ProtocolEvent) {
         println!("Inject event: {:?}", event);
         match event {
-            ProtocolEvent::Received {
-                name,
-                hash,
-                path,
-                size_bytes,
-            } => {
-                println!("Received {:?}", name);
-                let event = TransferPayload::new(name, hash, path, size_bytes);
-                self.events
-                    .push(NetworkBehaviourAction::GenerateEvent(event));
+            ProtocolEvent::Received(data) => {
+                self.events.push(NetworkBehaviourAction::NotifyHandler {
+                    handler: NotifyHandler::One(c),
+                    peer_id: peer,
+                    event: data,
+                });
             }
-            ProtocolEvent::Sent => println!("Node Sent event"),
+            ProtocolEvent::Sent => return,
         };
     }
 
@@ -92,26 +87,45 @@ impl NetworkBehaviour for TransferBehaviour {
         &mut self,
         _: &mut Context,
         _: &mut impl PollParameters,
-    ) -> Poll<NetworkBehaviourAction<TransferPayload, TransferPayload>> {
-        match self.events.pop() {
-            Some(e) => {
-                println!("Got event from the queue: {:?}", e);
-                return Poll::Ready(e);
+    ) -> Poll<
+        NetworkBehaviourAction<
+            <Self::ProtocolsHandler as ProtocolsHandler>::InEvent,
+            Self::OutEvent,
+        >,
+    > {
+        if let Some(event) = self.events.pop() {
+            println!("Got event from the queue: {:?}", event);
+            match event {
+                NetworkBehaviourAction::NotifyHandler {
+                    peer_id: _,
+                    handler: _,
+                    event: send_event,
+                } => {
+                    let tp = TransferPayload {
+                        name: send_event.name,
+                        path: send_event.path,
+                        hash: send_event.hash,
+                        size_bytes: send_event.size_bytes,
+                    };
+                    return Poll::Ready(NetworkBehaviourAction::GenerateEvent(tp));
+                }
+                NetworkBehaviourAction::GenerateEvent(e) => {
+                    println!("GenerateEvent event {:?}", e);
+                }
+                _ => {
+                    println!("Another event");
+                }
             }
-            None => {}
         };
 
         if self.connected_peers.len() > 0 {
             let peer = self.connected_peers.iter().nth(0).unwrap();
             match self.payloads.pop() {
                 Some(message) => {
-                    let event = TransferPayload {
+                    let event = TransferOut {
                         name: message.name,
                         path: message.path,
-                        hash: "".to_string(),
-                        size_bytes: 0,
                     };
-                    println!("Will emit event {:?}", event);
                     return Poll::Ready(NetworkBehaviourAction::NotifyHandler {
                         handler: NotifyHandler::Any,
                         peer_id: peer.to_owned(),
@@ -130,19 +144,6 @@ impl NetworkBehaviour for TransferBehaviour {
                         condition: DialPeerCondition::NotDialing,
                         peer_id: peer.to_owned(),
                     });
-                } else {
-                    match self.payloads.pop() {
-                        Some(value) => {
-                            // let event =
-                            //     TransferPayload::new(value.name, value.path, "".to_string(), 0);
-                            // return Poll::Ready(NetworkBehaviourAction::NotifyHandler {
-                            //     handler: NotifyHandler::All,
-                            //     peer_id: peer.to_owned(),
-                            //     event,
-                            // });
-                        }
-                        None => return Poll::Pending,
-                    }
                 }
             }
         }

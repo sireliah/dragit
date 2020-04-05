@@ -43,12 +43,7 @@ impl FileToSend {
 
 #[derive(Clone, Debug)]
 pub enum ProtocolEvent {
-    Received {
-        name: String,
-        path: String,
-        hash: String,
-        size_bytes: usize,
-    },
+    Received(TransferPayload),
     Sent,
 }
 
@@ -58,6 +53,12 @@ pub struct TransferPayload {
     pub path: String,
     pub hash: String,
     pub size_bytes: usize,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct TransferOut {
+    pub name: String,
+    pub path: String,
 }
 
 impl TransferPayload {
@@ -88,6 +89,15 @@ impl TransferPayload {
 }
 
 impl UpgradeInfo for TransferPayload {
+    type Info = &'static str;
+    type InfoIter = iter::Once<Self::Info>;
+
+    fn protocol_info(&self) -> Self::InfoIter {
+        std::iter::once("/transfer/1.0")
+    }
+}
+
+impl UpgradeInfo for TransferOut {
     type Info = &'static str;
     type InfoIter = iter::Once<Self::Info>;
 
@@ -157,12 +167,12 @@ async fn read_socket(
         }
     }
 
-    let event = TransferPayload::new(
-        name.to_string(),
-        hash.to_string(),
-        path.to_string(),
-        counter,
-    );
+    let event = TransferPayload {
+        name: name.to_string(),
+        path: path.to_string(),
+        hash: hash.to_string(),
+        size_bytes: counter,
+    };
 
     println!("Name: {}, Read {:?} bytes", name, counter);
     Ok(event)
@@ -188,7 +198,7 @@ where
     }
 }
 
-impl<TSocket> OutboundUpgrade<TSocket> for TransferPayload
+impl<TSocket> OutboundUpgrade<TSocket> for TransferOut
 where
     TSocket: AsyncRead + AsyncWrite + Send + Unpin + 'static,
 {
@@ -233,11 +243,6 @@ impl From<()> for ProtocolEvent {
 
 impl From<TransferPayload> for ProtocolEvent {
     fn from(transfer: TransferPayload) -> Self {
-        ProtocolEvent::Received {
-            name: transfer.name,
-            path: transfer.path,
-            hash: transfer.hash,
-            size_bytes: transfer.size_bytes,
-        }
+        ProtocolEvent::Received(transfer)
     }
 }
