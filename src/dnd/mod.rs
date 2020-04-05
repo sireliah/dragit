@@ -4,6 +4,7 @@ extern crate gio;
 extern crate gtk;
 
 use futures::channel::mpsc::{channel, Sender};
+use percent_encoding::percent_decode_str;
 
 use std::env::args;
 use std::error::Error;
@@ -70,6 +71,9 @@ pub fn build_window(
     label.connect_drag_data_received(move |w, _, _, _, s, _, _| {
         let path: String = match s.get_text() {
             Some(value) => {
+                let value = percent_decode_str(&value)
+                    .decode_utf8()
+                    .expect("Decoding path failed");
                 let path = value.replace("file://", "");
                 path.trim().to_string()
             }

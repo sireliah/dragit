@@ -19,7 +19,7 @@ pub mod behaviour;
 pub mod protocol;
 
 use behaviour::TransferBehaviour;
-use protocol::{ProtocolEvent, TransferOut, TransferPayload};
+use protocol::{TransferOut, TransferPayload};
 
 pub use protocol::FileToSend;
 
