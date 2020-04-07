@@ -14,16 +14,18 @@ use std::{
 
 use dragit::p2p::behaviour::TransferBehaviour;
 use dragit::p2p::protocol::FileToSend;
-use dragit::p2p::MyBehaviour;
+use dragit::p2p::{MyBehaviour, Peer};
 
 async fn execute_swarm(receiver: Receiver<FileToSend>) {
     let local_keys = identity::Keypair::generate_ed25519();
     let local_peer_id = PeerId::from(local_keys.public());
     println!("I am Peer: {:?}", local_peer_id);
 
+    let (sender, _receiver) = channel::<Vec<Peer>>(1024);
+
     let mut swarm = {
         let mdns = Mdns::new().unwrap();
-        let transfer_behaviour = TransferBehaviour::new();
+        let transfer_behaviour = TransferBehaviour::new(sender);
         let behaviour = MyBehaviour {
             mdns,
             transfer_behaviour,

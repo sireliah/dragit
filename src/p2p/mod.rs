@@ -1,5 +1,9 @@
 use async_std::task;
-use futures::{channel::mpsc::Receiver, executor, future, pin_mut, stream::StreamExt};
+use futures::{
+    channel::mpsc::{Receiver, Sender},
+    executor, future, pin_mut,
+    stream::StreamExt,
+};
 use libp2p::{
     build_development_transport,
     core::transport::timeout::TransportTimeout,
@@ -16,11 +20,13 @@ use std::{
 };
 
 pub mod behaviour;
+pub mod peer;
 pub mod protocol;
 
 use behaviour::TransferBehaviour;
 use protocol::{TransferOut, TransferPayload};
 
+pub use peer::Peer;
 pub use protocol::FileToSend;
 
 #[derive(NetworkBehaviour)]
@@ -33,14 +39,20 @@ impl NetworkBehaviourEventProcess<MdnsEvent> for MyBehaviour {
     fn inject_event(&mut self, event: MdnsEvent) {
         match event {
             MdnsEvent::Discovered(list) => {
-                for (peer, _addr) in list {
-                    self.transfer_behaviour.peers.insert(peer);
+                for (peer_id, _addr) in list {
+                    match self.transfer_behaviour.add_peer(peer_id) {
+                        Ok(_) => (),
+                        Err(e) => eprintln!("{:?}", e),
+                    };
                 }
             }
             MdnsEvent::Expired(list) => {
-                for (peer, _addr) in list {
-                    println!("Expired: {:?}", peer);
-                    self.transfer_behaviour.peers.remove(&peer);
+                for (peer_id, _addr) in list {
+                    println!("Expired: {:?}", peer_id);
+                    match self.transfer_behaviour.remove_peer(&peer_id) {
+                        Ok(_) => (),
+                        Err(e) => eprintln!("{:?}", e),
+                    }
                 }
             }
         }
@@ -63,14 +75,14 @@ impl NetworkBehaviourEventProcess<TransferOut> for MyBehaviour {
     }
 }
 
-async fn execute_swarm(receiver: Receiver<FileToSend>) {
+async fn execute_swarm(sender: Sender<Vec<Peer>>, receiver: Receiver<FileToSend>) {
     let local_keys = identity::Keypair::generate_ed25519();
     let local_peer_id = PeerId::from(local_keys.public());
-    println!("I am Peer: {:?}", local_peer_id);
+    println!("\n I am Peer: {:?} \n\n", local_peer_id);
 
     let mut swarm = {
         let mdns = Mdns::new().unwrap();
-        let transfer_behaviour = TransferBehaviour::new();
+        let transfer_behaviour = TransferBehaviour::new(sender);
         let behaviour = MyBehaviour {
             mdns,
             transfer_behaviour,
@@ -133,8 +145,11 @@ async fn execute_swarm(receiver: Receiver<FileToSend>) {
     }));
 }
 
-pub fn run_server(receiver: Receiver<FileToSend>) -> Result<(), Box<dyn Error>> {
-    let future = execute_swarm(receiver);
+pub fn run_server(
+    sender: Sender<Vec<Peer>>,
+    receiver: Receiver<FileToSend>,
+) -> Result<(), Box<dyn Error>> {
+    let future = execute_swarm(sender, receiver);
     executor::block_on(future);
     Ok(())
 }

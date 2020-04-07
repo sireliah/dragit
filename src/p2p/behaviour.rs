@@ -5,12 +5,15 @@ use std::task::{Context, Poll};
 use std::thread;
 use std::time::Duration;
 
+use futures::channel::mpsc::Sender;
+
 use libp2p::core::{connection::ConnectionId, Multiaddr, PeerId};
 use libp2p::swarm::{
     DialPeerCondition, NetworkBehaviour, NetworkBehaviourAction, NotifyHandler, OneShotHandler,
     OneShotHandlerConfig, PollParameters, ProtocolsHandler, SubstreamProtocol,
 };
 
+use crate::p2p::peer::Peer;
 use crate::p2p::protocol::{FileToSend, ProtocolEvent, TransferOut, TransferPayload};
 
 pub struct TransferBehaviour {
@@ -18,20 +21,50 @@ pub struct TransferBehaviour {
     pub connected_peers: HashSet<PeerId>,
     pub events: Vec<NetworkBehaviourAction<TransferPayload, TransferOut>>,
     payloads: Vec<FileToSend>,
+    sender: Sender<Vec<Peer>>,
 }
 
 impl TransferBehaviour {
-    pub fn new() -> Self {
+    pub fn new(sender: Sender<Vec<Peer>>) -> Self {
         TransferBehaviour {
             peers: HashSet::new(),
             connected_peers: HashSet::new(),
             events: vec![],
             payloads: vec![],
+            sender,
         }
     }
 
     pub fn push_file(&mut self, file: FileToSend) -> Result<(), Box<dyn Error>> {
         Ok(self.payloads.push(file))
+    }
+
+    fn peers_event(&mut self) -> Vec<Peer> {
+        self.connected_peers
+            .iter()
+            .map(|p| Peer {
+                name: p.to_base58(),
+                peer_id: p.to_owned(),
+            })
+            .collect::<Vec<Peer>>()
+    }
+
+    fn notify_frontend(&mut self) -> Result<(), Box<dyn Error>> {
+        let peers = self.peers_event();
+        Ok(self.sender.try_send(peers)?)
+    }
+
+    pub fn add_peer(&mut self, peer_id: PeerId) -> Result<(), Box<dyn Error>> {
+        self.peers.insert(peer_id);
+
+        Ok(self.notify_frontend()?)
+    }
+
+    pub fn remove_peer(&mut self, peer_id: &PeerId) -> Result<(), Box<dyn Error>> {
+        self.peers.remove(peer_id);
+        self.connected_peers.remove(peer_id);
+
+        Ok(self.notify_frontend()?)
     }
 }
 
@@ -65,8 +98,9 @@ impl NetworkBehaviour for TransferBehaviour {
 
     fn inject_disconnected(&mut self, peer: &PeerId) {
         println!("Disconnected: {:?}", peer);
-        self.connected_peers.remove(peer);
-        self.peers.remove(peer);
+        if let Err(e) = self.remove_peer(peer) {
+            eprintln!("{:?}", e);
+        }
     }
 
     fn inject_event(&mut self, peer: PeerId, c: ConnectionId, event: ProtocolEvent) {
@@ -119,7 +153,6 @@ impl NetworkBehaviour for TransferBehaviour {
         };
 
         if self.connected_peers.len() > 0 {
-            let peer = self.connected_peers.iter().nth(0).unwrap();
             match self.payloads.pop() {
                 Some(message) => {
                     let event = TransferOut {
@@ -128,7 +161,7 @@ impl NetworkBehaviour for TransferBehaviour {
                     };
                     return Poll::Ready(NetworkBehaviourAction::NotifyHandler {
                         handler: NotifyHandler::Any,
-                        peer_id: peer.to_owned(),
+                        peer_id: message.peer,
                         event,
                     });
                 }

@@ -3,7 +3,7 @@ use async_std::io as asyncio;
 use crypto::digest::Digest;
 use crypto::sha1::Sha1;
 use futures::prelude::*;
-use libp2p::core::{InboundUpgrade, OutboundUpgrade, UpgradeInfo};
+use libp2p::core::{InboundUpgrade, OutboundUpgrade, PeerId, UpgradeInfo};
 use std::error::Error;
 use std::fs::{metadata, File};
 use std::io::{BufReader, Read};
@@ -17,15 +17,17 @@ const CHUNK_SIZE: usize = 4096;
 pub struct FileToSend {
     pub name: String,
     pub path: String,
+    pub peer: PeerId,
 }
 
 impl FileToSend {
-    pub fn new(path: &str) -> Result<Self, Box<dyn Error>> {
+    pub fn new(path: &str, peer: &PeerId) -> Result<Self, Box<dyn Error>> {
         metadata(path)?;
         let name = Self::extract_name(path)?;
         Ok(FileToSend {
             name,
             path: path.to_string(),
+            peer: peer.to_owned(),
         })
     }
 
