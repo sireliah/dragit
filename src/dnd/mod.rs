@@ -1,27 +1,22 @@
-extern crate cairo;
-extern crate gdk;
-extern crate gio;
-extern crate glib;
-extern crate gtk;
-
-use futures::channel::mpsc::{channel, Receiver, Sender};
-use percent_encoding::percent_decode_str;
-
 use std::env::args;
 use std::error::Error;
 
 use std::sync::{Arc, Mutex};
 use std::thread;
 
-use self::gio::prelude::*;
-use self::gtk::prelude::*;
+use gio::prelude::*;
+use gtk::prelude::*;
+pub mod components;
 
 // use self::gdk::ScreenExt;
-use self::glib::Continue;
-use self::gtk::GtkWindowExt;
-use self::gtk::{timeout_add, ApplicationWindow};
+use glib::Continue;
+use gtk::GtkWindowExt;
+use gtk::{timeout_add, ApplicationWindow};
+
+use futures::channel::mpsc::{channel, Receiver, Sender};
 
 use crate::p2p::{run_server, FileToSend, Peer};
+use components::{remove_expired_boxes, PeerItem};
 // use crate::transfer::Protocol;
 
 // fn transfer_file(protocol: impl Protocol, path: &str) -> Result<(), Box<dyn Error>> {
@@ -52,29 +47,6 @@ use crate::p2p::{run_server, FileToSend, Peer};
 //     Ok(())
 // }
 
-fn clean_filename(path: &str) -> Result<String, Box<dyn Error>> {
-    let value = percent_decode_str(path).decode_utf8()?;
-    let path = value.replace("file://", "");
-    Ok(path.trim().to_string())
-}
-
-fn remove_expired_boxes(hbox_in: &gtk::Box, peers: &Vec<Peer>) {
-    for peer_box in hbox_in.get_children() {
-        if let Some(box_name) = peer_box.get_widget_name() {
-            let box_name = box_name.as_str().to_string();
-            let box_in_peers = peers
-                .iter()
-                .map(|p| p.name.clone())
-                .collect::<Vec<String>>()
-                .contains(&box_name);
-            if !box_in_peers {
-                hbox_in.remove(&peer_box);
-                peer_box.destroy();
-            }
-        }
-    }
-}
-
 fn pool_peers(
     window: &gtk::ApplicationWindow,
     hbox: &gtk::Box,
@@ -83,10 +55,6 @@ fn pool_peers(
 ) {
     let hbox_weak = hbox.downgrade();
     let weak_window = window.downgrade();
-    let targets = vec![
-        gtk::TargetEntry::new("STRING", gtk::TargetFlags::OTHER_APP, 0),
-        gtk::TargetEntry::new("text/uri-list", gtk::TargetFlags::OTHER_APP, 0),
-    ];
 
     timeout_add(100, move || {
         if let Some(hbox_in) = hbox_weak.upgrade() {
@@ -104,54 +72,17 @@ fn pool_peers(
                         }
                     })
                     .collect();
-                println!("{:?}", peers);
-                println!("Children: {:?}", children);
+                println!("Peers: {:?}", peers);
 
-                for p in peers.iter().filter(|p| !children.contains(&p.name)) {
-                    let name: &str = &p.name;
-                    let peer_id = p.peer_id.clone();
+                for peer in peers.iter().filter(|p| !children.contains(&p.name)) {
+                    let name: &str = &peer.name;
                     println!("Peer: {:?}", name);
 
                     let box_row = gtk::Box::new(gtk::Orientation::Vertical, 10);
-                    let new_label = gtk::Label::new(Some(name));
-
-                    box_row.pack_start(&new_label, false, false, 20);
-
-                    let fs = file_sender.clone();
-                    new_label.drag_dest_set(
-                        gtk::DestDefaults::ALL,
-                        &targets,
-                        gdk::DragAction::COPY,
-                    );
-
-                    new_label.connect_drag_data_received(move |_win, _, _, _, s, _, _| {
-                        let path: String = match s.get_text() {
-                            Some(value) => clean_filename(&value).expect("Decoding path failed"),
-                            None => s.get_uris().pop().unwrap().to_string(),
-                        };
-                        let file = match FileToSend::new(&path, &peer_id) {
-                            Ok(v) => v,
-                            Err(e) => {
-                                eprintln!("Failed creating FileToSend {:?}", e);
-                                return ();
-                            }
-                        };
-                        let mut sender = fs.lock().unwrap();
-                        sender.try_send(file).expect("Sending failed");
-                    });
-
-                    new_label.connect_drag_motion(|w, _, _, _, _| {
-                        match w.get_text() {
-                            Some(value) => {
-                                let filename =
-                                    clean_filename(&value).expect("Decoding path failed");
-                                w.set_text(&filename);
-                            }
-                            None => w.set_text("[FILE]>"),
-                        };
-                        gtk::Inhibit(false)
-                    });
-
+                    let item = PeerItem::new(name);
+                    let sender = file_sender.clone();
+                    let item = item.bind_drag_and_drop(peer, sender);
+                    box_row.pack_start(&item.label, false, false, 20);
                     box_row.set_widget_name(name);
                     hbox_in.pack_start(&box_row, false, false, 20);
                 }

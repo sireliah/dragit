@@ -88,11 +88,15 @@ impl NetworkBehaviour for TransferBehaviour {
     }
 
     fn inject_connected(&mut self, peer: &PeerId) {
+        println!("Connected to: {:?}", peer);
         self.connected_peers.insert(peer.to_owned());
+        if let Err(e) = self.notify_frontend() {
+            eprintln!("Failed to notify frontend {:?}", e);
+        };
     }
 
     fn inject_dial_failure(&mut self, peer: &PeerId) {
-        println!("Dial failure {:?}", peer);
+        println!("Dial failure: {:?}", peer);
         self.connected_peers.remove(peer);
     }
 
