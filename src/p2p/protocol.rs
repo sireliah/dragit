@@ -1,15 +1,18 @@
+use std::error::Error;
+use std::fs::{metadata, File};
+use std::io::{BufReader, Read};
+use std::path::Path;
+use std::time::Instant;
+use std::{io, iter, pin::Pin};
+
 use async_std::fs::File as AsyncFile;
 use async_std::io as asyncio;
 use crypto::digest::Digest;
 use crypto::sha1::Sha1;
 use futures::prelude::*;
 use libp2p::core::{InboundUpgrade, OutboundUpgrade, PeerId, UpgradeInfo};
-use std::error::Error;
-use std::fs::{metadata, File};
-use std::io::{BufReader, Read};
-use std::path::Path;
-use std::time::{Instant, SystemTime, UNIX_EPOCH};
-use std::{io, iter, pin::Pin};
+
+use super::util::get_target_path;
 
 const CHUNK_SIZE: usize = 4096;
 
@@ -135,10 +138,8 @@ async fn read_socket(
 
     let (name, hash) = (name.trim(), hash.trim());
     println!("Name: {}, Hash: {}", name, hash);
-    let now = SystemTime::now();
-    let timestamp = now.duration_since(UNIX_EPOCH).expect("Time failed");
 
-    let path = format!("/tmp/files/{}_{}", timestamp.as_secs(), name);
+    let path = get_target_path(&name)?;
 
     let mut file = asyncio::BufWriter::new(AsyncFile::create(&path).await?);
     let mut counter: usize = 0;

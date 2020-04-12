@@ -22,6 +22,7 @@ use std::{
 pub mod behaviour;
 pub mod peer;
 pub mod protocol;
+pub mod util;
 
 use behaviour::TransferBehaviour;
 use protocol::{TransferOut, TransferPayload};
@@ -78,7 +79,7 @@ impl NetworkBehaviourEventProcess<TransferOut> for MyBehaviour {
 async fn execute_swarm(sender: Sender<Vec<Peer>>, receiver: Receiver<FileToSend>) {
     let local_keys = identity::Keypair::generate_ed25519();
     let local_peer_id = PeerId::from(local_keys.public());
-    println!("\n I am Peer: {:?} \n\n", local_peer_id);
+    println!("\nI am Peer: {:?} \n\n", local_peer_id);
 
     let mut swarm = {
         let mdns = Mdns::new().unwrap();
@@ -103,6 +104,7 @@ async fn execute_swarm(sender: Sender<Vec<Peer>>, receiver: Receiver<FileToSend>
             .expect("Failed to parse address"),
     )
     .expect("Failed to listen");
+
     let mut listening = false;
 
     pin_mut!(receiver);

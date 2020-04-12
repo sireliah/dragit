@@ -16,6 +16,8 @@ use libp2p::swarm::{
 use crate::p2p::peer::Peer;
 use crate::p2p::protocol::{FileToSend, ProtocolEvent, TransferOut, TransferPayload};
 
+const TIMEOUT: u64 = 600;
+
 pub struct TransferBehaviour {
     pub peers: HashSet<PeerId>,
     pub connected_peers: HashSet<PeerId>,
@@ -73,7 +75,7 @@ impl NetworkBehaviour for TransferBehaviour {
     type OutEvent = TransferPayload;
 
     fn new_handler(&mut self) -> Self::ProtocolsHandler {
-        let timeout = Duration::from_secs(120);
+        let timeout = Duration::from_secs(TIMEOUT);
         let tp = TransferPayload::default();
         let handler_config = OneShotHandlerConfig {
             inactive_timeout: timeout,
@@ -178,7 +180,7 @@ impl NetworkBehaviour for TransferBehaviour {
                     let millis = Duration::from_millis(100);
                     thread::sleep(millis);
                     return Poll::Ready(NetworkBehaviourAction::DialPeer {
-                        condition: DialPeerCondition::NotDialing,
+                        condition: DialPeerCondition::Disconnected,
                         peer_id: peer.to_owned(),
                     });
                 }

@@ -1,49 +1,26 @@
+use std::io::{Error, ErrorKind};
 
-#![allow(dead_code)]
+use directories::UserDirs;
 
-use futures::prelude::*;
-use libp2p::core::muxing::StreamMuxer;
-use std::{pin::Pin, task::Context, task::Poll};
-
-pub struct CloseMuxer<M> {
-    state: CloseMuxerState<M>,
-}
-
-impl<M> CloseMuxer<M> {
-    pub fn new(m: M) -> CloseMuxer<M> {
-        CloseMuxer {
-            state: CloseMuxerState::Close(m)
-        }
-    }
-}
-
-pub enum CloseMuxerState<M> {
-    Close(M),
-    Done,
-}
-
-impl<M> Future for CloseMuxer<M>
-where
-    M: StreamMuxer,
-    M::Error: From<std::io::Error>
-{
-    type Output = Result<M, M::Error>;
-
-    fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
-        loop {
-            match std::mem::replace(&mut self.state, CloseMuxerState::Done) {
-                CloseMuxerState::Close(muxer) => {
-                    if !muxer.close(cx)?.is_ready() {
-                        self.state = CloseMuxerState::Close(muxer);
-                        return Poll::Pending
-                    }
-                    return Poll::Ready(Ok(muxer))
+pub fn get_target_path(name: &str) -> Result<String, Error> {
+    match UserDirs::new() {
+        Some(dirs) => match dirs.download_dir() {
+            Some(path) => {
+                let p = path.join(name);
+                let result = p.into_os_string().into_string();
+                match result {
+                    Ok(value) => Ok(value),
+                    Err(_) => Err(Error::new(
+                        ErrorKind::InvalidData,
+                        "Could not return Downloads path as string",
+                    )),
                 }
-                CloseMuxerState::Done => panic!()
-            }
-        }
+            },
+            None => Err(Error::new(
+                ErrorKind::NotFound,
+                "Downloads directory could not be found",
+            )),
+        },
+        None => Err(Error::new(ErrorKind::NotFound, "Could not check user dirs")),
     }
-}
-
-impl<M> Unpin for CloseMuxer<M> {
 }
