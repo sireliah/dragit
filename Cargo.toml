@@ -9,6 +9,7 @@ async-std = "1.5.0"
 blurz = { git = "https://github.com/szeged/blurz.git" }
 cairo-rs = "^0"
 dbus = "0.6"
+directories = "2.0.2"
 futures = "0.3.4"
 gdk = "^0"
 gio = "^0"

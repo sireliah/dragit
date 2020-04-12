@@ -5,20 +5,41 @@ use futures::channel::mpsc::Sender;
 
 use gdk::DragAction;
 use gtk::prelude::*;
-use gtk::{DestDefaults, Label, TargetEntry, TargetFlags};
+use gtk::{DestDefaults, Grid, Label, TargetEntry, TargetFlags};
 use percent_encoding::percent_decode_str;
 
 use crate::p2p::{FileToSend, Peer};
 
+pub const STYLE: &str = "
+#drop-label {
+    padding: 10px;
+    margin: 10px;
+    border: 1px;
+    border-style: dashed;
+    border-radius: 15px;
+    background-color: rgb(240, 240, 240); 
+}";
+
 #[derive(Debug)]
 pub struct PeerItem {
+    pub container: gtk::Box,
     pub label: Label,
 }
 
 impl PeerItem {
     pub fn new(name: &str) -> PeerItem {
+        let label = Label::new(Some(name));
+        label.set_widget_name("drop-label");
+        label.set_halign(gtk::Align::Center);
+        label.set_size_request(500, 100);
+
+        let container = gtk::Box::new(gtk::Orientation::Vertical, 10);
+        container.set_widget_name(name);
+        container.pack_start(&label, false, false, 10);
+
         PeerItem {
-            label: Label::new(Some(name)),
+            container,
+            label,
         }
     }
 
@@ -52,7 +73,7 @@ impl PeerItem {
                 sender.try_send(file).expect("Sending failed");
             });
 
-        self.label.connect_drag_motion(|w, _, _, _, _| {
+        self.label.connect_drag_motion(|w, _context, _, _, _| {
             match w.get_text() {
                 Some(value) => {
                     let filename = PeerItem::clean_filename(&value).expect("Decoding path failed");
@@ -73,8 +94,8 @@ impl PeerItem {
     }
 }
 
-pub fn remove_expired_boxes(hbox_in: &gtk::Box, peers: &Vec<Peer>) {
-    for peer_box in hbox_in.get_children() {
+pub fn remove_expired_boxes(grid: &Grid, peers: &Vec<Peer>) {
+    for peer_box in grid.get_children() {
         if let Some(box_name) = peer_box.get_widget_name() {
             let box_name = box_name.as_str().to_string();
             let box_in_peers = peers
@@ -83,7 +104,7 @@ pub fn remove_expired_boxes(hbox_in: &gtk::Box, peers: &Vec<Peer>) {
                 .collect::<Vec<String>>()
                 .contains(&box_name);
             if !box_in_peers {
-                hbox_in.remove(&peer_box);
+                println!("Box name to destroy: {}", box_name);
                 peer_box.destroy();
             }
         }

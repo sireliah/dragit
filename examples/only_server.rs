@@ -19,7 +19,7 @@ use dragit::p2p::{MyBehaviour, Peer};
 async fn execute_swarm(receiver: Receiver<FileToSend>) {
     let local_keys = identity::Keypair::generate_ed25519();
     let local_peer_id = PeerId::from(local_keys.public());
-    println!("I am Peer: {:?}", local_peer_id);
+    println!("\nI am Peer: {:?}\n\n", local_peer_id);
 
     let (sender, _receiver) = channel::<Vec<Peer>>(1024);
 

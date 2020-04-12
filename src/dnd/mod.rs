@@ -8,15 +8,147 @@ use gio::prelude::*;
 use gtk::prelude::*;
 pub mod components;
 
-// use self::gdk::ScreenExt;
 use glib::Continue;
-use gtk::GtkWindowExt;
-use gtk::{timeout_add, ApplicationWindow};
+use gtk::{timeout_add, ApplicationWindow, Grid, GtkWindowExt};
 
 use futures::channel::mpsc::{channel, Receiver, Sender};
 
 use crate::p2p::{run_server, FileToSend, Peer};
-use components::{remove_expired_boxes, PeerItem};
+use components::{remove_expired_boxes, PeerItem, STYLE};
+
+fn pool_peers(
+    window: &ApplicationWindow,
+    hbox: &Grid,
+    file_sender: Arc<Mutex<Sender<FileToSend>>>,
+    peer_receiver: Arc<Mutex<Receiver<Vec<Peer>>>>,
+) {
+    let hbox_weak = hbox.downgrade();
+    let weak_window = window.downgrade();
+
+    timeout_add(200, move || {
+        if let Some(hbox_in) = hbox_weak.upgrade() {
+            if let Ok(p) = peer_receiver.lock().unwrap().try_next() {
+                let peers: Vec<Peer> = match p {
+                    Some(peers) => peers,
+                    None => {
+                        eprintln!("Failed to get peers from the queue");
+                        return Continue(true);
+                    }
+                };
+
+                let children: Vec<String> = hbox_in
+                    .get_children()
+                    .iter()
+                    .map(|c| match c.get_widget_name() {
+                        Some(name) => name.as_str().to_string(),
+                        None => {
+                            eprintln!("Failed to get widget name");
+                            "".to_string()
+                        }
+                    })
+                    .collect();
+
+                let row_num: i32 = children.len() as i32 - 1;
+                for peer in peers.iter().filter(|p| !children.contains(&p.name)) {
+                    let name: &str = &peer.name;
+                    println!("Peer: {:?}", name);
+
+                    let item = PeerItem::new(name);
+                    let sender = file_sender.clone();
+                    let item = item.bind_drag_and_drop(peer, sender);
+
+                    hbox_in.attach(&item.container, 0, row_num, 1, 1);
+                }
+                remove_expired_boxes(&hbox_in, &peers);
+            };
+        }
+
+        if let Some(win) = weak_window.upgrade() {
+            win.show_all();
+        }
+        Continue(true)
+    });
+}
+
+pub fn build_window(
+    application: &gtk::Application,
+    file_sender: Arc<Mutex<Sender<FileToSend>>>,
+    peer_receiver: Arc<Mutex<Receiver<Vec<Peer>>>>,
+) -> Result<(), Box<dyn Error>> {
+    glib::set_program_name(Some("Dragit"));
+    let window = gtk::ApplicationWindow::new(application);
+
+    let hbox = Grid::new();
+    hbox.set_halign(gtk::Align::Center);
+
+    window.add(&hbox);
+
+    pool_peers(&window, &hbox, file_sender, peer_receiver);
+
+    // set_visual(&window, &None);
+    // window.connect_draw(draw);
+
+    window.set_title("Dragit");
+    window.set_default_size(600, 600);
+    window.set_border_width(10);
+
+    // window.set_app_paintable(true);
+    // Those will set transparent bar on left edge of the screen
+    // window.set_default_size(5, 1000);
+    // window.set_decorated(false);
+    // window.set_skip_taskbar_hint(true);
+    // window.move_(0, 0);
+    // window.set_keep_above(true);
+
+    window.show_all();
+
+    window.connect_delete_event(move |win, _| {
+        win.destroy();
+        Inhibit(false)
+    });
+    Ok(())
+}
+
+pub fn start_window() {
+    let (file_sender, file_receiver) = channel::<FileToSend>(1024 * 24);
+    let (peer_sender, peer_receiver) = channel::<Vec<Peer>>(1024 * 24);
+
+    // Start the p2p server in separate thread
+    thread::spawn(move || match run_server(peer_sender, file_receiver) {
+        Ok(_) => {}
+        Err(e) => eprintln!("{:?}", e),
+    });
+
+    let peer_receiver_arc = Arc::new(Mutex::new(peer_receiver));
+
+    let application =
+        gtk::Application::new(Some("com.drag_and_drop"), gio::ApplicationFlags::empty())
+            .expect("Initialization failed...");
+
+    application.connect_startup(move |app| {
+        let provider = gtk::CssProvider::new();
+        provider
+            .load_from_data(STYLE.as_bytes())
+            .expect("Failed to load CSS");
+        gtk::StyleContext::add_provider_for_screen(
+            &gdk::Screen::get_default().expect("Error initializing gtk css provider."),
+            &provider,
+            gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
+        );
+
+        let file_sender_c = Arc::new(Mutex::new(file_sender.clone()));
+        let peer_receiver_c = Arc::clone(&peer_receiver_arc);
+
+        match build_window(app, file_sender_c, peer_receiver_c) {
+            Ok(_) => println!("Ok!"),
+            Err(e) => println!("{:?}", e),
+        };
+    });
+    application.connect_activate(|_| {});
+
+    application.run(&args().collect::<Vec<_>>());
+}
+
 // use crate::transfer::Protocol;
 
 // fn transfer_file(protocol: impl Protocol, path: &str) -> Result<(), Box<dyn Error>> {
@@ -46,133 +178,3 @@ use components::{remove_expired_boxes, PeerItem};
 
 //     Ok(())
 // }
-
-fn pool_peers(
-    window: &gtk::ApplicationWindow,
-    hbox: &gtk::Box,
-    file_sender: Arc<Mutex<Sender<FileToSend>>>,
-    peer_receiver: Arc<Mutex<Receiver<Vec<Peer>>>>,
-) {
-    let hbox_weak = hbox.downgrade();
-    let weak_window = window.downgrade();
-
-    timeout_add(100, move || {
-        if let Some(hbox_in) = hbox_weak.upgrade() {
-            if let Ok(p) = peer_receiver.lock().unwrap().try_next() {
-                let peers: Vec<Peer> = p.unwrap();
-
-                let children: Vec<String> = hbox_in
-                    .get_children()
-                    .iter()
-                    .map(|c| match c.get_widget_name() {
-                        Some(name) => name.as_str().to_string(),
-                        None => {
-                            eprintln!("Failed to get widget name");
-                            "".to_string()
-                        }
-                    })
-                    .collect();
-                println!("Peers: {:?}", peers);
-
-                for peer in peers.iter().filter(|p| !children.contains(&p.name)) {
-                    let name: &str = &peer.name;
-                    println!("Peer: {:?}", name);
-
-                    let box_row = gtk::Box::new(gtk::Orientation::Vertical, 10);
-                    let item = PeerItem::new(name);
-                    let sender = file_sender.clone();
-                    let item = item.bind_drag_and_drop(peer, sender);
-                    box_row.pack_start(&item.label, false, false, 20);
-                    box_row.set_widget_name(name);
-                    hbox_in.pack_start(&box_row, false, false, 20);
-                }
-                remove_expired_boxes(&hbox_in, &peers);
-            };
-        }
-
-        if let Some(win) = weak_window.upgrade() {
-            win.show_all();
-        }
-        Continue(true)
-    });
-}
-
-pub fn build_window(
-    application: &gtk::Application,
-    file_sender: Arc<Mutex<Sender<FileToSend>>>,
-    peer_receiver: Arc<Mutex<Receiver<Vec<Peer>>>>,
-) -> Result<(), Box<dyn Error>> {
-    let window = gtk::ApplicationWindow::new(application);
-
-    let hbox = gtk::Box::new(gtk::Orientation::Vertical, 10);
-    window.add(&hbox);
-
-    pool_peers(&window, &hbox, file_sender, peer_receiver);
-
-    set_visual(&window, &None);
-    window.connect_draw(draw);
-
-    window.set_title("Dragit!");
-    window.set_default_size(600, 600);
-    window.set_app_paintable(true);
-
-    // Those will set transparent bar on left edge of the screen
-    // window.set_default_size(5, 1000);
-    // window.set_decorated(false);
-    // window.set_skip_taskbar_hint(true);
-    // window.move_(0, 0);
-    // window.set_keep_above(true);
-
-    window.show_all();
-
-    window.connect_delete_event(move |win, _| {
-        win.destroy();
-        Inhibit(false)
-    });
-    Ok(())
-}
-
-fn set_visual(window: &ApplicationWindow, _screen: &Option<gdk::Screen>) {
-    if let Some(screen) = window.get_screen() {
-        if let Some(visual) = screen.get_rgba_visual() {
-            window.set_visual(Some(&visual));
-        }
-    }
-}
-
-fn draw(_window: &ApplicationWindow, ctx: &cairo::Context) -> Inhibit {
-    ctx.set_source_rgba(0.0, 0.0, 0.0, 0.9);
-    ctx.set_operator(cairo::Operator::Screen);
-    ctx.paint();
-    Inhibit(false)
-}
-
-pub fn start_window() {
-    let (file_sender, file_receiver) = channel::<FileToSend>(1024 * 24);
-    let (peer_sender, peer_receiver) = channel::<Vec<Peer>>(1024 * 24);
-
-    // Start the p2p server in separate thread
-    thread::spawn(move || match run_server(peer_sender, file_receiver) {
-        Ok(_) => {}
-        Err(e) => eprintln!("{:?}", e),
-    });
-
-    let peer_receiver_arc = Arc::new(Mutex::new(peer_receiver));
-
-    let application =
-        gtk::Application::new(Some("com.drag_and_drop"), gio::ApplicationFlags::empty())
-            .expect("Initialization failed...");
-
-    application.connect_startup(move |app| {
-        let file_sender_c = Arc::new(Mutex::new(file_sender.clone()));
-        let peer_receiver_c = Arc::clone(&peer_receiver_arc);
-
-        match build_window(app, file_sender_c, peer_receiver_c) {
-            Ok(_) => println!("Ok!"),
-            Err(e) => println!("{:?}", e),
-        };
-    });
-    application.connect_activate(|_| {});
-
-    application.run(&args().collect::<Vec<_>>());
-}
