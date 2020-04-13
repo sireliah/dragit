@@ -1,5 +1,13 @@
 use libp2p::PeerId;
 
+#[derive(Debug, Clone)]
+pub enum PeerEvent {
+    PeersUpdated(CurrentPeers),
+    TransferProgress((usize, usize)),
+}
+
+pub type CurrentPeers = Vec<Peer>;
+
 #[derive(Debug, Eq, Hash, Clone)]
 pub struct Peer {
     pub name: String,

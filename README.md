@@ -14,7 +14,7 @@ cargo run
 
 
 ## TODOs:
-- determine the position/orientation of the target device in relation to the sender - left/right, top/bottom
-- use GTK tools to capture drop event on the edge of the screen
-- add support for OS that don't use Bluez
-
+- add progress bar
+- fix concurrent file transfers
+- re-integrate Bluetooth as tab in the GUI
+- check error handling in the protocol

@@ -27,7 +27,7 @@ pub mod util;
 use behaviour::TransferBehaviour;
 use protocol::{TransferOut, TransferPayload};
 
-pub use peer::Peer;
+pub use peer::{CurrentPeers, Peer, PeerEvent};
 pub use protocol::FileToSend;
 
 #[derive(NetworkBehaviour)]
@@ -76,7 +76,7 @@ impl NetworkBehaviourEventProcess<TransferOut> for MyBehaviour {
     }
 }
 
-async fn execute_swarm(sender: Sender<Vec<Peer>>, receiver: Receiver<FileToSend>) {
+async fn execute_swarm(sender: Sender<PeerEvent>, receiver: Receiver<FileToSend>) {
     let local_keys = identity::Keypair::generate_ed25519();
     let local_peer_id = PeerId::from(local_keys.public());
     println!("\nI am Peer: {:?} \n\n", local_peer_id);
@@ -148,7 +148,7 @@ async fn execute_swarm(sender: Sender<Vec<Peer>>, receiver: Receiver<FileToSend>
 }
 
 pub fn run_server(
-    sender: Sender<Vec<Peer>>,
+    sender: Sender<PeerEvent>,
     receiver: Receiver<FileToSend>,
 ) -> Result<(), Box<dyn Error>> {
     let future = execute_swarm(sender, receiver);

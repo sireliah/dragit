@@ -13,7 +13,7 @@ use libp2p::swarm::{
     OneShotHandlerConfig, PollParameters, ProtocolsHandler, SubstreamProtocol,
 };
 
-use crate::p2p::peer::Peer;
+use crate::p2p::peer::{CurrentPeers, Peer, PeerEvent};
 use crate::p2p::protocol::{FileToSend, ProtocolEvent, TransferOut, TransferPayload};
 
 const TIMEOUT: u64 = 600;
@@ -23,11 +23,11 @@ pub struct TransferBehaviour {
     pub connected_peers: HashSet<PeerId>,
     pub events: Vec<NetworkBehaviourAction<TransferPayload, TransferOut>>,
     payloads: Vec<FileToSend>,
-    sender: Sender<Vec<Peer>>,
+    sender: Sender<PeerEvent>,
 }
 
 impl TransferBehaviour {
-    pub fn new(sender: Sender<Vec<Peer>>) -> Self {
+    pub fn new(sender: Sender<PeerEvent>) -> Self {
         TransferBehaviour {
             peers: HashSet::new(),
             connected_peers: HashSet::new(),
@@ -48,12 +48,13 @@ impl TransferBehaviour {
                 name: p.to_base58(),
                 peer_id: p.to_owned(),
             })
-            .collect::<Vec<Peer>>()
+            .collect::<CurrentPeers>()
     }
 
     fn notify_frontend(&mut self) -> Result<(), Box<dyn Error>> {
         let peers = self.peers_event();
-        Ok(self.sender.try_send(peers)?)
+        let event = PeerEvent::PeersUpdated(peers);
+        Ok(self.sender.try_send(event)?)
     }
 
     pub fn add_peer(&mut self, peer_id: PeerId) -> Result<(), Box<dyn Error>> {
@@ -76,7 +77,13 @@ impl NetworkBehaviour for TransferBehaviour {
 
     fn new_handler(&mut self) -> Self::ProtocolsHandler {
         let timeout = Duration::from_secs(TIMEOUT);
-        let tp = TransferPayload::default();
+        let tp = TransferPayload {
+            name: "".to_string(),
+            path: "".to_string(),
+            hash: "".to_string(),
+            size_bytes: 0,
+            sender_queue: self.sender.clone(),
+        };
         let handler_config = OneShotHandlerConfig {
             inactive_timeout: timeout,
             substream_timeout: timeout,
@@ -146,6 +153,7 @@ impl NetworkBehaviour for TransferBehaviour {
                         path: send_event.path,
                         hash: send_event.hash,
                         size_bytes: send_event.size_bytes,
+                        sender_queue: self.sender.clone(),
                     };
                     return Poll::Ready(NetworkBehaviourAction::GenerateEvent(tp));
                 }

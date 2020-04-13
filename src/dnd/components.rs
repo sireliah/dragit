@@ -24,6 +24,7 @@ pub const STYLE: &str = "
 pub struct PeerItem {
     pub container: gtk::Box,
     pub label: Label,
+    pub progress: Option<gtk::ProgressBar>,
 }
 
 impl PeerItem {
@@ -40,6 +41,7 @@ impl PeerItem {
         PeerItem {
             container,
             label,
+            progress: None,
         }
     }
 
@@ -51,6 +53,7 @@ impl PeerItem {
         let peer_id = peer.peer_id.clone();
         let targets = vec![
             TargetEntry::new("STRING", TargetFlags::OTHER_APP, 0),
+            // TODO: use different content type here
             TargetEntry::new("text/uri-list", TargetFlags::OTHER_APP, 0),
         ];
         self.label
@@ -103,10 +106,19 @@ pub fn remove_expired_boxes(grid: &Grid, peers: &Vec<Peer>) {
                 .map(|p| p.name.clone())
                 .collect::<Vec<String>>()
                 .contains(&box_name);
-            if !box_in_peers {
-                println!("Box name to destroy: {}", box_name);
+            if !box_in_peers && box_name != "bar" {
                 peer_box.destroy();
             }
         }
     }
+}
+
+pub fn add_progress_bar(grid: &gtk::Grid) -> gtk::ProgressBar {
+    let progress = gtk::ProgressBar::new();
+    progress.set_text(Some("Receiving"));
+    progress.set_show_text(true);
+    progress.set_hexpand(true);
+    progress.set_widget_name("bar");
+    grid.attach(&progress, 0, 3, 1, 1);
+    progress
 }

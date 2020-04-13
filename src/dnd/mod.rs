@@ -13,23 +13,31 @@ use gtk::{timeout_add, ApplicationWindow, Grid, GtkWindowExt};
 
 use futures::channel::mpsc::{channel, Receiver, Sender};
 
-use crate::p2p::{run_server, FileToSend, Peer};
-use components::{remove_expired_boxes, PeerItem, STYLE};
+use crate::p2p::{run_server, CurrentPeers, FileToSend, PeerEvent};
+use components::{add_progress_bar, remove_expired_boxes, PeerItem, STYLE};
 
 fn pool_peers(
     window: &ApplicationWindow,
-    hbox: &Grid,
+    grid: &Grid,
     file_sender: Arc<Mutex<Sender<FileToSend>>>,
-    peer_receiver: Arc<Mutex<Receiver<Vec<Peer>>>>,
+    peer_receiver: Arc<Mutex<Receiver<PeerEvent>>>,
+    progress_sender: glib::Sender<Option<(usize, usize)>>,
 ) {
-    let hbox_weak = hbox.downgrade();
+    let grid_weak = grid.downgrade();
     let weak_window = window.downgrade();
 
     timeout_add(200, move || {
-        if let Some(hbox_in) = hbox_weak.upgrade() {
+        if let Some(hbox_in) = grid_weak.upgrade() {
             if let Ok(p) = peer_receiver.lock().unwrap().try_next() {
-                let peers: Vec<Peer> = match p {
-                    Some(peers) => peers,
+                let peers: CurrentPeers = match p {
+                    Some(event) => match event {
+                        PeerEvent::PeersUpdated(list) => list,
+                        PeerEvent::TransferProgress((value, total)) => {
+                            println!("Progress: {} {}", value, total);
+                            let _ = progress_sender.send(Some((value, total)));
+                            return Continue(true);
+                        }
+                    },
                     None => {
                         eprintln!("Failed to get peers from the queue");
                         return Continue(true);
@@ -73,32 +81,35 @@ fn pool_peers(
 pub fn build_window(
     application: &gtk::Application,
     file_sender: Arc<Mutex<Sender<FileToSend>>>,
-    peer_receiver: Arc<Mutex<Receiver<Vec<Peer>>>>,
+    peer_receiver: Arc<Mutex<Receiver<PeerEvent>>>,
 ) -> Result<(), Box<dyn Error>> {
     glib::set_program_name(Some("Dragit"));
     let window = gtk::ApplicationWindow::new(application);
 
-    let hbox = Grid::new();
-    hbox.set_halign(gtk::Align::Center);
+    let grid = Grid::new();
+    grid.set_halign(gtk::Align::Center);
 
-    window.add(&hbox);
+    let (progress_sender, rx) =
+        glib::MainContext::channel::<Option<(usize, usize)>>(glib::PRIORITY_DEFAULT);
+    let progress_bar = add_progress_bar(&grid);
 
-    pool_peers(&window, &hbox, file_sender, peer_receiver);
+    window.add(&grid);
 
-    // set_visual(&window, &None);
-    // window.connect_draw(draw);
+    pool_peers(&window, &grid, file_sender, peer_receiver, progress_sender);
+
+    rx.attach(None, move |values| match values {
+        Some((v, t)) => {
+            let size = v as f64;
+            let total = t as f64;
+            progress_bar.set_fraction(size / total);
+            Continue(true)
+        }
+        None => Continue(false),
+    });
 
     window.set_title("Dragit");
     window.set_default_size(600, 600);
     window.set_border_width(10);
-
-    // window.set_app_paintable(true);
-    // Those will set transparent bar on left edge of the screen
-    // window.set_default_size(5, 1000);
-    // window.set_decorated(false);
-    // window.set_skip_taskbar_hint(true);
-    // window.move_(0, 0);
-    // window.set_keep_above(true);
 
     window.show_all();
 
@@ -111,7 +122,7 @@ pub fn build_window(
 
 pub fn start_window() {
     let (file_sender, file_receiver) = channel::<FileToSend>(1024 * 24);
-    let (peer_sender, peer_receiver) = channel::<Vec<Peer>>(1024 * 24);
+    let (peer_sender, peer_receiver) = channel::<PeerEvent>(1024 * 24);
 
     // Start the p2p server in separate thread
     thread::spawn(move || match run_server(peer_sender, file_receiver) {
@@ -122,7 +133,7 @@ pub fn start_window() {
     let peer_receiver_arc = Arc::new(Mutex::new(peer_receiver));
 
     let application =
-        gtk::Application::new(Some("com.drag_and_drop"), gio::ApplicationFlags::empty())
+        gtk::Application::new(Some("com.drag_and_drop2"), gio::ApplicationFlags::empty())
             .expect("Initialization failed...");
 
     application.connect_startup(move |app| {
