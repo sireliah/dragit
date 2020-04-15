@@ -7,12 +7,13 @@ use std::{io, iter, pin::Pin};
 
 use async_std::fs::File as AsyncFile;
 use async_std::io as asyncio;
+use async_std::sync::channel;
 use futures::channel::mpsc::Sender;
 use futures::prelude::*;
 use libp2p::core::{InboundUpgrade, OutboundUpgrade, PeerId, UpgradeInfo};
 
 use super::peer::PeerEvent;
-use super::util::{add_row, check_size, get_target_path, hash_contents};
+use super::util::{add_row, check_size, get_target_path, hash_contents, spawn_file_job};
 
 const CHUNK_SIZE: usize = 4096;
 
@@ -95,25 +96,26 @@ impl TransferPayload {
         &self,
         socket: impl AsyncRead + AsyncWrite + Send + Unpin,
     ) -> Result<TransferPayload, io::Error> {
+        let (sender, receiver) = channel::<Vec<u8>>(1024 * 256);
+
         let mut reader = asyncio::BufReader::new(socket);
         let mut payloads: Vec<u8> = vec![];
 
-        let mut name: String = "".into();
-        let mut hash: String = "".into();
-        let mut size_b: String = "".into();
+        let (mut name, mut hash, mut size) = ("".to_string(), "".to_string(), "".to_string());
         reader.read_line(&mut name).await?;
         reader.read_line(&mut hash).await?;
-        reader.read_line(&mut size_b).await?;
+        reader.read_line(&mut size).await?;
 
         let (name, hash, size) = (
-            name.trim(),
-            hash.trim(),
-            size_b.trim().parse::<usize>().unwrap(),
+            name.trim().to_string(),
+            hash.trim().to_string(),
+            size.trim().parse::<usize>().expect("Failed parsing size"),
         );
+
         println!("Name: {}, Hash: {}, Size: {}", name, hash, size);
 
         let path = get_target_path(&name)?;
-        let mut file = asyncio::BufWriter::new(AsyncFile::create(&path).await?);
+        let job = spawn_file_job(receiver, path.clone());
 
         let mut counter: usize = 0;
         let mut res: usize = 0;
@@ -127,8 +129,7 @@ impl TransferPayload {
                         res += n;
 
                         if payloads.len() >= (CHUNK_SIZE * 256) {
-                            file.write_all(&payloads).await?;
-                            file.flush().await?;
+                            sender.send(payloads.clone()).await;
                             payloads.clear();
 
                             if res >= (CHUNK_SIZE * 256 * 50) {
@@ -137,9 +138,8 @@ impl TransferPayload {
                             }
                         }
                     } else {
-                        file.write_all(&payloads).await?;
-                        file.flush().await?;
-                        payloads.clear();
+                        sender.send(payloads.clone()).await;
+                        sender.send(vec![]).await;
                         self.notify_progress(counter, size);
                         break;
                     }
@@ -148,15 +148,15 @@ impl TransferPayload {
             }
         }
 
+        job.await;
+
         let event = TransferPayload {
-            name: name.to_string(),
+            name,
             path: path.to_string(),
             hash: hash.to_string(),
             size_bytes: counter,
             sender_queue: self.sender_queue.clone(),
         };
-
-        println!("Name: {}, Read {:?} bytes", name, counter);
         Ok(event)
     }
 }
@@ -231,6 +231,8 @@ where
             socket.write(&name).await?;
             socket.write(&checksum).await?;
             socket.write(&size_b).await?;
+
+            // TODO: implement chunking here
             socket.write_all(&contents).await.expect("Writing failed");
             socket.close().await.expect("Failed to close socket");
 

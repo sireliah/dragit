@@ -6,7 +6,35 @@ use crypto::digest::Digest;
 use crypto::sha1::Sha1;
 use directories::UserDirs;
 
+use futures::prelude::*;
+use async_std::fs::File as AsyncFile;
+use async_std::io as asyncio;
+use async_std::sync::Receiver;
+use async_std::task::{self, JoinHandle};
+
+pub fn spawn_file_job(receiver: Receiver<Vec<u8>>, path: String) -> JoinHandle<()> {
+    let child = task::spawn(async move {
+        let mut file = asyncio::BufWriter::new(
+            AsyncFile::create(&path)
+                .await
+                .expect("Creating file failed"),
+        );
+        loop {
+            match receiver.recv().await {
+                Some(payload) if payload == [] => {
+                    file.flush().await.expect("Flushing file failed");
+                    break;
+                }
+                Some(payload) => file.write_all(&payload).await.expect("Writing file failed"),
+                None => (),
+            }
+        }
+    });
+    child
+}
+
 pub fn get_target_path(name: &str) -> Result<String, Error> {
+    // TODO: make this a future
     match UserDirs::new() {
         Some(dirs) => match dirs.download_dir() {
             Some(path) => {
