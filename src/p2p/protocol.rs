@@ -1,6 +1,7 @@
 use std::error::Error;
 use std::fs::{metadata, File};
 use std::io::{BufReader, Read};
+use std::mem;
 use std::path::Path;
 use std::time::Instant;
 use std::{io, iter, pin::Pin};
@@ -8,14 +9,16 @@ use std::{io, iter, pin::Pin};
 use async_std::fs::File as AsyncFile;
 use async_std::io as asyncio;
 use async_std::sync::channel;
+use async_std::task;
 use futures::channel::mpsc::Sender;
 use futures::prelude::*;
 use libp2p::core::{InboundUpgrade, OutboundUpgrade, PeerId, UpgradeInfo};
 
 use super::peer::PeerEvent;
-use super::util::{add_row, check_size, get_target_path, hash_contents, spawn_file_job};
-
-const CHUNK_SIZE: usize = 4096;
+use super::util::{
+    add_row, check_size, get_target_path, hash_contents, spawn_read_file_job, spawn_write_file_job,
+    CHUNK_SIZE,
+};
 
 #[derive(Clone, Debug)]
 pub struct FileToSend {
@@ -73,7 +76,8 @@ impl TransferPayload {
         let mut contents = vec![];
         let mut file = BufReader::new(File::open(&self.path)?);
         file.read_to_end(&mut contents).expect("Cannot read file");
-        let hash_from_disk = hash_contents(&mut contents);
+        let hash_from_disk = hash_contents(&contents);
+        contents.clear();
 
         if hash_from_disk != self.hash {
             Err(io::Error::new(
@@ -85,18 +89,18 @@ impl TransferPayload {
         }
     }
 
-    fn notify_progress(&self, counter: usize, total_size: usize) {
+    async fn notify_progress(&self, counter: usize, total_size: usize) {
         let event = PeerEvent::TransferProgress((counter, total_size));
-        if let Err(e) = self.sender_queue.to_owned().try_send(event) {
+        if let Err(e) = self.sender_queue.to_owned().send(event).await {
             eprintln!("{:?}", e);
-        };
+        }
     }
 
     async fn read_socket(
         &self,
         socket: impl AsyncRead + AsyncWrite + Send + Unpin,
     ) -> Result<TransferPayload, io::Error> {
-        let (sender, receiver) = channel::<Vec<u8>>(1024 * 256);
+        let (sender, receiver) = channel::<Vec<u8>>(CHUNK_SIZE * 8);
 
         let mut reader = asyncio::BufReader::new(socket);
         let mut payloads: Vec<u8> = vec![];
@@ -115,7 +119,7 @@ impl TransferPayload {
         println!("Name: {}, Hash: {}, Size: {}", name, hash, size);
 
         let path = get_target_path(&name)?;
-        let job = spawn_file_job(receiver, path.clone());
+        let job = spawn_write_file_job(receiver, path.clone());
 
         let mut counter: usize = 0;
         let mut res: usize = 0;
@@ -128,19 +132,21 @@ impl TransferPayload {
                         counter += n;
                         res += n;
 
-                        if payloads.len() >= (CHUNK_SIZE * 256) {
+                        if payloads.len() >= (CHUNK_SIZE * 8) {
                             sender.send(payloads.clone()).await;
+                            task::yield_now().await;
+
                             payloads.clear();
 
                             if res >= (CHUNK_SIZE * 256 * 50) {
-                                self.notify_progress(counter, size);
+                                self.notify_progress(counter, size).await;
                                 res = 0;
                             }
                         }
                     } else {
                         sender.send(payloads.clone()).await;
                         sender.send(vec![]).await;
-                        self.notify_progress(counter, size);
+                        self.notify_progress(counter, size).await;
                         break;
                     }
                 }
@@ -167,6 +173,53 @@ impl UpgradeInfo for TransferPayload {
 
     fn protocol_info(&self) -> Self::InfoIter {
         std::iter::once("/transfer/1.0")
+    }
+}
+
+impl TransferOut {
+    async fn write_socket(
+        &self,
+        socket: impl AsyncRead + AsyncWrite + Send + Unpin,
+    ) -> Result<(), io::Error> {
+        let (sender, receiver) = channel::<Vec<u8>>(CHUNK_SIZE * 8);
+
+        let path = self.path.clone();
+
+        println!("Name: {:?}, Path: {:?}", self.name, &path);
+
+        let file = AsyncFile::open(&path).await.expect("File missing");
+        let mut buff = asyncio::BufReader::new(&file);
+        let mut contents = vec![];
+        buff.read_to_end(&mut contents)
+            .await
+            .expect("Cannot read file");
+
+        let hash = hash_contents(&contents);
+        mem::drop(contents);
+        mem::drop(buff);
+        let name = add_row(&self.name);
+        let size = check_size(&path)?;
+        let size_b = add_row(&size);
+        let checksum = add_row(&hash);
+
+        let mut writer = asyncio::BufWriter::new(socket);
+        writer.write(&name).await?;
+        writer.write(&checksum).await?;
+        writer.write(&size_b).await?;
+
+        let job = spawn_read_file_job(sender, path.clone());
+        loop {
+            match receiver.recv().await {
+                Some(payload) if payload.len() > 0 => {
+                    writer.write_all(&payload).await.expect("Writing failed")
+                }
+                Some(_) => break,
+                None => println!("rolling"),
+            }
+        }
+        job.await;
+        writer.close().await.expect("Failed to close socket");
+        Ok(())
     }
 }
 
@@ -207,35 +260,12 @@ where
     type Error = io::Error;
     type Future = Pin<Box<dyn Future<Output = Result<Self::Output, Self::Error>> + Send>>;
 
-    fn upgrade_outbound(self, mut socket: TSocket, _: Self::Info) -> Self::Future {
+    fn upgrade_outbound(self, socket: TSocket, _: Self::Info) -> Self::Future {
         Box::pin(async move {
             println!("Upgrade outbound");
             let start = Instant::now();
-            let path = self.path.clone();
 
-            println!("Name: {:?}, Path: {:?}", self.name, self.path);
-
-            let file = AsyncFile::open(self.path).await.expect("File missing");
-            let mut buff = asyncio::BufReader::new(&file);
-            let mut contents = vec![];
-            buff.read_to_end(&mut contents)
-                .await
-                .expect("Cannot read file");
-
-            let hash = hash_contents(&contents);
-            let name = add_row(&self.name);
-            let size = check_size(&path)?;
-            let size_b = add_row(&size);
-            let checksum = add_row(&hash);
-
-            socket.write(&name).await?;
-            socket.write(&checksum).await?;
-            socket.write(&size_b).await?;
-
-            // TODO: implement chunking here
-            socket.write_all(&contents).await.expect("Writing failed");
-            socket.close().await.expect("Failed to close socket");
-
+            self.write_socket(socket).await.unwrap();
             println!("Finished {:?} ms", start.elapsed().as_millis());
             Ok(())
         })

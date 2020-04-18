@@ -6,13 +6,15 @@ use crypto::digest::Digest;
 use crypto::sha1::Sha1;
 use directories::UserDirs;
 
-use futures::prelude::*;
 use async_std::fs::File as AsyncFile;
 use async_std::io as asyncio;
-use async_std::sync::Receiver;
+use async_std::sync::{Receiver, Sender};
 use async_std::task::{self, JoinHandle};
+use futures::prelude::*;
 
-pub fn spawn_file_job(receiver: Receiver<Vec<u8>>, path: String) -> JoinHandle<()> {
+pub const CHUNK_SIZE: usize = 4096;
+
+pub fn spawn_write_file_job(mut receiver: Receiver<Vec<u8>>, path: String) -> JoinHandle<()> {
     let child = task::spawn(async move {
         let mut file = asyncio::BufWriter::new(
             AsyncFile::create(&path)
@@ -20,13 +22,36 @@ pub fn spawn_file_job(receiver: Receiver<Vec<u8>>, path: String) -> JoinHandle<(
                 .expect("Creating file failed"),
         );
         loop {
-            match receiver.recv().await {
+            match receiver.next().await {
                 Some(payload) if payload == [] => {
                     file.flush().await.expect("Flushing file failed");
                     break;
                 }
                 Some(payload) => file.write_all(&payload).await.expect("Writing file failed"),
                 None => (),
+            }
+        }
+    });
+    child
+}
+
+pub fn spawn_read_file_job(sender: Sender<Vec<u8>>, path: String) -> JoinHandle<()> {
+    let child = task::spawn(async move {
+        let file = AsyncFile::open(&path).await.expect("File missing");
+        let mut reader = asyncio::BufReader::new(&file);
+
+        loop {
+            let mut buff = vec![0u8; CHUNK_SIZE * 32];
+            match reader.read(&mut buff).await {
+                Ok(n) if n > 0 => {
+                    sender.send(buff[..n].to_vec()).await;
+                    task::yield_now().await;
+                }
+                Ok(_) => {
+                    sender.send(vec![]).await;
+                    break;
+                }
+                Err(e) => panic!("Failed reading file {:?}", e),
             }
         }
     });
