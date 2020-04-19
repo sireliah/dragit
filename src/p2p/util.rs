@@ -49,6 +49,7 @@ pub fn spawn_read_file_job(sender: Sender<Vec<u8>>, path: String) -> JoinHandle<
                 }
                 Ok(_) => {
                     sender.send(vec![]).await;
+                    println!("Empty");
                     break;
                 }
                 Err(e) => panic!("Failed reading file {:?}", e),

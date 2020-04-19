@@ -4,6 +4,9 @@ use libp2p::PeerId;
 pub enum PeerEvent {
     PeersUpdated(CurrentPeers),
     TransferProgress((usize, usize)),
+    TransferError,
+    FileCorrect,
+    FileIncorrect,
 }
 
 pub type CurrentPeers = Vec<Peer>;

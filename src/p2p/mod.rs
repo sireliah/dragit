@@ -20,6 +20,7 @@ use std::{
 };
 
 pub mod behaviour;
+pub mod handler;
 pub mod peer;
 pub mod protocol;
 pub mod util;

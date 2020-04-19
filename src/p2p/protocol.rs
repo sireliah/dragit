@@ -1,7 +1,6 @@
 use std::error::Error;
 use std::fs::{metadata, File};
 use std::io::{BufReader, Read};
-use std::mem;
 use std::path::Path;
 use std::time::Instant;
 use std::{io, iter, pin::Pin};
@@ -177,28 +176,31 @@ impl UpgradeInfo for TransferPayload {
 }
 
 impl TransferOut {
+    async fn calculate_hash(&self) -> Result<String, io::Error> {
+        // TODO: implement incremental hashing for bigger files
+        let file = AsyncFile::open(&self.path).await?;
+        let mut buff = asyncio::BufReader::new(&file);
+        let mut contents = vec![];
+        buff.read_to_end(&mut contents).await?;
+
+        Ok(hash_contents(&contents))
+
+        // TODO: check if necessary
+        // mem::drop(contents);
+        // mem::drop(buff);
+    }
+
     async fn write_socket(
         &self,
         socket: impl AsyncRead + AsyncWrite + Send + Unpin,
     ) -> Result<(), io::Error> {
         let (sender, receiver) = channel::<Vec<u8>>(CHUNK_SIZE * 8);
 
-        let path = self.path.clone();
+        println!("Name: {:?}, Path: {:?}", self.name, &self.path);
 
-        println!("Name: {:?}, Path: {:?}", self.name, &path);
-
-        let file = AsyncFile::open(&path).await.expect("File missing");
-        let mut buff = asyncio::BufReader::new(&file);
-        let mut contents = vec![];
-        buff.read_to_end(&mut contents)
-            .await
-            .expect("Cannot read file");
-
-        let hash = hash_contents(&contents);
-        mem::drop(contents);
-        mem::drop(buff);
+        let hash = self.calculate_hash().await?;
         let name = add_row(&self.name);
-        let size = check_size(&path)?;
+        let size = check_size(&self.path)?;
         let size_b = add_row(&size);
         let checksum = add_row(&hash);
 
@@ -207,7 +209,7 @@ impl TransferOut {
         writer.write(&checksum).await?;
         writer.write(&size_b).await?;
 
-        let job = spawn_read_file_job(sender, path.clone());
+        let job = spawn_read_file_job(sender, self.path.clone());
         loop {
             match receiver.recv().await {
                 Some(payload) if payload.len() > 0 => {
@@ -241,14 +243,14 @@ where
     type Future = Pin<Box<dyn Future<Output = Result<Self::Output, Self::Error>> + Send>>;
 
     fn upgrade_inbound(self, socket: TSocket, _: Self::Info) -> Self::Future {
-        Box::pin(async move {
+        async move {
             println!("Upgrade inbound");
             let start = Instant::now();
             let event = self.read_socket(socket).await?;
 
             println!("Finished {:?} ms", start.elapsed().as_millis());
             Ok(event)
-        })
+        }.boxed()
     }
 }
 
@@ -261,14 +263,14 @@ where
     type Future = Pin<Box<dyn Future<Output = Result<Self::Output, Self::Error>> + Send>>;
 
     fn upgrade_outbound(self, socket: TSocket, _: Self::Info) -> Self::Future {
-        Box::pin(async move {
+        async move {
             println!("Upgrade outbound");
             let start = Instant::now();
 
             self.write_socket(socket).await.unwrap();
             println!("Finished {:?} ms", start.elapsed().as_millis());
             Ok(())
-        })
+        }.boxed()
     }
 }
 

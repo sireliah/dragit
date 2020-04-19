@@ -37,6 +37,10 @@ fn pool_peers(
                             println!("Progress: {} {}", value, total);
                             let _ = progress_sender.send(Some((value, total)));
                             return Continue(true);
+                        },
+                        event => {
+                            println!("Other event: {:?}", event);
+                            return Continue(true);
                         }
                     },
                     None => {
