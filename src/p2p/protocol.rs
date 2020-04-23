@@ -117,11 +117,14 @@ impl TransferPayload {
 
         println!("Name: {}, Hash: {}, Size: {}", name, hash, size);
 
+        self.notify_progress(0, size).await;
+
         let path = get_target_path(&name)?;
         let job = spawn_write_file_job(receiver, path.clone());
 
         let mut counter: usize = 0;
         let mut res: usize = 0;
+
         loop {
             let mut buff = vec![0u8; CHUNK_SIZE];
             match reader.read(&mut buff).await {
@@ -137,7 +140,7 @@ impl TransferPayload {
 
                             payloads.clear();
 
-                            if res >= (CHUNK_SIZE * 256 * 50) {
+                            if res >= ((size / 10) + CHUNK_SIZE * 256) {
                                 self.notify_progress(counter, size).await;
                                 res = 0;
                             }
