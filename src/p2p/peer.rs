@@ -5,7 +5,7 @@ pub enum PeerEvent {
     PeersUpdated(CurrentPeers),
     TransferProgress((usize, usize)),
     TransferError,
-    FileCorrect,
+    FileCorrect(String),
     FileIncorrect,
 }
 

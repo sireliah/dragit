@@ -5,7 +5,7 @@ use futures::channel::mpsc::Sender;
 
 use gdk::DragAction;
 use gtk::prelude::*;
-use gtk::{DestDefaults, Grid, Label, TargetEntry, TargetFlags};
+use gtk::{DestDefaults, Label, TargetEntry, TargetFlags};
 use percent_encoding::percent_decode_str;
 
 use crate::p2p::{FileToSend, Peer};
@@ -18,6 +18,20 @@ pub const STYLE: &str = "
     border-style: dashed;
     border-radius: 15px;
     background-color: rgb(240, 240, 240); 
+}
+#notification-alert {
+    padding: 10px;
+    border-radius: 10px;
+    background-color: rgb(100, 100, 100);
+}
+#button-close {
+    padding: 0;
+    margin: 0;
+    border: none;
+    border-radius: 10px;
+}
+#button-close:hover {
+    background-image: none;
 }";
 
 #[derive(Debug)]
@@ -97,8 +111,8 @@ impl PeerItem {
     }
 }
 
-pub fn remove_expired_boxes(grid: &Grid, peers: &Vec<Peer>) {
-    for peer_box in grid.get_children() {
+pub fn remove_expired_boxes(layout: &gtk::Box, peers: &Vec<Peer>) {
+    for peer_box in layout.get_children() {
         if let Some(box_name) = peer_box.get_widget_name() {
             let box_name = box_name.as_str().to_string();
             let box_in_peers = peers
@@ -106,19 +120,121 @@ pub fn remove_expired_boxes(grid: &Grid, peers: &Vec<Peer>) {
                 .map(|p| p.name.clone())
                 .collect::<Vec<String>>()
                 .contains(&box_name);
-            if !box_in_peers && box_name != "bar" {
+            if !box_in_peers && box_name != "notification" {
                 peer_box.destroy();
             }
         }
     }
 }
 
-pub fn add_progress_bar(grid: &gtk::Grid) -> gtk::ProgressBar {
-    let progress = gtk::ProgressBar::new();
-    progress.set_text(Some("Receiving"));
-    progress.set_show_text(true);
-    progress.set_hexpand(true);
-    progress.set_widget_name("bar");
-    grid.attach(&progress, 0, 3, 1, 1);
-    progress
+pub struct ProgressNotification {
+    revealer: gtk::Revealer,
+    pub progress_bar: gtk::ProgressBar,
+}
+
+impl ProgressNotification {
+    pub fn new(overlay: &gtk::Overlay) -> Self {
+        let revealer = gtk::Revealer::new();
+        let ov = gtk::Overlay::new();
+        let progress_bar = gtk::ProgressBar::new();
+        revealer.set_halign(gtk::Align::Center);
+        revealer.set_valign(gtk::Align::Start);
+
+        revealer.set_transition_type(gtk::RevealerTransitionType::SlideDown);
+
+        progress_bar.set_halign(gtk::Align::Center);
+        progress_bar.set_valign(gtk::Align::Start);
+        progress_bar.set_text(Some("Receiving file"));
+        progress_bar.set_show_text(true);
+        progress_bar.set_hexpand(true);
+        progress_bar.set_size_request(500, 50);
+        revealer.set_margin_bottom(30);
+
+        ov.add_overlay(&revealer);
+        revealer.add(&progress_bar);
+        revealer.set_widget_name("notification");
+        overlay.add_overlay(&ov);
+        revealer.set_reveal_child(false);
+
+        ProgressNotification {
+            revealer,
+            progress_bar,
+        }
+    }
+
+    pub fn show(&self) {
+        self.revealer.set_reveal_child(true)
+    }
+
+    pub fn hide(&self) {
+        self.revealer.set_reveal_child(false)
+    }
+}
+
+pub struct AppNotification {
+    revealer: gtk::Revealer,
+    pub overlay: gtk::Overlay,
+    label: Label,
+}
+
+impl AppNotification {
+    pub fn new(main_overlay: &gtk::Overlay) -> Self {
+        let layout = gtk::Box::new(gtk::Orientation::Horizontal, 5);
+        let overlay = gtk::Overlay::new();
+        let revealer = gtk::Revealer::new();
+        let label = Label::new(Some("File correct"));
+        let button_close = gtk::Button::new_from_icon_name(
+            Some("window-close-symbolic"),
+            gtk::IconSize::SmallToolbar,
+        );
+        button_close.set_widget_name("button-close");
+        button_close.set_relief(gtk::ReliefStyle::None);
+
+        let revealer_weak = revealer.downgrade();
+        let main_overlay_weak = main_overlay.downgrade();
+        let overlay_weak = overlay.downgrade();
+
+        button_close.connect_clicked(move |_| {
+            if let (Some(r), Some(mo), Some(o)) = (
+                revealer_weak.upgrade(),
+                main_overlay_weak.upgrade(),
+                overlay_weak.upgrade(),
+            ) {
+                r.set_reveal_child(false);
+                mo.reorder_overlay(&o, 0);
+            }
+        });
+
+        revealer.set_halign(gtk::Align::Center);
+        revealer.set_valign(gtk::Align::Start);
+
+        label.set_halign(gtk::Align::Start);
+        label.set_valign(gtk::Align::Center);
+        label.set_size_request(400, 50);
+
+        revealer.set_transition_type(gtk::RevealerTransitionType::SlideDown);
+
+        layout.pack_start(&label, true, false, 0);
+        layout.pack_start(&button_close, true, false, 0);
+        layout.set_widget_name("notification-alert");
+
+        revealer.add(&layout);
+        overlay.add_overlay(&revealer);
+
+        main_overlay.add_overlay(&overlay);
+        revealer.set_reveal_child(false);
+
+        AppNotification {
+            revealer,
+            overlay,
+            label,
+        }
+    }
+
+    pub fn show(&self, overlay: &gtk::Overlay, text: String) {
+        overlay.reorder_overlay(&self.overlay, 10);
+        let notif_text = format!("File received {}", text);
+        self.label.set_text(&notif_text);
+        self.revealer.set_reveal_child(true);
+    }
 }

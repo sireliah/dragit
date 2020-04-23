@@ -250,7 +250,8 @@ where
 
             println!("Finished {:?} ms", start.elapsed().as_millis());
             Ok(event)
-        }.boxed()
+        }
+        .boxed()
     }
 }
 
@@ -270,7 +271,8 @@ where
             self.write_socket(socket).await.unwrap();
             println!("Finished {:?} ms", start.elapsed().as_millis());
             Ok(())
-        }.boxed()
+        }
+        .boxed()
     }
 }
 

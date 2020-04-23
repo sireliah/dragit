@@ -8,80 +8,16 @@ use std::thread;
 use gio::prelude::*;
 use gtk::prelude::*;
 pub mod components;
+mod events;
 
 use glib::Continue;
-use gtk::{timeout_add, ApplicationWindow, Grid, GtkWindowExt};
+use gtk::GtkWindowExt;
 
 use futures::channel::mpsc::{channel, Receiver, Sender};
 
-use crate::p2p::{run_server, CurrentPeers, FileToSend, PeerEvent};
-use components::{add_progress_bar, remove_expired_boxes, PeerItem, STYLE};
-
-fn pool_peers(
-    window: &ApplicationWindow,
-    grid: &Grid,
-    file_sender: Arc<Mutex<Sender<FileToSend>>>,
-    peer_receiver: Arc<Mutex<Receiver<PeerEvent>>>,
-    progress_sender: glib::Sender<Option<(usize, usize)>>,
-) {
-    let grid_weak = grid.downgrade();
-    let weak_window = window.downgrade();
-
-    timeout_add(200, move || {
-        if let Some(hbox_in) = grid_weak.upgrade() {
-            if let Ok(p) = peer_receiver.lock().unwrap().try_next() {
-                let peers: CurrentPeers = match p {
-                    Some(event) => match event {
-                        PeerEvent::PeersUpdated(list) => list,
-                        PeerEvent::TransferProgress((value, total)) => {
-                            println!("Progress: {} {}", value, total);
-                            let _ = progress_sender.send(Some((value, total)));
-                            return Continue(true);
-                        },
-                        event => {
-                            println!("Other event: {:?}", event);
-                            return Continue(true);
-                        }
-                    },
-                    None => {
-                        eprintln!("Failed to get peers from the queue");
-                        return Continue(true);
-                    }
-                };
-
-                let children: Vec<String> = hbox_in
-                    .get_children()
-                    .iter()
-                    .map(|c| match c.get_widget_name() {
-                        Some(name) => name.as_str().to_string(),
-                        None => {
-                            eprintln!("Failed to get widget name");
-                            "".to_string()
-                        }
-                    })
-                    .collect();
-
-                let row_num: i32 = children.len() as i32 - 1;
-                for peer in peers.iter().filter(|p| !children.contains(&p.name)) {
-                    let name: &str = &peer.name;
-                    println!("Peer: {:?}", name);
-
-                    let item = PeerItem::new(name);
-                    let sender = file_sender.clone();
-                    let item = item.bind_drag_and_drop(peer, sender);
-
-                    hbox_in.attach(&item.container, 0, row_num, 1, 1);
-                }
-                remove_expired_boxes(&hbox_in, &peers);
-            };
-        }
-
-        if let Some(win) = weak_window.upgrade() {
-            win.show_all();
-        }
-        Continue(true)
-    });
-}
+use crate::p2p::{run_server, FileToSend, PeerEvent};
+use components::{AppNotification, ProgressNotification, STYLE};
+use events::pool_peers;
 
 pub fn build_window(
     application: &gtk::Application,
@@ -91,25 +27,36 @@ pub fn build_window(
     glib::set_program_name(Some("Dragit"));
     let window = gtk::ApplicationWindow::new(application);
 
-    let grid = Grid::new();
-    grid.set_halign(gtk::Align::Center);
+    let overlay = gtk::Overlay::new();
+    let layout = gtk::Box::new(gtk::Orientation::Vertical, 20);
+    layout.set_halign(gtk::Align::Center);
+    layout.set_margin_top(50);
 
-    let (progress_sender, rx) =
-        glib::MainContext::channel::<Option<(usize, usize)>>(glib::PRIORITY_DEFAULT);
-    let progress_bar = add_progress_bar(&grid);
+    let (gtk_sender, rx) = glib::MainContext::channel::<PeerEvent>(glib::PRIORITY_DEFAULT);
 
-    window.add(&grid);
+    let app_notification = AppNotification::new(&overlay);
+    let progress = ProgressNotification::new(&overlay);
 
-    pool_peers(&window, &grid, file_sender, peer_receiver, progress_sender);
+    overlay.add_overlay(&layout);
+    window.add(&overlay);
+
+    pool_peers(&window, &layout, file_sender, peer_receiver, gtk_sender);
 
     rx.attach(None, move |values| match values {
-        Some((v, t)) => {
+        PeerEvent::TransferProgress((v, t)) => {
             let size = v as f64;
             let total = t as f64;
-            progress_bar.set_fraction(size / total);
+            progress.show();
+            progress.progress_bar.set_fraction(size / total);
             Continue(true)
         }
-        None => Continue(false),
+        PeerEvent::FileCorrect(file_name) => {
+            progress.progress_bar.set_fraction(0.0);
+            progress.hide();
+            app_notification.show(&overlay, file_name);
+            Continue(true)
+        }
+        _ => Continue(false),
     });
 
     window.set_title("Dragit");

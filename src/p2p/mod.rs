@@ -62,11 +62,24 @@ impl NetworkBehaviourEventProcess<MdnsEvent> for MyBehaviour {
 }
 
 impl NetworkBehaviourEventProcess<TransferPayload> for MyBehaviour {
-    fn inject_event(&mut self, event: TransferPayload) {
+    fn inject_event(&mut self, mut event: TransferPayload) {
         println!("TransferPayload event: {:?}", event);
         match event.check_file() {
-            Ok(_) => println!("File is correct"),
-            Err(e) => println!("Not correct: {:?}", e),
+            Ok(_) => {
+                println!("File correct");
+                if let Err(e) = event
+                    .sender_queue
+                    .try_send(PeerEvent::FileCorrect(event.name))
+                {
+                    eprintln!("{:?}", e);
+                }
+            }
+            Err(e) => {
+                println!("Not correct: {:?}", e);
+                if let Err(e) = event.sender_queue.try_send(PeerEvent::FileIncorrect) {
+                    eprintln!("{:?}", e);
+                }
+            }
         }
     }
 }
