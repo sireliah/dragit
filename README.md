@@ -1,20 +1,31 @@
 # Dragit
 Experimental application for intuitive file sharing between devices.
-In current state it uses Bluetooth OBEX protocol for file transfer throught the D-Bus BlueZ interface, so the app should work on most of the Linux devices.
+
+The network part is using `libp2p` and custom protocol for file transfer.
+The frontend is ran on `gtk-rs`.
 
 ## How to build and run?
-1) Pair your devices (for instance laptop and a smartphone) using bluetooth. Make sure they are connected.
-2) Compile and run program.
+1) Start the application in two terminals (can be on separate machines in the same network)
 ```
-cargo run
+$ cargo run
 ```
-3) Drag some file and drop it to the program window.
-4) On the target device accept the incoming transfer.
-5) Voila, you have transfered a file!
+2) Wait for the two applications discover each other
+3) Drag a file and drop it to the drop zone in one of the windows
+4) File should be saved to your Downloads folder!
 
+## Performance
+Please build in the release mode to get the best performance (roughly 16-20x faster).
+
+```
+$ cargo build --release
+
+$ ./target/release/dragit
+```
+
+## Bluetooth support
+App can use Bluetooth OBEX protocol for file transfer throught the D-Bus BlueZ interface, which should work on most of the Linux devices. (currently disabled)
 
 ## TODOs:
-- add progress bar
-- fix concurrent file transfers
-- re-integrate Bluetooth as tab in the GUI
-- check error handling in the protocol
+- implement error events
+- adjust network timeouts
+- re-enable the Bluetooth
