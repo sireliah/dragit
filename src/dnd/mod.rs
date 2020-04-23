@@ -32,7 +32,7 @@ pub fn build_window(
     layout.set_halign(gtk::Align::Center);
     layout.set_margin_top(50);
 
-    let (gtk_sender, rx) = glib::MainContext::channel::<PeerEvent>(glib::PRIORITY_DEFAULT);
+    let (gtk_sender, gtk_receiver) = glib::MainContext::channel::<PeerEvent>(glib::PRIORITY_DEFAULT);
 
     let app_notification = AppNotification::new(&overlay);
     let progress = ProgressNotification::new(&overlay);
@@ -42,18 +42,25 @@ pub fn build_window(
 
     pool_peers(&window, &layout, file_sender, peer_receiver, gtk_sender);
 
-    rx.attach(None, move |values| match values {
+    gtk_receiver.attach(None, move |values| match values {
         PeerEvent::TransferProgress((v, t)) => {
             let size = v as f64;
             let total = t as f64;
             progress.show();
+            println!("Progress: {}, {}", size, total);
             progress.progress_bar.set_fraction(size / total);
             Continue(true)
         }
         PeerEvent::FileCorrect(file_name) => {
             progress.progress_bar.set_fraction(0.0);
             progress.hide();
-            app_notification.show(&overlay, file_name);
+            app_notification.show_ok(&overlay, file_name);
+            Continue(true)
+        }
+        PeerEvent::FileIncorrect => {
+            progress.progress_bar.set_fraction(0.0);
+            progress.hide();
+            app_notification.show_failure(&overlay);
             Continue(true)
         }
         _ => Continue(false),

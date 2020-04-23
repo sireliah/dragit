@@ -36,6 +36,10 @@ pub fn pool_peers(
                             let _ = progress_sender.send(PeerEvent::FileCorrect(file_name));
                             return Continue(true);
                         }
+                        PeerEvent::FileIncorrect => {
+                            let _ = progress_sender.send(PeerEvent::FileIncorrect);
+                            return Continue(true);
+                        }
                         event => {
                             println!("Other event: {:?}", event);
                             return Continue(true);

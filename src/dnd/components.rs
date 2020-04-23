@@ -231,10 +231,21 @@ impl AppNotification {
         }
     }
 
-    pub fn show(&self, overlay: &gtk::Overlay, text: String) {
+    fn reveal(&self, overlay: &gtk::Overlay) {
         overlay.reorder_overlay(&self.overlay, 10);
+        self.revealer.set_reveal_child(true);
+    }
+
+    pub fn show_ok(&self, overlay: &gtk::Overlay, text: String) {
         let notif_text = format!("File received {}", text);
         self.label.set_text(&notif_text);
-        self.revealer.set_reveal_child(true);
+
+        self.reveal(overlay);
+    }
+
+    pub fn show_failure(&self, overlay: &gtk::Overlay) {
+        self.label.set_text("File is incorrect");
+
+        self.reveal(overlay);
     }
 }
