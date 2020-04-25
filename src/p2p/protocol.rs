@@ -216,14 +216,14 @@ impl TransferOut {
         loop {
             match receiver.recv().await {
                 Some(payload) if payload.len() > 0 => {
-                    writer.write_all(&payload).await.expect("Writing failed")
+                    writer.write_all(&payload).await?
                 }
                 Some(_) => break,
                 None => println!("rolling"),
             }
         }
         job.await;
-        writer.close().await.expect("Failed to close socket");
+        writer.close().await?;
         Ok(())
     }
 }
@@ -249,7 +249,13 @@ where
         async move {
             println!("Upgrade inbound");
             let start = Instant::now();
-            let event = self.read_socket(socket).await?;
+            let event = match self.read_socket(socket).await {
+                Ok(event) => event,
+                Err(e) => {
+                    eprintln!("Error when reading socket: {:?}", e);
+                    return Err(e);
+                }
+            };
 
             println!("Finished {:?} ms", start.elapsed().as_millis());
             Ok(event)
@@ -271,7 +277,7 @@ where
             println!("Upgrade outbound");
             let start = Instant::now();
 
-            self.write_socket(socket).await.unwrap();
+            self.write_socket(socket).await?;
             println!("Finished {:?} ms", start.elapsed().as_millis());
             Ok(())
         }

@@ -27,5 +27,12 @@ App can use Bluetooth OBEX protocol for file transfer throught the D-Bus BlueZ i
 
 ## TODOs:
 - implement error events
+- add logging
+- add sender side progress bar
+- show details about the host
+- add confirmation message ("Do you want to accept this file?")
+- add files queue
+- inject_dial_upgrade_error - but why not inbound?
+
 - adjust network timeouts
 - re-enable the Bluetooth
