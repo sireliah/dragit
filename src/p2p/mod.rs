@@ -1,3 +1,6 @@
+use std::sync::Arc;
+
+use async_std::sync::Mutex;
 use async_std::task;
 use futures::{
     channel::mpsc::{Receiver, Sender},
@@ -20,6 +23,7 @@ use std::{
 };
 
 pub mod behaviour;
+pub mod commands;
 pub mod handler;
 pub mod peer;
 pub mod protocol;
@@ -28,6 +32,7 @@ pub mod util;
 use behaviour::TransferBehaviour;
 use protocol::{TransferOut, TransferPayload};
 
+pub use commands::TransferCommand;
 pub use peer::{CurrentPeers, Peer, PeerEvent};
 pub use protocol::FileToSend;
 
@@ -90,14 +95,21 @@ impl NetworkBehaviourEventProcess<TransferOut> for MyBehaviour {
     }
 }
 
-async fn execute_swarm(sender: Sender<PeerEvent>, receiver: Receiver<FileToSend>) {
+async fn execute_swarm(
+    sender: Sender<PeerEvent>,
+    receiver: Receiver<FileToSend>,
+    command_receiver: Receiver<TransferCommand>,
+) {
     let local_keys = identity::Keypair::generate_ed25519();
     let local_peer_id = PeerId::from(local_keys.public());
     println!("\nI am Peer: {:?} \n\n", local_peer_id);
 
+    let command_rec = Arc::new(Mutex::new(command_receiver));
+    let command_receiver_c = Arc::clone(&command_rec);
+
     let mut swarm = {
         let mdns = Mdns::new().unwrap();
-        let transfer_behaviour = TransferBehaviour::new(sender);
+        let transfer_behaviour = TransferBehaviour::new(sender, command_receiver_c);
         let behaviour = MyBehaviour {
             mdns,
             transfer_behaviour,
@@ -163,9 +175,10 @@ async fn execute_swarm(sender: Sender<PeerEvent>, receiver: Receiver<FileToSend>
 
 pub fn run_server(
     sender: Sender<PeerEvent>,
-    receiver: Receiver<FileToSend>,
+    file_receiver: Receiver<FileToSend>,
+    command_receiver: Receiver<TransferCommand>,
 ) -> Result<(), Box<dyn Error>> {
-    let future = execute_swarm(sender, receiver);
+    let future = execute_swarm(sender, file_receiver, command_receiver);
     executor::block_on(future);
     Ok(())
 }

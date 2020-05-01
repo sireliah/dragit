@@ -15,14 +15,15 @@ use gtk::GtkWindowExt;
 
 use futures::channel::mpsc::{channel, Receiver, Sender};
 
-use crate::p2p::{run_server, FileToSend, PeerEvent};
-use components::{AppNotification, ProgressNotification, STYLE};
+use crate::p2p::{run_server, FileToSend, PeerEvent, TransferCommand};
+use components::{AcceptFileDialog, AppNotification, ProgressNotification, STYLE};
 use events::pool_peers;
 
 pub fn build_window(
     application: &gtk::Application,
     file_sender: Arc<Mutex<Sender<FileToSend>>>,
     peer_receiver: Arc<Mutex<Receiver<PeerEvent>>>,
+    command_sender: Arc<Mutex<Sender<TransferCommand>>>,
 ) -> Result<(), Box<dyn Error>> {
     glib::set_program_name(Some("Dragit"));
     let window = gtk::ApplicationWindow::new(application);
@@ -32,7 +33,8 @@ pub fn build_window(
     layout.set_halign(gtk::Align::Center);
     layout.set_margin_top(50);
 
-    let (gtk_sender, gtk_receiver) = glib::MainContext::channel::<PeerEvent>(glib::PRIORITY_DEFAULT);
+    let (gtk_sender, gtk_receiver) =
+        glib::MainContext::channel::<PeerEvent>(glib::PRIORITY_DEFAULT);
 
     let app_notification = AppNotification::new(&overlay);
     let progress = ProgressNotification::new(&overlay);
@@ -42,12 +44,12 @@ pub fn build_window(
 
     pool_peers(&window, &layout, file_sender, peer_receiver, gtk_sender);
 
+    let window_weak = window.downgrade();
     gtk_receiver.attach(None, move |values| match values {
         PeerEvent::TransferProgress((v, t)) => {
             let size = v as f64;
             let total = t as f64;
             progress.show();
-            println!("Progress: {}, {}", size, total);
             progress.progress_bar.set_fraction(size / total);
             Continue(true)
         }
@@ -61,6 +63,21 @@ pub fn build_window(
             progress.progress_bar.set_fraction(0.0);
             progress.hide();
             app_notification.show_failure(&overlay);
+            Continue(true)
+        }
+        PeerEvent::FileIncoming(name) => {
+            if let Some(win) = window_weak.upgrade() {
+                let accept_dialog = AcceptFileDialog::new(&win, name);
+                let response = accept_dialog.run();
+
+                let command = match response {
+                    gtk::ResponseType::Yes => TransferCommand::Accept,
+                    gtk::ResponseType::No => TransferCommand::Deny,
+                    _ => TransferCommand::Deny,
+                };
+
+                let _ = command_sender.lock().unwrap().try_send(command);
+            }
             Continue(true)
         }
         _ => Continue(false),
@@ -82,12 +99,15 @@ pub fn build_window(
 pub fn start_window() {
     let (file_sender, file_receiver) = channel::<FileToSend>(1024 * 24);
     let (peer_sender, peer_receiver) = channel::<PeerEvent>(1024 * 24);
+    let (command_sender, command_receiver) = channel::<TransferCommand>(1024 * 24);
 
     // Start the p2p server in separate thread
-    thread::spawn(move || match run_server(peer_sender, file_receiver) {
-        Ok(_) => {}
-        Err(e) => eprintln!("{:?}", e),
-    });
+    thread::spawn(
+        move || match run_server(peer_sender, file_receiver, command_receiver) {
+            Ok(_) => {}
+            Err(e) => eprintln!("{:?}", e),
+        },
+    );
 
     let peer_receiver_arc = Arc::new(Mutex::new(peer_receiver));
 
@@ -112,8 +132,9 @@ pub fn start_window() {
 
         let file_sender_c = Arc::new(Mutex::new(file_sender.clone()));
         let peer_receiver_c = Arc::clone(&peer_receiver_arc);
+        let command_sender_c = Arc::new(Mutex::new(command_sender.clone()));
 
-        match build_window(app, file_sender_c, peer_receiver_c) {
+        match build_window(app, file_sender_c, peer_receiver_c, command_sender_c) {
             Ok(_) => println!("Ok!"),
             Err(e) => println!("{:?}", e),
         };

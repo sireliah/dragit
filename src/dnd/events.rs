@@ -3,10 +3,9 @@ use std::sync::{Arc, Mutex};
 use gio::prelude::*;
 use gtk::prelude::*;
 
+use futures::channel::mpsc::{Receiver, Sender};
 use glib::Continue;
 use gtk::{timeout_add, ApplicationWindow};
-
-use futures::channel::mpsc::{Receiver, Sender};
 
 use crate::dnd::components::{remove_expired_boxes, PeerItem};
 use crate::p2p::{CurrentPeers, FileToSend, PeerEvent};
@@ -16,7 +15,7 @@ pub fn pool_peers(
     layout: &gtk::Box,
     file_sender: Arc<Mutex<Sender<FileToSend>>>,
     peer_receiver: Arc<Mutex<Receiver<PeerEvent>>>,
-    progress_sender: glib::Sender<PeerEvent>,
+    peer_event_sender: glib::Sender<PeerEvent>,
 ) {
     let layout_weak = layout.downgrade();
     let weak_window = window.downgrade();
@@ -27,21 +26,8 @@ pub fn pool_peers(
                 let peers: CurrentPeers = match p {
                     Some(event) => match event {
                         PeerEvent::PeersUpdated(list) => list,
-                        PeerEvent::TransferProgress((value, total)) => {
-                            let _ =
-                                progress_sender.send(PeerEvent::TransferProgress((value, total)));
-                            return Continue(true);
-                        }
-                        PeerEvent::FileCorrect(file_name) => {
-                            let _ = progress_sender.send(PeerEvent::FileCorrect(file_name));
-                            return Continue(true);
-                        }
-                        PeerEvent::FileIncorrect => {
-                            let _ = progress_sender.send(PeerEvent::FileIncorrect);
-                            return Continue(true);
-                        }
                         event => {
-                            println!("Other event: {:?}", event);
+                            let _ = peer_event_sender.send(event);
                             return Continue(true);
                         }
                     },

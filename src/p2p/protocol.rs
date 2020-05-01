@@ -1,18 +1,24 @@
+use std::sync::Arc;
+
 use std::error::Error;
+use std::io::{Error as IoError, ErrorKind};
+
 use std::fs::{metadata, File};
 use std::io::{BufReader, Read};
 use std::path::Path;
+use std::task::{Context, Poll};
 use std::time::Instant;
 use std::{io, iter, pin::Pin};
 
 use async_std::fs::File as AsyncFile;
 use async_std::io as asyncio;
-use async_std::sync::channel;
+use async_std::sync::{channel, Mutex};
 use async_std::task;
-use futures::channel::mpsc::Sender;
+use futures::channel::mpsc::{Receiver, Sender};
 use futures::prelude::*;
 use libp2p::core::{InboundUpgrade, OutboundUpgrade, PeerId, UpgradeInfo};
 
+use super::commands::TransferCommand;
 use super::peer::PeerEvent;
 use super::util::{
     add_row, check_size, get_target_path, hash_contents, spawn_read_file_job, spawn_write_file_job,
@@ -68,6 +74,7 @@ pub struct TransferPayload {
     pub hash: String,
     pub size_bytes: usize,
     pub sender_queue: Sender<PeerEvent>,
+    pub receiver: Arc<Mutex<Receiver<TransferCommand>>>,
 }
 
 impl TransferPayload {
@@ -95,36 +102,47 @@ impl TransferPayload {
         }
     }
 
-    async fn read_socket(
+    async fn notify_incoming_file_event(&self, name: &str) {
+        let event = PeerEvent::FileIncoming(name.to_string());
+        if let Err(e) = self.sender_queue.to_owned().send(event).await {
+            eprintln!("{:?}", e);
+        }
+    }
+
+    async fn block_for_answer(
         &self,
-        socket: impl AsyncRead + AsyncWrite + Send + Unpin,
-    ) -> Result<TransferPayload, io::Error> {
-        let (sender, receiver) = channel::<Vec<u8>>(CHUNK_SIZE * 8);
+        receiver: Arc<Mutex<Receiver<TransferCommand>>>,
+    ) -> TransferCommand {
+        let mut r = receiver.lock().await;
+        // Wait for the user to confirm the incoming file
+        task::block_on(future::poll_fn(
+            move |context: &mut Context| match Receiver::poll_next_unpin(&mut r, context) {
+                Poll::Ready(Some(choice)) => {
+                    Poll::Ready(choice)
+                }
+                Poll::Ready(None) => {
+                    println!("Nothing to handle now");
+                    Poll::Pending
+                }
+                Poll::Pending => Poll::Pending,
+            },
+        ))
+    }
 
-        let mut reader = asyncio::BufReader::new(socket);
+    async fn read_file_payload(
+        &mut self,
+        mut reader: asyncio::BufReader<impl AsyncRead + AsyncWrite + Send + Unpin>,
+        name: String,
+        size: usize,
+    ) -> Result<(usize, String, String), io::Error> {
         let mut payloads: Vec<u8> = vec![];
-
-        let (mut name, mut hash, mut size) = ("".to_string(), "".to_string(), "".to_string());
-        reader.read_line(&mut name).await?;
-        reader.read_line(&mut hash).await?;
-        reader.read_line(&mut size).await?;
-
-        let (name, hash, size) = (
-            name.trim().to_string(),
-            hash.trim().to_string(),
-            size.trim().parse::<usize>().expect("Failed parsing size"),
-        );
-
-        println!("Name: {}, Hash: {}, Size: {}", name, hash, size);
-
-        self.notify_progress(0, size).await;
+        let (sender, receiver) = channel::<Vec<u8>>(CHUNK_SIZE * 8);
 
         let path = get_target_path(&name)?;
         let job = spawn_write_file_job(receiver, path.clone());
 
         let mut counter: usize = 0;
         let mut res: usize = 0;
-
         loop {
             let mut buff = vec![0u8; CHUNK_SIZE];
             match reader.read(&mut buff).await {
@@ -158,14 +176,42 @@ impl TransferPayload {
 
         job.await;
 
-        let event = TransferPayload {
-            name,
-            path: path.to_string(),
-            hash: hash.to_string(),
-            size_bytes: counter,
-            sender_queue: self.sender_queue.clone(),
-        };
-        Ok(event)
+        Ok((counter, path, name))
+    }
+
+    async fn read_socket(
+        &mut self,
+        socket: impl AsyncRead + AsyncWrite + Send + Unpin,
+    ) -> Result<(), io::Error> {
+        let mut reader = asyncio::BufReader::new(socket);
+
+        let (mut name, mut hash, mut size) = ("".to_string(), "".to_string(), "".to_string());
+        reader.read_line(&mut name).await?;
+        reader.read_line(&mut hash).await?;
+        reader.read_line(&mut size).await?;
+
+        let (name, hash, size) = (
+            name.trim().to_string(),
+            hash.trim().to_string(),
+            size.trim().parse::<usize>().expect("Failed parsing size"),
+        );
+        println!("Name: {}, Hash: {}, Size: {}", name, hash, size);
+
+        self.notify_incoming_file_event(&name).await;
+        let rec_cp = Arc::clone(&self.receiver);
+
+        match self.block_for_answer(rec_cp).await {
+            TransferCommand::Accept => {
+                self.notify_progress(0, size).await;
+                let (counter, path, name) = self.read_file_payload(reader, name, size).await?;
+                self.name = name;
+                self.hash = hash;
+                self.path = path;
+                self.size_bytes = counter;
+                Ok(())
+            }
+            TransferCommand::Deny => Err(IoError::new(ErrorKind::PermissionDenied, "Rejected")),
+        }
     }
 }
 
@@ -186,11 +232,11 @@ impl TransferOut {
         let mut contents = vec![];
         buff.read_to_end(&mut contents).await?;
 
-        Ok(hash_contents(&contents))
-
         // TODO: check if necessary
         // mem::drop(contents);
         // mem::drop(buff);
+
+        Ok(hash_contents(&contents))
     }
 
     async fn write_socket(
@@ -215,9 +261,7 @@ impl TransferOut {
         let job = spawn_read_file_job(sender, self.path.clone());
         loop {
             match receiver.recv().await {
-                Some(payload) if payload.len() > 0 => {
-                    writer.write_all(&payload).await?
-                }
+                Some(payload) if payload.len() > 0 => writer.write_all(&payload).await?,
                 Some(_) => break,
                 None => println!("rolling"),
             }
@@ -245,11 +289,11 @@ where
     type Error = io::Error;
     type Future = Pin<Box<dyn Future<Output = Result<Self::Output, Self::Error>> + Send>>;
 
-    fn upgrade_inbound(self, socket: TSocket, _: Self::Info) -> Self::Future {
+    fn upgrade_inbound(mut self, socket: TSocket, _: Self::Info) -> Self::Future {
         async move {
             println!("Upgrade inbound");
             let start = Instant::now();
-            let event = match self.read_socket(socket).await {
+            match self.read_socket(socket).await {
                 Ok(event) => event,
                 Err(e) => {
                     eprintln!("Error when reading socket: {:?}", e);
@@ -258,7 +302,7 @@ where
             };
 
             println!("Finished {:?} ms", start.elapsed().as_millis());
-            Ok(event)
+            Ok(self)
         }
         .boxed()
     }
@@ -278,6 +322,7 @@ where
             let start = Instant::now();
 
             self.write_socket(socket).await?;
+
             println!("Finished {:?} ms", start.elapsed().as_millis());
             Ok(())
         }

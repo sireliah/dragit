@@ -1,11 +1,13 @@
 use std::collections::HashSet;
 use std::error::Error;
-
+use std::sync::Arc;
 use std::task::{Context, Poll};
 use std::thread;
 use std::time::Duration;
 
-use futures::channel::mpsc::Sender;
+use async_std::sync::Mutex;
+
+use futures::channel::mpsc::{Receiver, Sender};
 
 use libp2p::core::{connection::ConnectionId, Multiaddr, PeerId};
 use libp2p::swarm::{
@@ -13,6 +15,7 @@ use libp2p::swarm::{
     ProtocolsHandler, SubstreamProtocol,
 };
 
+use crate::p2p::commands::TransferCommand;
 use crate::p2p::handler::{OneShotHandler, OneShotHandlerConfig};
 use crate::p2p::peer::{CurrentPeers, Peer, PeerEvent};
 use crate::p2p::protocol::{FileToSend, ProtocolEvent, TransferOut, TransferPayload};
@@ -25,16 +28,18 @@ pub struct TransferBehaviour {
     pub events: Vec<NetworkBehaviourAction<TransferPayload, TransferOut>>,
     payloads: Vec<FileToSend>,
     sender: Sender<PeerEvent>,
+    receiver: Arc<Mutex<Receiver<TransferCommand>>>,
 }
 
 impl TransferBehaviour {
-    pub fn new(sender: Sender<PeerEvent>) -> Self {
+    pub fn new(sender: Sender<PeerEvent>, receiver: Arc<Mutex<Receiver<TransferCommand>>>) -> Self {
         TransferBehaviour {
             peers: HashSet::new(),
             connected_peers: HashSet::new(),
             events: vec![],
             payloads: vec![],
             sender,
+            receiver,
         }
     }
 
@@ -79,11 +84,12 @@ impl NetworkBehaviour for TransferBehaviour {
     fn new_handler(&mut self) -> Self::ProtocolsHandler {
         let timeout = Duration::from_secs(TIMEOUT);
         let tp = TransferPayload {
-            name: "".to_string(),
+            name: "default".to_string(),
             path: "".to_string(),
             hash: "".to_string(),
             size_bytes: 0,
             sender_queue: self.sender.clone(),
+            receiver: Arc::clone(&self.receiver),
         };
         let handler_config = OneShotHandlerConfig {
             inactive_timeout: timeout,
@@ -142,7 +148,6 @@ impl NetworkBehaviour for TransferBehaviour {
         >,
     > {
         if let Some(event) = self.events.pop() {
-            println!("Got event from the queue: {:?}", event);
             match event {
                 NetworkBehaviourAction::NotifyHandler {
                     peer_id: _,
@@ -155,6 +160,7 @@ impl NetworkBehaviour for TransferBehaviour {
                         hash: send_event.hash,
                         size_bytes: send_event.size_bytes,
                         sender_queue: self.sender.clone(),
+                        receiver: Arc::clone(&self.receiver),
                     };
                     return Poll::Ready(NetworkBehaviourAction::GenerateEvent(tp));
                 }

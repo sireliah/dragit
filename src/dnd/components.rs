@@ -249,3 +249,24 @@ impl AppNotification {
         self.reveal(overlay);
     }
 }
+
+pub struct AcceptFileDialog(gtk::MessageDialog);
+
+impl AcceptFileDialog {
+    pub fn new(window: &gtk::ApplicationWindow, name: String) -> AcceptFileDialog {
+        let dialog = gtk::MessageDialog::new(
+            Some(window),
+            gtk::DialogFlags::MODAL,
+            gtk::MessageType::Question,
+            gtk::ButtonsType::YesNo,
+            &format!("Incoming file {}. Would you like to accept it?", name),
+        );
+        AcceptFileDialog(dialog)
+    }
+
+    pub fn run(&self) -> gtk::ResponseType {
+        let resp = self.0.run();
+        self.0.destroy();
+        resp
+    }
+}
