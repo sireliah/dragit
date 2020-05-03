@@ -6,6 +6,7 @@ use futures::channel::mpsc::Sender;
 use gdk::DragAction;
 use gtk::prelude::*;
 use gtk::{DestDefaults, Label, TargetEntry, TargetFlags};
+use libp2p::Multiaddr;
 use percent_encoding::percent_decode_str;
 
 use crate::p2p::{FileToSend, Peer};
@@ -42,8 +43,10 @@ pub struct PeerItem {
 }
 
 impl PeerItem {
-    pub fn new(name: &str) -> PeerItem {
-        let label = Label::new(Some(name));
+    pub fn new(name: &str, address: &Multiaddr) -> PeerItem {
+        let display_name = format!("{} \n {}", name, address);
+
+        let label = Label::new(Some(&display_name));
         label.set_widget_name("drop-label");
         label.set_halign(gtk::Align::Center);
         label.set_size_request(500, 100);

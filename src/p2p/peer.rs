@@ -1,4 +1,4 @@
-use libp2p::PeerId;
+use libp2p::{Multiaddr, PeerId};
 
 #[derive(Debug, Clone)]
 pub enum PeerEvent {
@@ -16,6 +16,7 @@ pub type CurrentPeers = Vec<Peer>;
 #[derive(Debug, Eq, Hash, Clone)]
 pub struct Peer {
     pub name: String,
+    pub address: Multiaddr,
     pub peer_id: PeerId,
 }
 

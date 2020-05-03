@@ -46,8 +46,8 @@ impl NetworkBehaviourEventProcess<MdnsEvent> for MyBehaviour {
     fn inject_event(&mut self, event: MdnsEvent) {
         match event {
             MdnsEvent::Discovered(list) => {
-                for (peer_id, _addr) in list {
-                    match self.transfer_behaviour.add_peer(peer_id) {
+                for (peer_id, addr) in list {
+                    match self.transfer_behaviour.add_peer(peer_id, addr) {
                         Ok(_) => (),
                         Err(e) => eprintln!("{:?}", e),
                     };

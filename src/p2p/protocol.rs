@@ -117,9 +117,7 @@ impl TransferPayload {
         // Wait for the user to confirm the incoming file
         task::block_on(future::poll_fn(
             move |context: &mut Context| match Receiver::poll_next_unpin(&mut r, context) {
-                Poll::Ready(Some(choice)) => {
-                    Poll::Ready(choice)
-                }
+                Poll::Ready(Some(choice)) => Poll::Ready(choice),
                 Poll::Ready(None) => {
                     println!("Nothing to handle now");
                     Poll::Pending

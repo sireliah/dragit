@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::sync::Arc;
 use std::task::{Context, Poll};
@@ -9,7 +9,7 @@ use async_std::sync::Mutex;
 
 use futures::channel::mpsc::{Receiver, Sender};
 
-use libp2p::core::{connection::ConnectionId, Multiaddr, PeerId};
+use libp2p::core::{connection::ConnectionId, ConnectedPoint, Multiaddr, PeerId};
 use libp2p::swarm::{
     DialPeerCondition, NetworkBehaviour, NetworkBehaviourAction, NotifyHandler, PollParameters,
     ProtocolsHandler, SubstreamProtocol,
@@ -23,7 +23,7 @@ use crate::p2p::protocol::{FileToSend, ProtocolEvent, TransferOut, TransferPaylo
 const TIMEOUT: u64 = 600;
 
 pub struct TransferBehaviour {
-    pub peers: HashSet<PeerId>,
+    pub peers: HashMap<PeerId, Peer>,
     pub connected_peers: HashSet<PeerId>,
     pub events: Vec<NetworkBehaviourAction<TransferPayload, TransferOut>>,
     payloads: Vec<FileToSend>,
@@ -34,7 +34,7 @@ pub struct TransferBehaviour {
 impl TransferBehaviour {
     pub fn new(sender: Sender<PeerEvent>, receiver: Arc<Mutex<Receiver<TransferCommand>>>) -> Self {
         TransferBehaviour {
-            peers: HashSet::new(),
+            peers: HashMap::new(),
             connected_peers: HashSet::new(),
             events: vec![],
             payloads: vec![],
@@ -47,33 +47,41 @@ impl TransferBehaviour {
         Ok(self.payloads.push(file))
     }
 
-    fn peers_event(&mut self) -> Vec<Peer> {
-        self.connected_peers
-            .iter()
-            .map(|p| Peer {
-                name: p.to_base58(),
-                peer_id: p.to_owned(),
-            })
+    fn peers_event(&mut self) -> CurrentPeers {
+        self.peers
+            .clone()
+            .into_iter()
+            .filter(|(peer_id, _)| self.connected_peers.contains(peer_id))
+            .into_iter()
+            .map(|(_, peer)| peer.to_owned())
             .collect::<CurrentPeers>()
     }
 
-    fn notify_frontend(&mut self) -> Result<(), Box<dyn Error>> {
-        let peers = self.peers_event();
-        let event = PeerEvent::PeersUpdated(peers);
+    fn notify_frontend(&mut self, peers: Option<CurrentPeers>) -> Result<(), Box<dyn Error>> {
+        let current_peers = match peers {
+            Some(peers) => peers,
+            None => self.peers_event(),
+        };
+        let event = PeerEvent::PeersUpdated(current_peers);
         Ok(self.sender.try_send(event)?)
     }
 
-    pub fn add_peer(&mut self, peer_id: PeerId) -> Result<(), Box<dyn Error>> {
-        self.peers.insert(peer_id);
+    pub fn add_peer(&mut self, peer_id: PeerId, addr: Multiaddr) -> Result<(), Box<dyn Error>> {
+        let peer = Peer {
+            name: peer_id.to_base58(),
+            peer_id: peer_id.clone(),
+            address: addr,
+        };
+        self.peers.insert(peer_id, peer);
 
-        Ok(self.notify_frontend()?)
+        Ok(self.notify_frontend(None)?)
     }
 
     pub fn remove_peer(&mut self, peer_id: &PeerId) -> Result<(), Box<dyn Error>> {
         self.peers.remove(peer_id);
         self.connected_peers.remove(peer_id);
 
-        Ok(self.notify_frontend()?)
+        Ok(self.notify_frontend(None)?)
     }
 }
 
@@ -106,7 +114,37 @@ impl NetworkBehaviour for TransferBehaviour {
     fn inject_connected(&mut self, peer: &PeerId) {
         println!("Connected to: {:?}", peer);
         self.connected_peers.insert(peer.to_owned());
-        if let Err(e) = self.notify_frontend() {
+        if let Err(e) = self.notify_frontend(None) {
+            eprintln!("Failed to notify frontend {:?}", e);
+        };
+    }
+
+    fn inject_connection_established(
+        &mut self,
+        _: &PeerId,
+        _: &ConnectionId,
+        endpoint: &ConnectedPoint,
+    ) {
+        let peers = self
+            .peers
+            .clone()
+            .into_iter()
+            .map(|(_, mut peer)| match endpoint {
+                ConnectedPoint::Dialer { address } => {
+                    peer.address = address.clone();
+                    peer
+                }
+                ConnectedPoint::Listener {
+                    local_addr,
+                    send_back_addr: _,
+                } => {
+                    peer.address = local_addr.clone();
+                    peer
+                }
+            })
+            .collect::<CurrentPeers>();
+
+        if let Err(e) = self.notify_frontend(Some(peers)) {
             eprintln!("Failed to notify frontend {:?}", e);
         };
     }
@@ -189,14 +227,14 @@ impl NetworkBehaviour for TransferBehaviour {
                 None => return Poll::Pending,
             }
         } else {
-            for peer in self.peers.iter() {
-                if !self.connected_peers.contains(peer) {
-                    println!("Will try to dial: {:?}", peer);
+            for (peer_id, _) in self.peers.iter() {
+                if !self.connected_peers.contains(peer_id) {
+                    println!("Will try to dial: {:?}", peer_id);
                     let millis = Duration::from_millis(100);
                     thread::sleep(millis);
                     return Poll::Ready(NetworkBehaviourAction::DialPeer {
                         condition: DialPeerCondition::Disconnected,
-                        peer_id: peer.to_owned(),
+                        peer_id: peer_id.to_owned(),
                     });
                 }
             }
