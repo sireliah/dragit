@@ -6,19 +6,19 @@ use futures::channel::mpsc::Sender;
 use gdk::DragAction;
 use gtk::prelude::*;
 use gtk::{DestDefaults, Label, TargetEntry, TargetFlags};
-use libp2p::Multiaddr;
+
+use libp2p::{multiaddr::Protocol, Multiaddr};
 use percent_encoding::percent_decode_str;
 
 use crate::p2p::{FileToSend, Peer};
 
 pub const STYLE: &str = "
-#drop-label {
+#drop-zone {
     padding: 10px;
     margin: 10px;
     border: 1px;
     border-style: dashed;
     border-radius: 15px;
-    background-color: rgb(240, 240, 240); 
 }
 #notification-alert {
     padding: 10px;
@@ -39,27 +39,39 @@ pub const STYLE: &str = "
 pub struct PeerItem {
     pub container: gtk::Box,
     pub label: Label,
-    pub progress: Option<gtk::ProgressBar>,
 }
 
 impl PeerItem {
     pub fn new(name: &str, address: &Multiaddr) -> PeerItem {
-        let display_name = format!("{} \n {}", name, address);
+        let ip = PeerItem::extract_ip(&address);
+        let display_name = format!("<big><b>{}</b></big> \n<small>{}</small>", ip, name);
 
-        let label = Label::new(Some(&display_name));
+        let label = Label::new(None);
+        label.set_markup(&display_name);
         label.set_widget_name("drop-label");
         label.set_halign(gtk::Align::Center);
         label.set_size_request(500, 100);
 
-        let container = gtk::Box::new(gtk::Orientation::Vertical, 10);
-        container.set_widget_name(name);
-        container.pack_start(&label, false, false, 10);
+        let image = gtk::Image::new_from_icon_name(Some("insert-object"), gtk::IconSize::Dialog);
 
-        PeerItem {
-            container,
-            label,
-            progress: None,
-        }
+        let container = gtk::Box::new(gtk::Orientation::Vertical, 10);
+        let inner_container = gtk::Box::new(gtk::Orientation::Vertical, 10);
+
+        container.set_widget_name(name);
+        inner_container.set_widget_name("drop-zone");
+
+        inner_container.pack_start(&image, false, false, 10);
+        inner_container.pack_start(&label, false, false, 10);
+        container.pack_start(&inner_container, false, false, 0);
+
+        PeerItem { container, label }
+    }
+
+    fn extract_ip(address: &Multiaddr) -> String {
+        let components = address.iter().collect::<Vec<Protocol>>();
+        println!("Ip: {:?}", components);
+        let ip = &components[0];
+        ip.to_string().replace("/ip4/", "").replace("/ip6/", "")
     }
 
     pub fn bind_drag_and_drop(
@@ -73,10 +85,10 @@ impl PeerItem {
             // TODO: use different content type here
             TargetEntry::new("text/uri-list", TargetFlags::OTHER_APP, 0),
         ];
-        self.label
+        self.container
             .drag_dest_set(DestDefaults::ALL, &targets, DragAction::COPY);
 
-        self.label
+        self.container
             .connect_drag_data_received(move |_win, _, _, _, s, _, _| {
                 let path: String = match s.get_text() {
                     Some(value) => PeerItem::clean_filename(&value).expect("Decoding path failed"),
@@ -92,17 +104,6 @@ impl PeerItem {
                 let mut sender = file_sender.lock().unwrap();
                 sender.try_send(file).expect("Sending failed");
             });
-
-        self.label.connect_drag_motion(|w, _context, _, _, _| {
-            match w.get_text() {
-                Some(value) => {
-                    let filename = PeerItem::clean_filename(&value).expect("Decoding path failed");
-                    w.set_text(&filename);
-                }
-                None => w.set_text("[FILE]>"),
-            };
-            gtk::Inhibit(false)
-        });
 
         self
     }

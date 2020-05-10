@@ -28,10 +28,13 @@ pub fn build_window(
     glib::set_program_name(Some("Dragit"));
     let window = gtk::ApplicationWindow::new(application);
 
+    let scroll = gtk::ScrolledWindow::new(gtk::NONE_ADJUSTMENT, gtk::NONE_ADJUSTMENT);
+    scroll.set_policy(gtk::PolicyType::Automatic, gtk::PolicyType::Automatic);
+
     let overlay = gtk::Overlay::new();
     let layout = gtk::Box::new(gtk::Orientation::Vertical, 20);
     layout.set_halign(gtk::Align::Center);
-    layout.set_margin_top(50);
+    layout.set_margin_top(60);
 
     let (gtk_sender, gtk_receiver) =
         glib::MainContext::channel::<PeerEvent>(glib::PRIORITY_DEFAULT);
@@ -39,7 +42,8 @@ pub fn build_window(
     let app_notification = AppNotification::new(&overlay);
     let progress = ProgressNotification::new(&overlay);
 
-    overlay.add_overlay(&layout);
+    scroll.add(&layout);
+    overlay.add_overlay(&scroll);
     window.add(&overlay);
 
     pool_peers(&window, &layout, file_sender, peer_receiver, gtk_sender);

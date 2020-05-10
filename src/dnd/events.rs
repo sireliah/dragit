@@ -52,7 +52,6 @@ pub fn pool_peers(
                 for peer in peers.iter().filter(|p| !children.contains(&p.name)) {
                     let name: &str = &peer.name;
                     let addr = &peer.address;
-                    println!("Peer: {:?}", name);
 
                     let item = PeerItem::new(name, addr);
                     let sender = file_sender.clone();

@@ -187,7 +187,7 @@ where
         >,
     > {
         if let Some(err) = self.pending_error.take() {
-            println!("{:?}", err);
+            println!("Error handler: {:?}", err);
             return Poll::Ready(ProtocolsHandlerEvent::Close(err));
         }
 
