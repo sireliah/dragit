@@ -217,6 +217,7 @@ impl NetworkBehaviour for TransferBehaviour {
                     let event = TransferOut {
                         name: message.name,
                         path: message.path,
+                        sender_queue: self.sender.clone(),
                     };
                     return Poll::Ready(NetworkBehaviourAction::NotifyHandler {
                         handler: NotifyHandler::Any,

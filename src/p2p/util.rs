@@ -1,18 +1,21 @@
 use std::fs;
-use std::io::{Error, ErrorKind};
+use std::io::{Error, ErrorKind, Read};
 use std::time::{SystemTime, UNIX_EPOCH};
-
-use crypto::digest::Digest;
-use crypto::sha1::Sha1;
-use directories::UserDirs;
 
 use async_std::fs::File as AsyncFile;
 use async_std::io as asyncio;
 use async_std::sync::{Receiver, Sender};
 use async_std::task::{self, JoinHandle};
+use directories::UserDirs;
+use futures::channel::mpsc::Sender as FutSender;
 use futures::prelude::*;
+use hex;
+use md5::{Digest, Md5};
+
+use super::peer::PeerEvent;
 
 pub const CHUNK_SIZE: usize = 4096;
+pub const HASH_BUFFER_SIZE: usize = 1024;
 
 pub fn spawn_write_file_job(mut receiver: Receiver<Vec<u8>>, path: String) -> JoinHandle<()> {
     let child = task::spawn(async move {
@@ -59,6 +62,17 @@ pub fn spawn_read_file_job(sender: Sender<Vec<u8>>, path: String) -> JoinHandle<
     child
 }
 
+pub async fn notify_progress(
+    sender_queue: &FutSender<PeerEvent>,
+    counter: usize,
+    total_size: usize,
+) {
+    let event = PeerEvent::TransferProgress((counter, total_size));
+    if let Err(e) = sender_queue.to_owned().send(event).await {
+        eprintln!("{:?}", e);
+    }
+}
+
 pub fn get_target_path(name: &str) -> Result<String, Error> {
     // TODO: make this a future
     match UserDirs::new() {
@@ -90,13 +104,47 @@ pub fn add_row(value: &str) -> Vec<u8> {
     format!("{}\n", value).into_bytes()
 }
 
-pub fn hash_contents(contents: &Vec<u8>) -> String {
-    let mut hasher = Sha1::new();
-    hasher.input(&contents);
-    hasher.result_str()
+pub fn hash_contents(path: &str) -> Result<String, Error> {
+    let mut state = Md5::default();
+    let mut buffer = [0u8; HASH_BUFFER_SIZE];
+    let mut reader = fs::File::open(path)?;
+
+    loop {
+        match reader.read(&mut buffer) {
+            Ok(n) if n == 0 || n < HASH_BUFFER_SIZE => {
+                state.input(&buffer[..n]);
+                break;
+            }
+            Ok(n) => {
+                state.input(&buffer[..n]);
+            }
+            Err(e) => return Err(e),
+        };
+    }
+    Ok(hex::encode::<Vec<u8>>(state.result().to_vec()))
 }
 
 pub fn check_size(path: &str) -> Result<String, Error> {
     let meta = fs::metadata(path)?;
     Ok(meta.len().to_string())
+}
+
+pub fn time_to_notify(current_size: usize, total_size: usize) -> bool {
+    if current_size >= ((total_size / 10) + CHUNK_SIZE * 256) {
+        true
+    } else {
+        false
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use self::super::hash_contents;
+
+    #[test]
+    fn test_hash_local_file() {
+        let result = hash_contents("src/file.txt").unwrap();
+
+        assert_eq!(result, "696c56be6d4c4a48d3de0d17e237f82a");
+    }
 }

@@ -2,15 +2,14 @@ use std::sync::Arc;
 
 use std::error::Error;
 use std::io::{Error as IoError, ErrorKind};
+use std::str::FromStr;
 
-use std::fs::{metadata, File};
-use std::io::{BufReader, Read};
+use std::fs::metadata;
 use std::path::Path;
 use std::task::{Context, Poll};
 use std::time::Instant;
 use std::{io, iter, pin::Pin};
 
-use async_std::fs::File as AsyncFile;
 use async_std::io as asyncio;
 use async_std::sync::{channel, Mutex};
 use async_std::task;
@@ -20,10 +19,7 @@ use libp2p::core::{InboundUpgrade, OutboundUpgrade, PeerId, UpgradeInfo};
 
 use super::commands::TransferCommand;
 use super::peer::PeerEvent;
-use super::util::{
-    add_row, check_size, get_target_path, hash_contents, spawn_read_file_job, spawn_write_file_job,
-    CHUNK_SIZE,
-};
+use super::util::{self, CHUNK_SIZE};
 
 #[derive(Clone, Debug)]
 pub struct FileToSend {
@@ -61,10 +57,11 @@ pub enum ProtocolEvent {
     Sent,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct TransferOut {
     pub name: String,
     pub path: String,
+    pub sender_queue: Sender<PeerEvent>,
 }
 
 #[derive(Clone, Debug)]
@@ -79,11 +76,7 @@ pub struct TransferPayload {
 
 impl TransferPayload {
     pub fn check_file(&self) -> Result<(), io::Error> {
-        let mut contents = vec![];
-        let mut file = BufReader::new(File::open(&self.path)?);
-        file.read_to_end(&mut contents).expect("Cannot read file");
-        let hash_from_disk = hash_contents(&contents);
-        contents.clear();
+        let hash_from_disk = util::hash_contents(&self.path)?;
 
         if hash_from_disk != self.hash {
             Err(io::Error::new(
@@ -92,13 +85,6 @@ impl TransferPayload {
             ))
         } else {
             Ok(())
-        }
-    }
-
-    async fn notify_progress(&self, counter: usize, total_size: usize) {
-        let event = PeerEvent::TransferProgress((counter, total_size));
-        if let Err(e) = self.sender_queue.to_owned().send(event).await {
-            eprintln!("{:?}", e);
         }
     }
 
@@ -136,11 +122,11 @@ impl TransferPayload {
         let mut payloads: Vec<u8> = vec![];
         let (sender, receiver) = channel::<Vec<u8>>(CHUNK_SIZE * 8);
 
-        let path = get_target_path(&name)?;
-        let job = spawn_write_file_job(receiver, path.clone());
+        let path = util::get_target_path(&name)?;
+        let job = util::spawn_write_file_job(receiver, path.clone());
 
         let mut counter: usize = 0;
-        let mut res: usize = 0;
+        let mut current_size: usize = 0;
         loop {
             let mut buff = vec![0u8; CHUNK_SIZE];
             match reader.read(&mut buff).await {
@@ -148,7 +134,7 @@ impl TransferPayload {
                     if n > 0 {
                         payloads.extend(&buff[..n]);
                         counter += n;
-                        res += n;
+                        current_size += n;
 
                         if payloads.len() >= (CHUNK_SIZE * 8) {
                             sender.send(payloads.clone()).await;
@@ -156,15 +142,15 @@ impl TransferPayload {
 
                             payloads.clear();
 
-                            if res >= ((size / 10) + CHUNK_SIZE * 256) {
-                                self.notify_progress(counter, size).await;
-                                res = 0;
+                            if util::time_to_notify(current_size, size) {
+                                util::notify_progress(&self.sender_queue, counter, size).await;
+                                current_size = 0;
                             }
                         }
                     } else {
                         sender.send(payloads.clone()).await;
                         sender.send(vec![]).await;
-                        self.notify_progress(counter, size).await;
+                        util::notify_progress(&self.sender_queue, counter, size).await;
                         break;
                     }
                 }
@@ -200,7 +186,7 @@ impl TransferPayload {
 
         match self.block_for_answer(rec_cp).await {
             TransferCommand::Accept => {
-                self.notify_progress(0, size).await;
+                util::notify_progress(&self.sender_queue, 0, size).await;
                 let (counter, path, name) = self.read_file_payload(reader, name, size).await?;
                 self.name = name;
                 self.hash = hash;
@@ -224,17 +210,7 @@ impl UpgradeInfo for TransferPayload {
 
 impl TransferOut {
     async fn calculate_hash(&self) -> Result<String, io::Error> {
-        // TODO: implement incremental hashing for bigger files
-        let file = AsyncFile::open(&self.path).await?;
-        let mut buff = asyncio::BufReader::new(&file);
-        let mut contents = vec![];
-        buff.read_to_end(&mut contents).await?;
-
-        // TODO: check if necessary
-        // mem::drop(contents);
-        // mem::drop(buff);
-
-        Ok(hash_contents(&contents))
+        Ok(util::hash_contents(&self.path)?)
     }
 
     async fn write_socket(
@@ -246,22 +222,39 @@ impl TransferOut {
         println!("Name: {:?}, Path: {:?}", self.name, &self.path);
 
         let hash = self.calculate_hash().await?;
-        let name = add_row(&self.name);
-        let size = check_size(&self.path)?;
-        let size_b = add_row(&size);
-        let checksum = add_row(&hash);
+        let name = util::add_row(&self.name);
+        let size = util::check_size(&self.path)?;
+        let size_b = util::add_row(&size);
+        let size_u = usize::from_str(&size).unwrap_or(0);
+        let checksum = util::add_row(&hash);
 
         let mut writer = asyncio::BufWriter::new(socket);
         writer.write(&name).await?;
         writer.write(&checksum).await?;
         writer.write(&size_b).await?;
 
-        let job = spawn_read_file_job(sender, self.path.clone());
+        let job = util::spawn_read_file_job(sender, self.path.clone());
+        util::notify_progress(&self.sender_queue, 0, size_u).await;
+        let mut counter: usize = 0;
+        let mut current_size: usize = 0;
+
         loop {
             match receiver.recv().await {
-                Some(payload) if payload.len() > 0 => writer.write_all(&payload).await?,
-                Some(_) => break,
-                None => println!("rolling"),
+                Some(payload) if payload.len() > 0 => {
+                    writer.write_all(&payload).await?;
+                    counter += payload.len();
+                    current_size += payload.len();
+
+                    if util::time_to_notify(current_size, size_u) {
+                        util::notify_progress(&self.sender_queue, counter, size_u).await;
+                        current_size = 0;
+                    }
+                }
+                Some(_) => {
+                    util::notify_progress(&self.sender_queue, counter, size_u).await;
+                    break;
+                }
+                None => (),
             }
         }
         job.await;
