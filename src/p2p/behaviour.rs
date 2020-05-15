@@ -2,7 +2,6 @@ use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::sync::Arc;
 use std::task::{Context, Poll};
-use std::thread;
 use std::time::Duration;
 
 use async_std::sync::Mutex;
@@ -25,7 +24,7 @@ const TIMEOUT: u64 = 600;
 pub struct TransferBehaviour {
     pub peers: HashMap<PeerId, Peer>,
     pub connected_peers: HashSet<PeerId>,
-    pub events: Vec<NetworkBehaviourAction<TransferPayload, TransferOut>>,
+    pub events: Vec<NetworkBehaviourAction<TransferOut, TransferPayload>>,
     payloads: Vec<FileToSend>,
     sender: Sender<PeerEvent>,
     receiver: Arc<Mutex<Receiver<TransferCommand>>>,
@@ -50,8 +49,6 @@ impl TransferBehaviour {
     fn peers_event(&mut self) -> CurrentPeers {
         self.peers
             .clone()
-            .into_iter()
-            .filter(|(peer_id, _)| self.connected_peers.contains(peer_id))
             .into_iter()
             .map(|(_, peer)| peer.to_owned())
             .collect::<CurrentPeers>()
@@ -78,7 +75,6 @@ impl TransferBehaviour {
     }
 
     pub fn remove_peer(&mut self, peer_id: &PeerId) -> Result<(), Box<dyn Error>> {
-        self.peers.remove(peer_id);
         self.connected_peers.remove(peer_id);
 
         Ok(self.notify_frontend(None)?)
@@ -100,7 +96,7 @@ impl NetworkBehaviour for TransferBehaviour {
             receiver: Arc::clone(&self.receiver),
         };
         let handler_config = OneShotHandlerConfig {
-            inactive_timeout: timeout,
+            inactive_timeout: Duration::from_secs(5),
             substream_timeout: timeout,
         };
         let proto = SubstreamProtocol::new(tp).with_timeout(timeout);
@@ -121,10 +117,29 @@ impl NetworkBehaviour for TransferBehaviour {
 
     fn inject_connection_established(
         &mut self,
-        _: &PeerId,
-        _: &ConnectionId,
+        peer: &PeerId,
+        c: &ConnectionId,
         endpoint: &ConnectedPoint,
     ) {
+
+        match self.payloads.pop() {
+            Some(message) => {
+                let transfer = TransferOut {
+                    name: message.name,
+                    path: message.path,
+                    sender_queue: self.sender.clone(),
+                };
+
+                let event = NetworkBehaviourAction::NotifyHandler {
+                    handler: NotifyHandler::One(c.to_owned()),
+                    peer_id: peer.to_owned(),
+                    event: transfer,
+                };
+                self.events.push(event);
+            },
+            None => ()
+        }
+
         let peers = self
             .peers
             .clone()
@@ -161,15 +176,11 @@ impl NetworkBehaviour for TransferBehaviour {
         }
     }
 
-    fn inject_event(&mut self, peer: PeerId, c: ConnectionId, event: ProtocolEvent) {
+    fn inject_event(&mut self, _peer: PeerId, c: ConnectionId, event: ProtocolEvent) {
         println!("Inject event: {:?}", event);
         match event {
             ProtocolEvent::Received(data) => {
-                self.events.push(NetworkBehaviourAction::NotifyHandler {
-                    handler: NotifyHandler::One(c),
-                    peer_id: peer,
-                    event: data,
-                });
+                self.events.push(NetworkBehaviourAction::GenerateEvent(data))
             }
             ProtocolEvent::Sent => return,
         };
@@ -185,61 +196,50 @@ impl NetworkBehaviour for TransferBehaviour {
             Self::OutEvent,
         >,
     > {
+        for file in self.payloads.iter() {
+            println!("Will try to dial: {:?}", file.peer);
+            if !self.connected_peers.contains(&file.peer) {
+                return Poll::Ready(NetworkBehaviourAction::DialPeer {
+                    condition: DialPeerCondition::Disconnected,
+                    peer_id: file.peer.to_owned(),
+                });
+            }
+        }
+
         if let Some(event) = self.events.pop() {
+            println!("Got some shiny event: {:?}", event);
             match event {
                 NetworkBehaviourAction::NotifyHandler {
-                    peer_id: _,
-                    handler: _,
+                    peer_id,
+                    handler,
                     event: send_event,
                 } => {
-                    let tp = TransferPayload {
+
+                    let out = TransferOut {
                         name: send_event.name,
                         path: send_event.path,
-                        hash: send_event.hash,
-                        size_bytes: send_event.size_bytes,
                         sender_queue: self.sender.clone(),
-                        receiver: Arc::clone(&self.receiver),
                     };
-                    return Poll::Ready(NetworkBehaviourAction::GenerateEvent(tp));
+                    let event = NetworkBehaviourAction::NotifyHandler {
+                        handler,
+                        peer_id,
+                        event: out,
+                    };
+
+                    return Poll::Ready(event);
                 }
                 NetworkBehaviourAction::GenerateEvent(e) => {
                     println!("GenerateEvent event {:?}", e);
+                    return Poll::Ready(NetworkBehaviourAction::GenerateEvent(e));
                 }
                 _ => {
                     println!("Another event");
+                    return Poll::Pending;
                 }
             }
-        };
 
-        if self.connected_peers.len() > 0 {
-            match self.payloads.pop() {
-                Some(message) => {
-                    let event = TransferOut {
-                        name: message.name,
-                        path: message.path,
-                        sender_queue: self.sender.clone(),
-                    };
-                    return Poll::Ready(NetworkBehaviourAction::NotifyHandler {
-                        handler: NotifyHandler::Any,
-                        peer_id: message.peer,
-                        event,
-                    });
-                }
-                None => return Poll::Pending,
-            }
         } else {
-            for (peer_id, _) in self.peers.iter() {
-                if !self.connected_peers.contains(peer_id) {
-                    println!("Will try to dial: {:?}", peer_id);
-                    let millis = Duration::from_millis(100);
-                    thread::sleep(millis);
-                    return Poll::Ready(NetworkBehaviourAction::DialPeer {
-                        condition: DialPeerCondition::Disconnected,
-                        peer_id: peer_id.to_owned(),
-                    });
-                }
-            }
+            return Poll::Pending;
         }
-        Poll::Pending
     }
 }
