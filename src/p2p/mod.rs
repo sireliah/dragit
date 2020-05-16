@@ -8,12 +8,15 @@ use futures::{
     stream::StreamExt,
 };
 use libp2p::{
-    build_development_transport,
+    core::muxing,
     core::transport::timeout::TransportTimeout,
-    identity,
+    core::transport::Transport,
+    core::upgrade,
+    dns, identity,
     mdns::{Mdns, MdnsEvent},
+    mplex, secio,
     swarm::NetworkBehaviourEventProcess,
-    NetworkBehaviour, PeerId, Swarm,
+    tcp, websocket, NetworkBehaviour, PeerId, Swarm,
 };
 
 use std::{
@@ -68,7 +71,7 @@ impl NetworkBehaviourEventProcess<MdnsEvent> for MyBehaviour {
 
 impl NetworkBehaviourEventProcess<TransferPayload> for MyBehaviour {
     fn inject_event(&mut self, mut event: TransferPayload) {
-        println!("TransferPayload event: {:?}", event);
+        println!("Injected {}", event);
         match event.check_file() {
             Ok(_) => {
                 println!("File correct");
@@ -115,8 +118,27 @@ async fn execute_swarm(
             transfer_behaviour,
         };
         let timeout = Duration::from_secs(60);
+
+        let transport = {
+            let tcp = tcp::TcpConfig::new().nodelay(true);
+            let transport = dns::DnsConfig::new(tcp).unwrap();
+            let trans_clone = transport.clone();
+            transport.or_transport(websocket::WsConfig::new(trans_clone))
+        };
+        let mut mplex_config = mplex::MplexConfig::new();
+
+        // TODO: test different Mplex frame sizes
+        let mp = mplex_config
+            .max_buffer_len(40960)
+            .split_send_size(1024 * 512);
+
         let transport = TransportTimeout::with_outgoing_timeout(
-            build_development_transport(local_keys.clone()).unwrap(),
+            transport
+                .upgrade(upgrade::Version::V1)
+                .authenticate(secio::SecioConfig::new(local_keys.clone()))
+                .multiplex(mp.clone())
+                .map(|(peer, muxer), _| (peer, muxing::StreamMuxerBox::new(muxer)))
+                .timeout(timeout),
             timeout,
         );
 

@@ -121,7 +121,6 @@ impl NetworkBehaviour for TransferBehaviour {
         c: &ConnectionId,
         endpoint: &ConnectedPoint,
     ) {
-
         match self.payloads.pop() {
             Some(message) => {
                 let transfer = TransferOut {
@@ -136,8 +135,8 @@ impl NetworkBehaviour for TransferBehaviour {
                     event: transfer,
                 };
                 self.events.push(event);
-            },
-            None => ()
+            }
+            None => (),
         }
 
         let peers = self
@@ -176,12 +175,12 @@ impl NetworkBehaviour for TransferBehaviour {
         }
     }
 
-    fn inject_event(&mut self, _peer: PeerId, c: ConnectionId, event: ProtocolEvent) {
-        println!("Inject event: {:?}", event);
+    fn inject_event(&mut self, _: PeerId, _: ConnectionId, event: ProtocolEvent) {
+        println!("Inject event: {}", event);
         match event {
-            ProtocolEvent::Received(data) => {
-                self.events.push(NetworkBehaviourAction::GenerateEvent(data))
-            }
+            ProtocolEvent::Received(data) => self
+                .events
+                .push(NetworkBehaviourAction::GenerateEvent(data)),
             ProtocolEvent::Sent => return,
         };
     }
@@ -207,14 +206,12 @@ impl NetworkBehaviour for TransferBehaviour {
         }
 
         if let Some(event) = self.events.pop() {
-            println!("Got some shiny event: {:?}", event);
             match event {
                 NetworkBehaviourAction::NotifyHandler {
                     peer_id,
                     handler,
                     event: send_event,
                 } => {
-
                     let out = TransferOut {
                         name: send_event.name,
                         path: send_event.path,
@@ -229,7 +226,6 @@ impl NetworkBehaviour for TransferBehaviour {
                     return Poll::Ready(event);
                 }
                 NetworkBehaviourAction::GenerateEvent(e) => {
-                    println!("GenerateEvent event {:?}", e);
                     return Poll::Ready(NetworkBehaviourAction::GenerateEvent(e));
                 }
                 _ => {
@@ -237,7 +233,6 @@ impl NetworkBehaviour for TransferBehaviour {
                     return Poll::Pending;
                 }
             }
-
         } else {
             return Poll::Pending;
         }
