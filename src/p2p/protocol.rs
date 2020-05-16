@@ -1,8 +1,9 @@
 use std::sync::Arc;
 
 use std::error::Error;
+use std::fmt;
 use std::io::{Error as IoError, ErrorKind};
-use std::str::FromStr;
+use std::sync::mpsc::sync_channel;
 
 use std::fs::metadata;
 use std::path::Path;
@@ -10,10 +11,11 @@ use std::task::{Context, Poll};
 use std::time::Instant;
 use std::{io, iter, pin::Pin};
 
-use async_std::io as asyncio;
-use async_std::sync::{channel, Mutex};
+use async_std::sync::Mutex;
 use async_std::task;
 use futures::channel::mpsc::{Receiver, Sender};
+use futures::future;
+use futures::io as futio;
 use futures::prelude::*;
 use libp2p::core::{InboundUpgrade, OutboundUpgrade, PeerId, UpgradeInfo};
 
@@ -103,7 +105,10 @@ impl TransferPayload {
         // Wait for the user to confirm the incoming file
         task::block_on(future::poll_fn(
             move |context: &mut Context| match Receiver::poll_next_unpin(&mut r, context) {
-                Poll::Ready(Some(choice)) => Poll::Ready(choice),
+                Poll::Ready(Some(choice)) => {
+                    println!("Got the choice: {:?}", choice);
+                    Poll::Ready(choice)
+                }
                 Poll::Ready(None) => {
                     println!("Nothing to handle now");
                     Poll::Pending
@@ -115,13 +120,14 @@ impl TransferPayload {
 
     async fn read_file_payload(
         &mut self,
-        mut reader: asyncio::BufReader<impl AsyncRead + AsyncWrite + Send + Unpin>,
-        name: String,
+        socket: impl AsyncRead + AsyncWrite + Send + Unpin,
+        name: &str,
         size: usize,
-    ) -> Result<(usize, String, String), io::Error> {
-        let mut payloads: Vec<u8> = vec![];
-        let (sender, receiver) = channel::<Vec<u8>>(CHUNK_SIZE * 8);
+    ) -> Result<(usize, String), io::Error> {
+        let mut reader = futio::BufReader::new(socket);
 
+        let mut payloads: Vec<u8> = vec![];
+        let (sender, receiver) = sync_channel::<Vec<u8>>(CHUNK_SIZE * 32);
         let path = util::get_target_path(&name)?;
         let job = util::spawn_write_file_job(receiver, path.clone());
 
@@ -137,8 +143,7 @@ impl TransferPayload {
                         current_size += n;
 
                         if payloads.len() >= (CHUNK_SIZE * 8) {
-                            sender.send(payloads.clone()).await;
-                            task::yield_now().await;
+                            sender.send(payloads.clone()).expect("sending failed");
 
                             payloads.clear();
 
@@ -148,8 +153,8 @@ impl TransferPayload {
                             }
                         }
                     } else {
-                        sender.send(payloads.clone()).await;
-                        sender.send(vec![]).await;
+                        sender.send(payloads.clone()).expect("sending failed");
+                        sender.send(vec![]).expect("sending failed");
                         util::notify_progress(&self.sender_queue, counter, size).await;
                         break;
                     }
@@ -158,43 +163,42 @@ impl TransferPayload {
             }
         }
 
-        job.await;
+        job.join().expect("Joining failed");
 
-        Ok((counter, path, name))
+        Ok((counter, path))
     }
 
-    async fn read_socket(
-        &mut self,
-        socket: impl AsyncRead + AsyncWrite + Send + Unpin,
-    ) -> Result<(), io::Error> {
-        let mut reader = asyncio::BufReader::new(socket);
+    async fn read_socket<TSocket>(&mut self, socket: TSocket) -> Result<(), io::Error>
+    where
+        TSocket: AsyncRead + AsyncWrite + Send + Unpin,
+    {
+        let (meta, mut socket): (util::Metadata, TSocket) =
+            util::Metadata::read_metadata(socket).await?;
 
-        let (mut name, mut hash, mut size) = ("".to_string(), "".to_string(), "".to_string());
-        reader.read_line(&mut name).await?;
-        reader.read_line(&mut hash).await?;
-        reader.read_line(&mut size).await?;
-
-        let (name, hash, size) = (
-            name.trim().to_string(),
-            hash.trim().to_string(),
-            size.trim().parse::<usize>().expect("Failed parsing size"),
-        );
-        println!("Name: {}, Hash: {}, Size: {}", name, hash, size);
-
-        self.notify_incoming_file_event(&name).await;
+        self.notify_incoming_file_event(&meta.name).await;
         let rec_cp = Arc::clone(&self.receiver);
 
         match self.block_for_answer(rec_cp).await {
             TransferCommand::Accept => {
-                util::notify_progress(&self.sender_queue, 0, size).await;
-                let (counter, path, name) = self.read_file_payload(reader, name, size).await?;
-                self.name = name;
-                self.hash = hash;
+                socket.write(b"Y").await?;
+                socket.flush().await?;
+
+                util::notify_progress(&self.sender_queue, 0, meta.size).await;
+
+                let (counter, path) = self
+                    .read_file_payload(socket, &meta.name, meta.size)
+                    .await?;
+                self.name = meta.name;
+                self.hash = meta.hash;
                 self.path = path;
                 self.size_bytes = counter;
                 Ok(())
             }
-            TransferCommand::Deny => Err(IoError::new(ErrorKind::PermissionDenied, "Rejected")),
+            TransferCommand::Deny => {
+                socket.write(b"N").await?;
+                socket.flush().await?;
+                Err(IoError::new(ErrorKind::PermissionDenied, "Rejected"))
+            }
         }
     }
 }
@@ -209,57 +213,60 @@ impl UpgradeInfo for TransferPayload {
 }
 
 impl TransferOut {
-    async fn calculate_hash(&self) -> Result<String, io::Error> {
-        Ok(util::hash_contents(&self.path)?)
-    }
-
-    async fn write_socket(
-        &self,
-        socket: impl AsyncRead + AsyncWrite + Send + Unpin,
-    ) -> Result<(), io::Error> {
-        let (sender, receiver) = channel::<Vec<u8>>(CHUNK_SIZE * 8);
+    async fn write_socket<TSocket>(&self, socket: TSocket) -> Result<(), io::Error>
+    where
+        TSocket: AsyncRead + AsyncWrite + Send + Unpin,
+    {
+        let (sender, receiver) = sync_channel::<Vec<u8>>(CHUNK_SIZE * 32);
 
         println!("Name: {:?}, Path: {:?}", self.name, &self.path);
 
-        let hash = self.calculate_hash().await?;
-        let name = util::add_row(&self.name);
-        let size = util::check_size(&self.path)?;
-        let size_b = util::add_row(&size);
-        let size_u = usize::from_str(&size).unwrap_or(0);
-        let checksum = util::add_row(&hash);
+        let (size, mut socket): (usize, TSocket) =
+            util::Metadata::write_metadata(&self.name, &self.path, socket).await?;
 
-        let mut writer = asyncio::BufWriter::new(socket);
-        writer.write(&name).await?;
-        writer.write(&checksum).await?;
-        writer.write(&size_b).await?;
+        let mut received = [0u8; 1];
+        socket.read_exact(&mut received).await?;
+        let received = String::from_utf8(received.to_vec()).unwrap();
+        println!("Received answer: '{}'", received);
 
-        let job = util::spawn_read_file_job(sender, self.path.clone());
-        util::notify_progress(&self.sender_queue, 0, size_u).await;
-        let mut counter: usize = 0;
-        let mut current_size: usize = 0;
+        if received == "Y" {
+            println!("Writing data to the socket");
+            let mut writer = futio::BufWriter::new(socket);
+            let job = util::spawn_read_file_job(sender.clone(), self.path.clone());
 
-        loop {
-            match receiver.recv().await {
-                Some(payload) if payload.len() > 0 => {
-                    writer.write_all(&payload).await?;
-                    counter += payload.len();
-                    current_size += payload.len();
+            util::notify_progress(&self.sender_queue, 0, size).await;
 
-                    if util::time_to_notify(current_size, size_u) {
-                        util::notify_progress(&self.sender_queue, counter, size_u).await;
-                        current_size = 0;
+            let mut counter: usize = 0;
+            let mut current_size: usize = 0;
+
+            loop {
+                let value = receiver.recv();
+                match value {
+                    Ok(payload) if payload.len() > 0 => {
+                        writer.write_all(&payload).await?;
+                        counter += payload.len();
+                        current_size += payload.len();
+
+                        if util::time_to_notify(current_size, size) {
+                            util::notify_progress(&self.sender_queue, counter, size).await;
+                            current_size = 0;
+                        }
                     }
+                    Ok(_) => {
+                        util::notify_progress(&self.sender_queue, counter, size).await;
+                        break;
+                    }
+                    Err(e) => panic!(e),
                 }
-                Some(_) => {
-                    util::notify_progress(&self.sender_queue, counter, size_u).await;
-                    break;
-                }
-                None => (),
             }
+
+            job.join().expect("Joining failed");
+            writer.close().await?;
+            drop(writer);
+            Ok(())
+        } else {
+            Ok(())
         }
-        job.await;
-        writer.close().await?;
-        Ok(())
     }
 }
 
@@ -281,21 +288,19 @@ where
     type Future = Pin<Box<dyn Future<Output = Result<Self::Output, Self::Error>> + Send>>;
 
     fn upgrade_inbound(mut self, socket: TSocket, _: Self::Info) -> Self::Future {
-        async move {
+        Box::pin(async move {
             println!("Upgrade inbound");
             let start = Instant::now();
             match self.read_socket(socket).await {
                 Ok(event) => event,
                 Err(e) => {
-                    eprintln!("Error when reading socket: {:?}", e);
-                    return Err(e);
+                    panic!("Error when reading socket: {:?}", e);
                 }
             };
 
             println!("Finished {:?} ms", start.elapsed().as_millis());
             Ok(self)
-        }
-        .boxed()
+        })
     }
 }
 
@@ -308,16 +313,43 @@ where
     type Future = Pin<Box<dyn Future<Output = Result<Self::Output, Self::Error>> + Send>>;
 
     fn upgrade_outbound(self, socket: TSocket, _: Self::Info) -> Self::Future {
-        async move {
+        Box::pin(async move {
             println!("Upgrade outbound");
             let start = Instant::now();
 
-            self.write_socket(socket).await?;
+            match self.write_socket(socket).await {
+                Ok(_) => (),
+                Err(e) => panic!("Fucked up: {}", e),
+            }
 
             println!("Finished {:?} ms", start.elapsed().as_millis());
             Ok(())
+        })
+    }
+}
+
+impl fmt::Display for TransferOut {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "TransferOut name: {}, path: {}", self.name, self.path)
+    }
+}
+
+impl fmt::Display for TransferPayload {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "TransferPayload name: {}, path: {}, hash: {}, size: {} bytes",
+            self.name, self.path, self.hash, self.size_bytes
+        )
+    }
+}
+
+impl fmt::Display for ProtocolEvent {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ProtocolEvent::Received(e) => write!(f, "Received {}", e),
+            ProtocolEvent::Sent => write!(f, "Sent"),
         }
-        .boxed()
     }
 }
 
