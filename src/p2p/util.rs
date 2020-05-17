@@ -96,7 +96,7 @@ impl Metadata {
 
 pub fn spawn_write_file_job(receiver: Receiver<Vec<u8>>, path: String) -> JoinHandle<()> {
     thread::spawn(move || {
-        let mut file = io::BufWriter::new(fs::File::create(&path).expect("Creating file failed"));
+        let mut file = fs::File::create(&path).expect("Creating file failed");
         loop {
             match receiver.recv() {
                 Ok(payload) if payload == [] => {
@@ -112,12 +112,11 @@ pub fn spawn_write_file_job(receiver: Receiver<Vec<u8>>, path: String) -> JoinHa
 
 pub fn spawn_read_file_job(sender: SyncSender<Vec<u8>>, path: String) -> JoinHandle<()> {
     thread::spawn(move || {
-        let file = fs::File::open(&path).expect("File missing");
-        let mut reader = io::BufReader::new(&file);
+        let mut file = fs::File::open(&path).expect("File missing");
 
         loop {
             let mut buff = vec![0u8; CHUNK_SIZE * 32];
-            match reader.read(&mut buff) {
+            match file.read(&mut buff) {
                 Ok(n) if n > 0 => {
                     sender.send(buff[..n].to_vec()).expect("sending failed");
                 }

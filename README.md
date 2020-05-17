@@ -27,11 +27,16 @@ App can use Bluetooth OBEX protocol for file transfer throught the D-Bus BlueZ i
 
 ## TODOs:
 - implement error events
+- fix the outbound memory issue (consumes too much memory on file reading)
+- add test for the outbound/inbound
 - add logging
-- add sender side progress bar
 - show details about the host
 - add files queue
 - inject_dial_upgrade_error - but why not inbound?
 
 - adjust network timeouts
 - re-enable the Bluetooth
+
+## Done
+- add sender side progress bar
+- fix the inbound memory issue

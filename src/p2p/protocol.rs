@@ -127,7 +127,7 @@ impl TransferPayload {
         let mut reader = futio::BufReader::new(socket);
 
         let mut payloads: Vec<u8> = vec![];
-        let (sender, receiver) = sync_channel::<Vec<u8>>(CHUNK_SIZE * 32);
+        let (sender, receiver) = sync_channel::<Vec<u8>>(CHUNK_SIZE * 128);
         let path = util::get_target_path(&name)?;
         let job = util::spawn_write_file_job(receiver, path.clone());
 
@@ -163,6 +163,7 @@ impl TransferPayload {
             }
         }
 
+        drop(reader);
         job.join().expect("Joining failed");
 
         Ok((counter, path))
@@ -217,8 +218,7 @@ impl TransferOut {
     where
         TSocket: AsyncRead + AsyncWrite + Send + Unpin,
     {
-        let (sender, receiver) = sync_channel::<Vec<u8>>(CHUNK_SIZE * 32);
-
+        let (sender, receiver) = sync_channel::<Vec<u8>>(CHUNK_SIZE * 128);
         println!("Name: {:?}, Path: {:?}", self.name, &self.path);
 
         let (size, mut socket): (usize, TSocket) =
