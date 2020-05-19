@@ -32,7 +32,7 @@ pub fn pool_peers(
                         }
                     },
                     None => {
-                        eprintln!("Failed to get peers from the queue");
+                        error!("Failed to get peers from the queue");
                         return Continue(true);
                     }
                 };
@@ -43,7 +43,7 @@ pub fn pool_peers(
                     .map(|c| match c.get_widget_name() {
                         Some(name) => name.as_str().to_string(),
                         None => {
-                            eprintln!("Failed to get widget name");
+                            error!("Failed to get widget name");
                             "".to_string()
                         }
                     })

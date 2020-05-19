@@ -52,16 +52,16 @@ impl NetworkBehaviourEventProcess<MdnsEvent> for MyBehaviour {
                 for (peer_id, addr) in list {
                     match self.transfer_behaviour.add_peer(peer_id, addr) {
                         Ok(_) => (),
-                        Err(e) => eprintln!("{:?}", e),
+                        Err(e) => error!("{:?}", e),
                     };
                 }
             }
             MdnsEvent::Expired(list) => {
                 for (peer_id, _addr) in list {
-                    println!("Expired: {:?}", peer_id);
+                    error!("Address expired: {:?}", peer_id);
                     match self.transfer_behaviour.remove_peer(&peer_id) {
                         Ok(_) => (),
-                        Err(e) => eprintln!("{:?}", e),
+                        Err(e) => error!("{:?}", e),
                     }
                 }
             }
@@ -71,21 +71,21 @@ impl NetworkBehaviourEventProcess<MdnsEvent> for MyBehaviour {
 
 impl NetworkBehaviourEventProcess<TransferPayload> for MyBehaviour {
     fn inject_event(&mut self, mut event: TransferPayload) {
-        println!("Injected {}", event);
+        info!("Injected {}", event);
         match event.check_file() {
             Ok(_) => {
-                println!("File correct");
+                info!("File correct");
                 if let Err(e) = event
                     .sender_queue
                     .try_send(PeerEvent::FileCorrect(event.name))
                 {
-                    eprintln!("{:?}", e);
+                    error!("{:?}", e);
                 }
             }
             Err(e) => {
-                println!("Not correct: {:?}", e);
+                warn!("Not correct: {:?}", e);
                 if let Err(e) = event.sender_queue.try_send(PeerEvent::FileIncorrect) {
-                    eprintln!("{:?}", e);
+                    error!("{:?}", e);
                 }
             }
         }
@@ -94,7 +94,7 @@ impl NetworkBehaviourEventProcess<TransferPayload> for MyBehaviour {
 
 impl NetworkBehaviourEventProcess<TransferOut> for MyBehaviour {
     fn inject_event(&mut self, event: TransferOut) {
-        println!("TransferOut event: {:?}", event);
+        info!("TransferOut event: {:?}", event);
     }
 }
 
@@ -105,7 +105,7 @@ async fn execute_swarm(
 ) {
     let local_keys = identity::Keypair::generate_ed25519();
     let local_peer_id = PeerId::from(local_keys.public());
-    println!("\nI am Peer: {:?} \n\n", local_peer_id);
+    info!("I am Peer: {:?}", local_peer_id);
 
     let command_rec = Arc::new(Mutex::new(command_receiver));
     let command_receiver_c = Arc::clone(&command_rec);
@@ -161,28 +161,27 @@ async fn execute_swarm(
             match Receiver::poll_next_unpin(&mut receiver, context) {
                 Poll::Ready(Some(event)) => {
                     match swarm.transfer_behaviour.push_file(event) {
-                        Ok(_) => {}
-                        Err(e) => eprintln!("{:?}", e),
+                        Ok(_) => (),
+                        Err(e) => error!("{:?}", e),
                     };
                 }
-                Poll::Ready(None) => println!("nothing in queue"),
+                Poll::Ready(None) => info!("Nothing in queue"),
                 Poll::Pending => break,
             };
         }
 
         loop {
             match swarm.poll_next_unpin(context) {
-                Poll::Ready(Some(event)) => println!("Some event main: {:?}", event),
+                Poll::Ready(Some(event)) => info!("Some event main: {:?}", event),
                 Poll::Ready(None) => {
                     return {
-                        println!("Ready");
-                        Poll::Ready("aaa")
+                        Poll::Ready("Ready")
                     }
                 }
                 Poll::Pending => {
                     if !listening {
                         for addr in Swarm::listeners(&swarm) {
-                            println!("Listening on {:?}", addr);
+                            info!("Listening on {:?}", addr);
                             listening = true;
                         }
                     }

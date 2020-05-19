@@ -109,7 +109,7 @@ pub fn start_window() {
     thread::spawn(
         move || match run_server(peer_sender, file_receiver, command_receiver) {
             Ok(_) => {}
-            Err(e) => eprintln!("{:?}", e),
+            Err(e) => error!("{:?}", e),
         },
     );
 
@@ -139,8 +139,8 @@ pub fn start_window() {
         let command_sender_c = Arc::new(Mutex::new(command_sender.clone()));
 
         match build_window(app, file_sender_c, peer_receiver_c, command_sender_c) {
-            Ok(_) => println!("Ok!"),
-            Err(e) => println!("{:?}", e),
+            Ok(_) => info!("Window started"),
+            Err(e) => error!("{:?}", e),
         };
     });
     application.connect_activate(|_| {});
@@ -161,10 +161,10 @@ pub fn start_window() {
 //     let path_clone = Arc::clone(&path_arc);
 
 //     thread::spawn(move || {
-//         println!("Spawning thread");
+//         info!("Spawning thread");
 //         match transfer_file(BluetoothProtocol, &path_clone) {
 //             Ok(_) => (),
-//             Err(err) => eprintln!("{}", err),
+//             Err(err) => error!("{}", err),
 //         }
 //     })
 //     .join()

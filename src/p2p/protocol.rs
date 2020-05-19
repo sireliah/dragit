@@ -93,7 +93,7 @@ impl TransferPayload {
     async fn notify_incoming_file_event(&self, name: &str) {
         let event = PeerEvent::FileIncoming(name.to_string());
         if let Err(e) = self.sender_queue.to_owned().send(event).await {
-            eprintln!("{:?}", e);
+            error!("{:?}", e);
         }
     }
 
@@ -106,11 +106,11 @@ impl TransferPayload {
         task::block_on(future::poll_fn(
             move |context: &mut Context| match Receiver::poll_next_unpin(&mut r, context) {
                 Poll::Ready(Some(choice)) => {
-                    println!("Got the choice: {:?}", choice);
+                    info!("Got the choice: {:?}", choice);
                     Poll::Ready(choice)
                 }
                 Poll::Ready(None) => {
-                    println!("Nothing to handle now");
+                    info!("Nothing to handle now");
                     Poll::Pending
                 }
                 Poll::Pending => Poll::Pending,
@@ -219,7 +219,7 @@ impl TransferOut {
         TSocket: AsyncRead + AsyncWrite + Send + Unpin,
     {
         let (sender, receiver) = sync_channel::<Vec<u8>>(CHUNK_SIZE * 128);
-        println!("Name: {:?}, Path: {:?}", self.name, &self.path);
+        info!("Name: {:?}, Path: {:?}", self.name, &self.path);
 
         let (size, mut socket): (usize, TSocket) =
             util::Metadata::write_metadata(&self.name, &self.path, socket).await?;
@@ -227,10 +227,10 @@ impl TransferOut {
         let mut received = [0u8; 1];
         socket.read_exact(&mut received).await?;
         let received = String::from_utf8(received.to_vec()).unwrap();
-        println!("Received answer: '{}'", received);
+        info!("Received answer: '{}'", received);
 
         if received == "Y" {
-            println!("Writing data to the socket");
+            info!("Writing data to the socket");
             let mut writer = futio::BufWriter::new(socket);
             let job = util::spawn_read_file_job(sender.clone(), self.path.clone());
 
@@ -289,7 +289,7 @@ where
 
     fn upgrade_inbound(mut self, socket: TSocket, _: Self::Info) -> Self::Future {
         Box::pin(async move {
-            println!("Upgrade inbound");
+            info!("Upgrade inbound");
             let start = Instant::now();
             match self.read_socket(socket).await {
                 Ok(event) => event,
@@ -298,7 +298,7 @@ where
                 }
             };
 
-            println!("Finished {:?} ms", start.elapsed().as_millis());
+            info!("Finished {:?} ms", start.elapsed().as_millis());
             Ok(self)
         })
     }
@@ -314,7 +314,7 @@ where
 
     fn upgrade_outbound(self, socket: TSocket, _: Self::Info) -> Self::Future {
         Box::pin(async move {
-            println!("Upgrade outbound");
+            info!("Upgrade outbound");
             let start = Instant::now();
 
             match self.write_socket(socket).await {
@@ -322,7 +322,7 @@ where
                 Err(e) => panic!("Fucked up: {}", e),
             }
 
-            println!("Finished {:?} ms", start.elapsed().as_millis());
+            info!("Finished {:?} ms", start.elapsed().as_millis());
             Ok(())
         })
     }

@@ -69,7 +69,6 @@ impl PeerItem {
 
     fn extract_ip(address: &Multiaddr) -> String {
         let components = address.iter().collect::<Vec<Protocol>>();
-        println!("Ip: {:?}", components);
         let ip = &components[0];
         ip.to_string().replace("/ip4/", "").replace("/ip6/", "")
     }
@@ -97,7 +96,7 @@ impl PeerItem {
                 let file = match FileToSend::new(&path, &peer_id) {
                     Ok(v) => v,
                     Err(e) => {
-                        eprintln!("Failed creating FileToSend {:?}", e);
+                        error!("Failed creating FileToSend {:?}", e);
                         return ();
                     }
                 };

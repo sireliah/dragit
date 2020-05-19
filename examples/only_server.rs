@@ -19,7 +19,7 @@
 // async fn execute_swarm(receiver: Receiver<FileToSend>) {
 //     let local_keys = identity::Keypair::generate_ed25519();
 //     let local_peer_id = PeerId::from(local_keys.public());
-//     println!("\nI am Peer: {:?}\n\n", local_peer_id);
+//     info!("\nI am Peer: {:?}\n\n", local_peer_id);
 
 //     let (sender, _receiver) = channel::<PeerEvent>(1024);
 
@@ -55,27 +55,27 @@
 //                 Poll::Ready(Some(event)) => {
 //                     match swarm.transfer_behaviour.push_file(event) {
 //                         Ok(_) => {}
-//                         Err(e) => eprintln!("{:?}", e),
+//                         Err(e) => error!("{:?}", e),
 //                     };
 //                 }
-//                 Poll::Ready(None) => println!("nothing in queue"),
+//                 Poll::Ready(None) => info!("nothing in queue"),
 //                 Poll::Pending => break,
 //             };
 //         }
 
 //         loop {
 //             match swarm.poll_next_unpin(context) {
-//                 Poll::Ready(Some(event)) => println!("Some event main: {:?}", event),
+//                 Poll::Ready(Some(event)) => info!("Some event main: {:?}", event),
 //                 Poll::Ready(None) => {
 //                     return {
-//                         println!("Ready");
+//                         info!("Ready");
 //                         Poll::Ready("aaa")
 //                     }
 //                 }
 //                 Poll::Pending => {
 //                     if !listening {
 //                         for addr in Swarm::listeners(&swarm) {
-//                             println!("Listening on {:?}", addr);
+//                             info!("Listening on {:?}", addr);
 //                             listening = true;
 //                         }
 //                     }

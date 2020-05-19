@@ -18,7 +18,7 @@ pub struct BluetoothProtocol;
 
 impl Protocol for BluetoothProtocol {
     fn transfer_file(&self, file_path: &str) -> Result<(), Box<dyn Error>> {
-        println!("Received file to transfer: '{}'", file_path);
+        info!("Received file to transfer: '{}'", file_path);
         let adapter: Adapter = Adapter::init().unwrap();
         let devices: Vec<String> = adapter.get_device_list().unwrap();
 
@@ -36,10 +36,10 @@ impl Protocol for BluetoothProtocol {
 
         match connect(&device) {
             Ok(_) => match send_file_to_device(&device, file_path) {
-                Ok(_) => println!("File sent to the device successfully."),
-                Err(err) => println!("{:?}", err),
+                Ok(_) => info!("File sent to the device successfully."),
+                Err(err) => error!("{:?}", err),
             },
-            Err(err) => println!("{:?}", err),
+            Err(err) => error!("{:?}", err),
         }
 
         Ok(())
@@ -50,18 +50,18 @@ fn connect(device: &Device) -> Result<(), Box<dyn Error>> {
     let obex_push_uuid: String = "00001105-0000-1000-8000-00805f9b34fb"
         .to_string()
         .to_lowercase();
-    println!(
+    info!(
         "Device name {:?}, Paired {:?}",
         device.get_name(),
         device.is_paired()
     );
     let uuids = device.get_uuids();
-    println!("{:?}", uuids);
+    info!("{:?}", uuids);
     device.connect().ok();
     let push_func_found: bool = uuids.unwrap().contains(&obex_push_uuid);
-    println!("Push file functionality found: {}", push_func_found);
+    info!("Push file functionality found: {}", push_func_found);
     match device.is_connected() {
-        Ok(_) => println!("Connected!"),
+        Ok(_) => info!("Connected!"),
         Err(_) => process::exit(1),
     }
     sleep(Duration::from_millis(1000));
@@ -74,8 +74,8 @@ fn send_file_to_device(device: &Device, file_path: &str) -> Result<(), Box<dyn E
     let transfer = OBEXTransfer::send_file(&session, file_path)?;
 
     match transfer.wait_until_transfer_completed() {
-        Ok(_) => println!("Ok"),
-        Err(error) => println!("{:?}", error),
+        Ok(_) => info!("Ok"),
+        Err(error) => error!("{:?}", error),
     }
     Ok(())
 }

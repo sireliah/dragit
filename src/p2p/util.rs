@@ -62,7 +62,7 @@ impl Metadata {
                 Err(e) => return Err(Error::new(ErrorKind::InvalidData, e)),
             },
         );
-        println!("Read: Name: {}, Hash: {}, Size: {}", name, hash, size);
+        info!("Read: Name: {}, Hash: {}, Size: {}", name, hash, size);
         Ok((Metadata { name, hash, size }, socket))
     }
 
@@ -137,7 +137,7 @@ pub async fn notify_progress(
 ) {
     let event = PeerEvent::TransferProgress((counter, total_size));
     if let Err(e) = sender_queue.to_owned().send(event).await {
-        eprintln!("{:?}", e);
+        error!("{:?}", e);
     }
 }
 

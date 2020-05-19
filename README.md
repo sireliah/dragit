@@ -23,7 +23,7 @@ $ ./target/release/dragit
 ```
 
 ## Bluetooth support
-App can use Bluetooth OBEX protocol for file transfer throught the D-Bus BlueZ interface, which should work on most of the Linux devices. (currently disabled)
+App can use Bluetooth OBEX protocol for file transfer through the D-Bus BlueZ interface, which should work on most of the Linux devices. (currently disabled)
 
 ## TODOs:
 - implement error events

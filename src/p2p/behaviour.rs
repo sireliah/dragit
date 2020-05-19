@@ -108,10 +108,10 @@ impl NetworkBehaviour for TransferBehaviour {
     }
 
     fn inject_connected(&mut self, peer: &PeerId) {
-        println!("Connected to: {:?}", peer);
+        info!("Connected to: {:?}", peer);
         self.connected_peers.insert(peer.to_owned());
         if let Err(e) = self.notify_frontend(None) {
-            eprintln!("Failed to notify frontend {:?}", e);
+            error!("Failed to notify frontend {:?}", e);
         };
     }
 
@@ -159,24 +159,24 @@ impl NetworkBehaviour for TransferBehaviour {
             .collect::<CurrentPeers>();
 
         if let Err(e) = self.notify_frontend(Some(peers)) {
-            eprintln!("Failed to notify frontend {:?}", e);
+            error!("Failed to notify frontend {:?}", e);
         };
     }
 
     fn inject_dial_failure(&mut self, peer: &PeerId) {
-        println!("Dial failure: {:?}", peer);
+        warn!("Dial failure: {:?}", peer);
         self.connected_peers.remove(peer);
     }
 
     fn inject_disconnected(&mut self, peer: &PeerId) {
-        println!("Disconnected: {:?}", peer);
+        info!("Disconnected: {:?}", peer);
         if let Err(e) = self.remove_peer(peer) {
-            eprintln!("{:?}", e);
+            error!("{:?}", e);
         }
     }
 
     fn inject_event(&mut self, _: PeerId, _: ConnectionId, event: ProtocolEvent) {
-        println!("Inject event: {}", event);
+        info!("Inject event: {}", event);
         match event {
             ProtocolEvent::Received(data) => self
                 .events
@@ -196,7 +196,7 @@ impl NetworkBehaviour for TransferBehaviour {
         >,
     > {
         for file in self.payloads.iter() {
-            println!("Will try to dial: {:?}", file.peer);
+            info!("Will try to dial: {:?}", file.peer);
             if !self.connected_peers.contains(&file.peer) {
                 return Poll::Ready(NetworkBehaviourAction::DialPeer {
                     condition: DialPeerCondition::Disconnected,
@@ -229,7 +229,7 @@ impl NetworkBehaviour for TransferBehaviour {
                     return Poll::Ready(NetworkBehaviourAction::GenerateEvent(e));
                 }
                 _ => {
-                    println!("Another event");
+                    info!("Another event");
                     return Poll::Pending;
                 }
             }

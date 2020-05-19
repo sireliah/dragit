@@ -17,5 +17,7 @@ glib = "^0"
 gtk = { version = "0.8.1", features = [ "v3_18" ] }
 hex = "0.4.2"
 libp2p = "0.18.1"
+log = "0.4.8"
+env_logger = "0.7"
 md-5 = "0.8.0"
 percent-encoding = "2.1.0"

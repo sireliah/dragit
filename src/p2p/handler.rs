@@ -164,7 +164,7 @@ where
         _: Self::OutboundOpenInfo,
         error: ProtocolsHandlerUpgrErr<<Self::OutboundProtocol as OutboundUpgradeSend>::Error>,
     ) {
-        eprintln!("Ah, error: {:?}", error);
+        error!("Ah, error: {:?}", error);
         if self.pending_error.is_none() {
             self.pending_error = Some(error);
         }
@@ -187,7 +187,7 @@ where
         >,
     > {
         if let Some(err) = self.pending_error.take() {
-            println!("Error handler: {:?}", err);
+            error!("Error handler: {:?}", err);
             return Poll::Ready(ProtocolsHandlerEvent::Close(err));
         }
 
