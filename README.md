@@ -26,10 +26,10 @@ $ ./target/release/dragit
 App can use Bluetooth OBEX protocol for file transfer through the D-Bus BlueZ interface, which should work on most of the Linux devices. (currently disabled)
 
 ## TODOs:
+- TransferCommand::Accept should specify which file should be accepted
+- add timeout on the Accept/Deny event
 - implement error events
 - fix the outbound memory issue (consumes too much memory on file reading)
-- add test for the outbound/inbound
-- add logging
 - show details about the host
 - add files queue
 - inject_dial_upgrade_error - but why not inbound?
@@ -40,3 +40,5 @@ App can use Bluetooth OBEX protocol for file transfer through the D-Bus BlueZ in
 ## Done
 - add sender side progress bar
 - fix the inbound memory issue
+- add logging
+- add test for the outbound/inbound

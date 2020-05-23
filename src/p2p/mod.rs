@@ -32,12 +32,10 @@ pub mod peer;
 pub mod protocol;
 pub mod util;
 
-use behaviour::TransferBehaviour;
-use protocol::{TransferOut, TransferPayload};
-
+pub use behaviour::TransferBehaviour;
 pub use commands::TransferCommand;
 pub use peer::{CurrentPeers, Peer, PeerEvent};
-pub use protocol::FileToSend;
+pub use protocol::{FileToSend, TransferOut, TransferPayload};
 
 #[derive(NetworkBehaviour)]
 pub struct MyBehaviour {
@@ -118,7 +116,6 @@ async fn execute_swarm(
             transfer_behaviour,
         };
         let timeout = Duration::from_secs(60);
-
         let transport = {
             let tcp = tcp::TcpConfig::new().nodelay(true);
             let transport = dns::DnsConfig::new(tcp).unwrap();
@@ -141,7 +138,6 @@ async fn execute_swarm(
                 .timeout(timeout),
             timeout,
         );
-
         Swarm::new(transport, behaviour, local_peer_id)
     };
 
@@ -172,12 +168,11 @@ async fn execute_swarm(
 
         loop {
             match swarm.poll_next_unpin(context) {
-                Poll::Ready(Some(event)) => info!("Some event main: {:?}", event),
-                Poll::Ready(None) => {
-                    return {
-                        Poll::Ready("Ready")
-                    }
+                Poll::Ready(Some(event)) => {
+                    info!("Some event main: {:?}", event);
+                    return Poll::Ready(event);
                 }
+                Poll::Ready(None) => return Poll::Ready(()),
                 Poll::Pending => {
                     if !listening {
                         for addr in Swarm::listeners(&swarm) {

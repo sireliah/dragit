@@ -11,7 +11,7 @@ use futures::channel::mpsc::{Receiver, Sender};
 use libp2p::core::{connection::ConnectionId, ConnectedPoint, Multiaddr, PeerId};
 use libp2p::swarm::{
     DialPeerCondition, NetworkBehaviour, NetworkBehaviourAction, NotifyHandler, PollParameters,
-    ProtocolsHandler, SubstreamProtocol,
+    SubstreamProtocol,
 };
 
 use crate::p2p::commands::TransferCommand;
@@ -26,7 +26,7 @@ pub struct TransferBehaviour {
     pub connected_peers: HashSet<PeerId>,
     pub events: Vec<NetworkBehaviourAction<TransferOut, TransferPayload>>,
     payloads: Vec<FileToSend>,
-    sender: Sender<PeerEvent>,
+    pub sender: Sender<PeerEvent>,
     receiver: Arc<Mutex<Receiver<TransferCommand>>>,
 }
 
@@ -121,6 +121,7 @@ impl NetworkBehaviour for TransferBehaviour {
         c: &ConnectionId,
         endpoint: &ConnectedPoint,
     ) {
+        info!("Connection established: {:?}", peer);
         match self.payloads.pop() {
             Some(message) => {
                 let transfer = TransferOut {
@@ -189,15 +190,10 @@ impl NetworkBehaviour for TransferBehaviour {
         &mut self,
         _: &mut Context,
         _: &mut impl PollParameters,
-    ) -> Poll<
-        NetworkBehaviourAction<
-            <Self::ProtocolsHandler as ProtocolsHandler>::InEvent,
-            Self::OutEvent,
-        >,
-    > {
+    ) -> Poll<NetworkBehaviourAction<TransferOut, TransferPayload>> {
         for file in self.payloads.iter() {
-            info!("Will try to dial: {:?}", file.peer);
             if !self.connected_peers.contains(&file.peer) {
+                // info!("Will try to dial: {:?}", file.peer);
                 return Poll::Ready(NetworkBehaviourAction::DialPeer {
                     condition: DialPeerCondition::Disconnected,
                     peer_id: file.peer.to_owned(),

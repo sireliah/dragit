@@ -113,7 +113,10 @@ impl TransferPayload {
                     info!("Nothing to handle now");
                     Poll::Pending
                 }
-                Poll::Pending => Poll::Pending,
+                Poll::Pending => {
+                    info!("Waiting for answer...");
+                    Poll::Pending
+                }
             },
         ))
     }
@@ -317,10 +320,7 @@ where
             info!("Upgrade outbound");
             let start = Instant::now();
 
-            match self.write_socket(socket).await {
-                Ok(_) => (),
-                Err(e) => panic!("Fucked up: {}", e),
-            }
+            self.write_socket(socket).await?;
 
             info!("Finished {:?} ms", start.elapsed().as_millis());
             Ok(())
