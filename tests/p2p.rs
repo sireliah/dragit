@@ -1,6 +1,6 @@
 use async_std::{sync::Mutex, task};
 use futures::{
-    channel::mpsc::{channel, Receiver},
+    channel::mpsc::{channel, Receiver, Sender},
     future,
     prelude::*,
 };
@@ -31,8 +31,15 @@ fn test_transfer() {
         .unwrap();
 
     let (mut tx, mut rx) = channel::<Multiaddr>(10);
-    let (peer1, mut peer_receiver1, mut swarm1) = build_swarm();
-    let (_, _, mut swarm2) = build_swarm();
+    let (peer1, mut sender, mut peer_receiver1, mut swarm1) = build_swarm();
+    let (_, _, _, mut swarm2) = build_swarm();
+
+    // File should be accepted from the beginning
+    sender
+        .try_send(TransferCommand::Accept(
+            "81dc9bdb52d04dc20036dbd8313ed055".to_string(),
+        ))
+        .unwrap();
 
     let addr = "/ip4/127.0.0.1/tcp/3000".parse().unwrap();
 
@@ -138,13 +145,15 @@ fn test_transfer() {
     assert_eq!(actual, "a-file".to_string());
 }
 
-fn build_swarm() -> (PeerId, Receiver<PeerEvent>, Swarm<MyBehaviour>) {
+fn build_swarm() -> (
+    PeerId,
+    Sender<TransferCommand>,
+    Receiver<PeerEvent>,
+    Swarm<MyBehaviour>,
+) {
     let (_, _) = channel::<FileToSend>(1024 * 24);
-    let (mut command_sender, command_receiver) = channel::<TransferCommand>(1024 * 24);
+    let (command_sender, command_receiver) = channel::<TransferCommand>(1024 * 24);
     let (peer_sender, peer_receiver) = channel::<PeerEvent>(1024 * 24);
-
-    // File should be accepted from the beginning
-    command_sender.try_send(TransferCommand::Accept).unwrap();
 
     let local_keys = identity::Keypair::generate_ed25519();
     let local_peer_id = PeerId::from(local_keys.public());
@@ -182,6 +191,7 @@ fn build_swarm() -> (PeerId, Receiver<PeerEvent>, Swarm<MyBehaviour>) {
     let peer_id = local_peer_id.clone();
     (
         peer_id,
+        command_sender,
         peer_receiver,
         Swarm::new(transport, behaviour, local_peer_id),
     )

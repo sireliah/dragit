@@ -7,7 +7,7 @@ pub enum PeerEvent {
     TransferError,
     FileCorrect(String),
     FileIncorrect,
-    FileIncoming(String),
+    FileIncoming(String, String),
 }
 
 pub type CurrentPeers = Vec<Peer>;

@@ -193,7 +193,6 @@ impl NetworkBehaviour for TransferBehaviour {
     ) -> Poll<NetworkBehaviourAction<TransferOut, TransferPayload>> {
         for file in self.payloads.iter() {
             if !self.connected_peers.contains(&file.peer) {
-                // info!("Will try to dial: {:?}", file.peer);
                 return Poll::Ready(NetworkBehaviourAction::DialPeer {
                     condition: DialPeerCondition::Disconnected,
                     peer_id: file.peer.to_owned(),

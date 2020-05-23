@@ -69,15 +69,15 @@ pub fn build_window(
             app_notification.show_failure(&overlay);
             Continue(true)
         }
-        PeerEvent::FileIncoming(name) => {
+        PeerEvent::FileIncoming(name, hash) => {
             if let Some(win) = window_weak.upgrade() {
                 let accept_dialog = AcceptFileDialog::new(&win, name);
                 let response = accept_dialog.run();
 
                 let command = match response {
-                    gtk::ResponseType::Yes => TransferCommand::Accept,
-                    gtk::ResponseType::No => TransferCommand::Deny,
-                    _ => TransferCommand::Deny,
+                    gtk::ResponseType::Yes => TransferCommand::Accept(hash),
+                    gtk::ResponseType::No => TransferCommand::Deny(hash),
+                    _ => TransferCommand::Deny(hash),
                 };
 
                 let _ = command_sender.lock().unwrap().try_send(command);

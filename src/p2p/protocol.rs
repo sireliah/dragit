@@ -90,8 +90,8 @@ impl TransferPayload {
         }
     }
 
-    async fn notify_incoming_file_event(&self, name: &str) {
-        let event = PeerEvent::FileIncoming(name.to_string());
+    async fn notify_incoming_file_event(&self, name: &str, hash: &str) {
+        let event = PeerEvent::FileIncoming(name.to_string(), hash.to_string());
         if let Err(e) = self.sender_queue.to_owned().send(event).await {
             error!("{:?}", e);
         }
@@ -113,10 +113,7 @@ impl TransferPayload {
                     info!("Nothing to handle now");
                     Poll::Pending
                 }
-                Poll::Pending => {
-                    info!("Waiting for answer...");
-                    Poll::Pending
-                }
+                Poll::Pending => Poll::Pending,
             },
         ))
     }
@@ -179,11 +176,12 @@ impl TransferPayload {
         let (meta, mut socket): (util::Metadata, TSocket) =
             util::Metadata::read_metadata(socket).await?;
 
-        self.notify_incoming_file_event(&meta.name).await;
+        self.notify_incoming_file_event(&meta.name, &meta.hash)
+            .await;
         let rec_cp = Arc::clone(&self.receiver);
 
         match self.block_for_answer(rec_cp).await {
-            TransferCommand::Accept => {
+            TransferCommand::Accept(hash) if hash == meta.hash => {
                 socket.write(b"Y").await?;
                 socket.flush().await?;
 
@@ -198,7 +196,17 @@ impl TransferPayload {
                 self.size_bytes = counter;
                 Ok(())
             }
-            TransferCommand::Deny => {
+            TransferCommand::Accept(hash) => {
+                warn!("Accepted hash does not match: {} {}", hash, meta.hash);
+                socket.write(b"N").await?;
+                socket.flush().await?;
+                Err(IoError::new(
+                    ErrorKind::PermissionDenied,
+                    "Hash does not match",
+                ))
+            }
+            TransferCommand::Deny(hash) => {
+                warn!("Denied hash: {}", hash);
                 socket.write(b"N").await?;
                 socket.flush().await?;
                 Err(IoError::new(ErrorKind::PermissionDenied, "Rejected"))
