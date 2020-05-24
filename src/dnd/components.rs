@@ -240,8 +240,7 @@ impl AppNotification {
     }
 
     pub fn show_ok(&self, overlay: &gtk::Overlay, text: String) {
-        let notif_text = format!("File received {}", text);
-        self.label.set_text(&notif_text);
+        self.label.set_text(&text);
 
         self.reveal(overlay);
     }

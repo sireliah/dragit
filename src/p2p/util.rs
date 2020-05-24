@@ -1,7 +1,6 @@
 use std::fs;
-use std::io;
-use std::io::Write;
-use std::io::{Error, ErrorKind, Read};
+use std::io::{self, Error, ErrorKind, Read, Write};
+use std::path::Path;
 use std::str::FromStr;
 use std::thread::{self, JoinHandle};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -141,30 +140,46 @@ pub async fn notify_progress(
     }
 }
 
-pub fn get_target_path(name: &str) -> Result<String, Error> {
+fn get_timestamp() -> u64 {
+    let now = SystemTime::now();
+    now.duration_since(UNIX_EPOCH)
+        .expect("Time failed")
+        .as_secs()
+}
+
+fn generate_full_path<F>(name: &str, path: &Path, timestamp: F) -> Result<String, Error>
+where
+    F: Fn() -> u64,
+{
+    let name = format!("{}_{}", timestamp(), name);
+    let path = Path::new(path);
+    let joined = path.join(name);
+    let result = joined.into_os_string().into_string().or_else(|_| {
+        Err(Error::new(
+            ErrorKind::InvalidData,
+            "Could not return target path as string",
+        ))
+    });
+    result
+}
+
+pub fn get_target_path(name: &str, target_path: Option<&String>) -> Result<String, Error> {
     // TODO: make this a future
-    match UserDirs::new() {
-        Some(dirs) => match dirs.download_dir() {
-            Some(path) => {
-                let now = SystemTime::now();
-                let timestamp = now.duration_since(UNIX_EPOCH).expect("Time failed");
-                let name = format!("{}_{}", timestamp.as_secs(), name);
-                let p = path.join(name);
-                let result = p.into_os_string().into_string();
-                match result {
-                    Ok(value) => Ok(value),
-                    Err(_) => Err(Error::new(
-                        ErrorKind::InvalidData,
-                        "Could not return Downloads path as string",
-                    )),
-                }
-            }
-            None => Err(Error::new(
-                ErrorKind::NotFound,
-                "Downloads directory could not be found",
-            )),
+    match target_path {
+        Some(path) => {
+            let path = Path::new(path);
+            generate_full_path(name, path, get_timestamp)
+        }
+        None => match UserDirs::new() {
+            Some(dirs) => match dirs.download_dir() {
+                Some(path) => generate_full_path(name, path, get_timestamp),
+                None => Err(Error::new(
+                    ErrorKind::NotFound,
+                    "Downloads directory could not be found",
+                )),
+            },
+            None => Err(Error::new(ErrorKind::NotFound, "Could not check user dirs")),
         },
-        None => Err(Error::new(ErrorKind::NotFound, "Could not check user dirs")),
     }
 }
 
@@ -211,12 +226,19 @@ pub fn time_to_notify(current_size: usize, total_size: usize) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use self::super::hash_contents;
+    use self::super::*;
 
     #[test]
     fn test_hash_local_file() {
         let result = hash_contents("src/file.txt").unwrap();
 
         assert_eq!(result, "696c56be6d4c4a48d3de0d17e237f82a");
+    }
+
+    #[test]
+    fn test_generate_full_path() {
+        let result = generate_full_path("a-file.txt", Path::new("/home/user/"), || 1111).unwrap();
+
+        assert_eq!(result, "/home/user/1111_a-file.txt");
     }
 }

@@ -1,3 +1,7 @@
+use std::fs;
+use std::sync::Arc;
+use std::time::Duration;
+
 use async_std::{sync::Mutex, task};
 use futures::{
     channel::mpsc::{channel, Receiver, Sender},
@@ -15,8 +19,6 @@ use libp2p::{
     swarm::{NetworkBehaviourAction, NotifyHandler, SwarmEvent},
     tcp, websocket, Multiaddr, PeerId, Swarm,
 };
-use std::sync::Arc;
-use std::time::Duration;
 
 use dragit::p2p::{
     FileToSend, MyBehaviour, PeerEvent, TransferBehaviour, TransferCommand, TransferOut,
@@ -131,18 +133,22 @@ fn test_transfer() {
     assert_eq!(p1, ());
 
     let mut tries = 0;
-    let actual = loop {
+    let (name, path) = loop {
         match peer_receiver1.try_next().unwrap().unwrap() {
-            PeerEvent::FileCorrect(e) => break e,
+            PeerEvent::FileCorrect(name, path) => break (name, path),
             other => {
                 println!("Other event: {:?}", other);
-                assert_ne!(tries, 10);
             }
         }
         tries += 1;
+        assert_ne!(tries, 10);
     };
 
-    assert_eq!(actual, "a-file".to_string());
+    assert_eq!(name, "a-file".to_string());
+
+    let meta = fs::metadata(path).expect("No file found");
+
+    assert!(meta.is_file());
 }
 
 fn build_swarm() -> (
@@ -161,7 +167,8 @@ fn build_swarm() -> (
     let command_receiver = Arc::new(Mutex::new(command_receiver));
 
     let mdns = Mdns::new().unwrap();
-    let transfer_behaviour = TransferBehaviour::new(peer_sender, command_receiver);
+    let transfer_behaviour =
+        TransferBehaviour::new(peer_sender, command_receiver, Some("/tmp/".to_string()));
     let behaviour = MyBehaviour {
         mdns,
         transfer_behaviour,

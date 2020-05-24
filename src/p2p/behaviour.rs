@@ -28,10 +28,15 @@ pub struct TransferBehaviour {
     payloads: Vec<FileToSend>,
     pub sender: Sender<PeerEvent>,
     receiver: Arc<Mutex<Receiver<TransferCommand>>>,
+    pub target_path: Option<String>,
 }
 
 impl TransferBehaviour {
-    pub fn new(sender: Sender<PeerEvent>, receiver: Arc<Mutex<Receiver<TransferCommand>>>) -> Self {
+    pub fn new(
+        sender: Sender<PeerEvent>,
+        receiver: Arc<Mutex<Receiver<TransferCommand>>>,
+        target_path: Option<String>,
+    ) -> Self {
         TransferBehaviour {
             peers: HashMap::new(),
             connected_peers: HashSet::new(),
@@ -39,6 +44,7 @@ impl TransferBehaviour {
             payloads: vec![],
             sender,
             receiver,
+            target_path,
         }
     }
 
@@ -94,6 +100,7 @@ impl NetworkBehaviour for TransferBehaviour {
             size_bytes: 0,
             sender_queue: self.sender.clone(),
             receiver: Arc::clone(&self.receiver),
+            target_path: self.target_path.clone(),
         };
         let handler_config = OneShotHandlerConfig {
             inactive_timeout: Duration::from_secs(5),

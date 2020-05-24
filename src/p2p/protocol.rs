@@ -74,6 +74,7 @@ pub struct TransferPayload {
     pub size_bytes: usize,
     pub sender_queue: Sender<PeerEvent>,
     pub receiver: Arc<Mutex<Receiver<TransferCommand>>>,
+    pub target_path: Option<String>,
 }
 
 impl TransferPayload {
@@ -128,7 +129,7 @@ impl TransferPayload {
 
         let mut payloads: Vec<u8> = vec![];
         let (sender, receiver) = sync_channel::<Vec<u8>>(CHUNK_SIZE * 128);
-        let path = util::get_target_path(&name)?;
+        let path = util::get_target_path(&name, self.target_path.as_ref())?;
         let job = util::spawn_write_file_job(receiver, path.clone());
 
         let mut counter: usize = 0;

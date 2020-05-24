@@ -75,7 +75,7 @@ impl NetworkBehaviourEventProcess<TransferPayload> for MyBehaviour {
                 info!("File correct");
                 if let Err(e) = event
                     .sender_queue
-                    .try_send(PeerEvent::FileCorrect(event.name))
+                    .try_send(PeerEvent::FileCorrect(event.name, event.path))
                 {
                     error!("{:?}", e);
                 }
@@ -110,7 +110,7 @@ async fn execute_swarm(
 
     let mut swarm = {
         let mdns = Mdns::new().unwrap();
-        let transfer_behaviour = TransferBehaviour::new(sender, command_receiver_c);
+        let transfer_behaviour = TransferBehaviour::new(sender, command_receiver_c, None);
         let behaviour = MyBehaviour {
             mdns,
             transfer_behaviour,

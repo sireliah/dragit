@@ -57,10 +57,11 @@ pub fn build_window(
             progress.progress_bar.set_fraction(size / total);
             Continue(true)
         }
-        PeerEvent::FileCorrect(file_name) => {
+        PeerEvent::FileCorrect(file_name, path) => {
             progress.progress_bar.set_fraction(0.0);
             progress.hide();
-            app_notification.show_ok(&overlay, file_name);
+            let text = format!("Received {} \nSaved in {}", file_name, path);
+            app_notification.show_ok(&overlay, text);
             Continue(true)
         }
         PeerEvent::FileIncorrect => {
