@@ -1,3 +1,4 @@
+[![Actions Status](https://github.com/sireliah/dragit/workflows/Build%20and%20Test/badge.svg)](https://github.com/sireliah/dragit/actions)
 # Dragit
 Experimental application for intuitive file sharing between devices.
 
