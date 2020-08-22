@@ -668,8 +668,6 @@ version = "0.1.0"
 dependencies = [
  "async-std 1.6.0",
  "blurz",
- "cairo-rs",
- "dbus",
  "directories",
  "env_logger",
  "futures",
