@@ -11,11 +11,10 @@ use futures::channel::mpsc::{Receiver, Sender};
 use libp2p::core::{connection::ConnectionId, ConnectedPoint, Multiaddr, PeerId};
 use libp2p::swarm::{
     DialPeerCondition, NetworkBehaviour, NetworkBehaviourAction, NotifyHandler, PollParameters,
-    SubstreamProtocol,
+    SubstreamProtocol, OneShotHandler, OneShotHandlerConfig
 };
 
 use crate::p2p::commands::TransferCommand;
-use crate::p2p::handler::{OneShotHandler, OneShotHandlerConfig};
 use crate::p2p::peer::{CurrentPeers, Peer, PeerEvent};
 use crate::p2p::protocol::{FileToSend, ProtocolEvent, TransferOut, TransferPayload};
 
@@ -103,8 +102,8 @@ impl NetworkBehaviour for TransferBehaviour {
             target_path: self.target_path.clone(),
         };
         let handler_config = OneShotHandlerConfig {
-            inactive_timeout: Duration::from_secs(5),
-            substream_timeout: timeout,
+            keep_alive_timeout: Duration::from_secs(5),
+            outbound_substream_timeout: timeout,
         };
         let proto = SubstreamProtocol::new(tp).with_timeout(timeout);
         Self::ProtocolsHandler::new(proto, handler_config)

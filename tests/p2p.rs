@@ -15,7 +15,7 @@ use libp2p::{
     core::upgrade,
     dns, identity,
     mdns::Mdns,
-    mplex, secio,
+    mplex,
     swarm::{NetworkBehaviourAction, NotifyHandler, SwarmEvent},
     tcp, websocket, Multiaddr, PeerId, Swarm,
 };

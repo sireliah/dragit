@@ -12,11 +12,14 @@ use libp2p::{
     core::transport::timeout::TransportTimeout,
     core::transport::Transport,
     core::upgrade,
-    dns, identity,
+    identity,
+    mplex,
+    dns,
+    noise,
     mdns::{Mdns, MdnsEvent},
-    mplex, secio,
+    tcp::TcpConfig,
     swarm::NetworkBehaviourEventProcess,
-    tcp, websocket, NetworkBehaviour, PeerId, Swarm,
+    websocket, NetworkBehaviour, PeerId, Swarm,
 };
 
 use std::{
@@ -27,7 +30,6 @@ use std::{
 
 pub mod behaviour;
 pub mod commands;
-pub mod handler;
 pub mod peer;
 pub mod protocol;
 pub mod util;
@@ -109,15 +111,15 @@ async fn execute_swarm(
     let command_receiver_c = Arc::clone(&command_rec);
 
     let mut swarm = {
-        let mdns = Mdns::new().unwrap();
         let transfer_behaviour = TransferBehaviour::new(sender, command_receiver_c, None);
+        let mdns = Mdns::new().unwrap();
         let behaviour = MyBehaviour {
             mdns,
             transfer_behaviour,
         };
         let timeout = Duration::from_secs(60);
         let transport = {
-            let tcp = tcp::TcpConfig::new().nodelay(true);
+            let tcp = TcpConfig::new().nodelay(true);
             let transport = dns::DnsConfig::new(tcp).unwrap();
             let trans_clone = transport.clone();
             transport.or_transport(websocket::WsConfig::new(trans_clone))
@@ -129,10 +131,14 @@ async fn execute_swarm(
             .max_buffer_len(40960)
             .split_send_size(1024 * 512);
 
+        let noise_keys = noise::Keypair::<noise::X25519Spec>::new().into_authentic(&local_keys).unwrap();
+
+        let noise = noise::NoiseConfig::xx(noise_keys).into_authenticated();
+
         let transport = TransportTimeout::with_outgoing_timeout(
             transport
                 .upgrade(upgrade::Version::V1)
-                .authenticate(secio::SecioConfig::new(local_keys.clone()))
+                .authenticate(noise)
                 .multiplex(mp.clone())
                 .map(|(peer, muxer), _| (peer, muxing::StreamMuxerBox::new(muxer)))
                 .timeout(timeout),
