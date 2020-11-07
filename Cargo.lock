@@ -316,16 +316,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "blurz"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b1bc2df4d0f1d373b324672d9966aca3f5ba1f03d69edad6240144774539ea59"
-dependencies = [
- "dbus",
- "hex 0.3.2",
-]
-
-[[package]]
 name = "bs58"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -612,16 +602,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72aa14c04dfae8dd7d8a2b1cb7ca2152618cd01336dbfe704b8dcbf8d41dbd69"
 
 [[package]]
-name = "dbus"
-version = "0.6.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "48b5f0f36f1eebe901b0e6bee369a77ed3396334bf3f09abd46454a576f71819"
-dependencies = [
- "libc",
- "libdbus-sys",
-]
-
-[[package]]
 name = "digest"
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -667,7 +647,6 @@ name = "dragit"
 version = "0.1.0"
 dependencies = [
  "async-std 1.6.0",
- "blurz",
  "directories",
  "env_logger",
  "futures",
@@ -675,7 +654,7 @@ dependencies = [
  "gio",
  "glib",
  "gtk",
- "hex 0.4.2",
+ "hex",
  "libp2p",
  "log",
  "md-5",
@@ -1170,12 +1149,6 @@ dependencies = [
 
 [[package]]
 name = "hex"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "805026a5d0141ffc30abb3be3173848ad46a1b1664fe632428479619a3644d77"
-
-[[package]]
-name = "hex"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "644f9158b2f133fd50f5fb3242878846d9eb792e445c893805ff0e3824006e35"
@@ -1322,15 +1295,6 @@ name = "libc"
 version = "0.2.70"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3baa92041a6fec78c687fa0cc2b3fae8884f743d672cf551bed1d6dac6988d0f"
-
-[[package]]
-name = "libdbus-sys"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dc12a3bc971424edbbf7edaf6e5740483444db63aa8e23d3751ff12a30f306f0"
-dependencies = [
- "pkg-config",
-]
 
 [[package]]
 name = "libp2p"
