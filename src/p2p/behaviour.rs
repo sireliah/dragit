@@ -10,8 +10,8 @@ use futures::channel::mpsc::{Receiver, Sender};
 
 use libp2p::core::{connection::ConnectionId, ConnectedPoint, Multiaddr, PeerId};
 use libp2p::swarm::{
-    DialPeerCondition, NetworkBehaviour, NetworkBehaviourAction, NotifyHandler, PollParameters,
-    SubstreamProtocol, OneShotHandler, OneShotHandlerConfig
+    DialPeerCondition, NetworkBehaviour, NetworkBehaviourAction, NotifyHandler, OneShotHandler,
+    OneShotHandlerConfig, PollParameters, SubstreamProtocol,
 };
 
 use crate::p2p::commands::TransferCommand;

@@ -12,13 +12,11 @@ use libp2p::{
     core::transport::timeout::TransportTimeout,
     core::transport::Transport,
     core::upgrade,
-    identity,
-    mplex,
-    dns,
-    noise,
+    dns, identity,
     mdns::{Mdns, MdnsEvent},
-    tcp::TcpConfig,
+    mplex, noise,
     swarm::NetworkBehaviourEventProcess,
+    tcp::TcpConfig,
     websocket, NetworkBehaviour, PeerId, Swarm,
 };
 
@@ -131,7 +129,9 @@ async fn execute_swarm(
             .max_buffer_len(40960)
             .split_send_size(1024 * 512);
 
-        let noise_keys = noise::Keypair::<noise::X25519Spec>::new().into_authentic(&local_keys).unwrap();
+        let noise_keys = noise::Keypair::<noise::X25519Spec>::new()
+            .into_authentic(&local_keys)
+            .unwrap();
 
         let noise = noise::NoiseConfig::xx(noise_keys).into_authenticated();
 

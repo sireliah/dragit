@@ -91,7 +91,11 @@ impl PeerItem {
             .connect_drag_data_received(move |_win, _, _, _, s, _, _| {
                 let path: String = match s.get_text() {
                     Some(value) => PeerItem::clean_filename(&value).expect("Decoding path failed"),
-                    None => s.get_uris().pop().unwrap().to_string(),
+                    None => {
+                        // Extracting the file path from the URI works best for Windows
+                        let uri = s.get_uris().pop().unwrap().to_string();
+                        PeerItem::clean_filename(&uri).expect("Decoding path from URI failed")
+                    }
                 };
                 let file = match FileToSend::new(&path, &peer_id) {
                     Ok(v) => v,
@@ -109,7 +113,8 @@ impl PeerItem {
 
     fn clean_filename(path: &str) -> Result<String, Box<dyn Error>> {
         let value = percent_decode_str(path).decode_utf8()?;
-        let path = value.replace("file://", "");
+        // Windows paths contain one extra slash
+        let path = value.replace("file:///", "").replace("file://", "");
         Ok(path.trim().to_string())
     }
 }

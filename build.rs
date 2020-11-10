@@ -1,6 +1,5 @@
-
 //fn main() {
-    //println!(r"cargo:rustc-link-search=native=C:\msys64\home\vieviurka\vcpkg\installed\x64-windows\lib");
+//println!(r"cargo:rustc-link-search=native=C:\msys64\home\vieviurka\vcpkg\installed\x64-windows\lib");
 //}
 
 use autovcpkg;
