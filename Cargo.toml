@@ -21,11 +21,5 @@ env_logger = "0.7"
 md-5 = "0.8.0"
 percent-encoding = "2.1.0"
 
-[dependencies.autovcpkg]
-git = "https://github.com/fungos/autovcpkg.git"
-version = "0.1.2019-10"
-features = ["gtk", "cairo"]
-
-[build-dependencies.autovcpkg]
-git = "https://github.com/fungos/autovcpkg.git"
-version = "0.1.2019-10"
+[target.'cfg(windows)'.build-dependencies]
+autovcpkg = { git = "https://github.com/fungos/autovcpkg.git", version = "0.1.2019-10", features = ["gtk", "cairo"]}
