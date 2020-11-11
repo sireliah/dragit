@@ -3,7 +3,9 @@ use std::sync::{Arc, Mutex};
 use gio::prelude::*;
 use gtk::prelude::*;
 
-use futures::channel::mpsc::{Receiver, Sender};
+use async_std::sync::{Receiver, Sender};
+
+// use futures::channel::mpsc::{Receiver, Sender};
 use glib::Continue;
 use gtk::{timeout_add, ApplicationWindow};
 
@@ -22,17 +24,11 @@ pub fn pool_peers(
 
     timeout_add(200, move || {
         if let Some(layout_in) = layout_weak.upgrade() {
-            if let Ok(p) = peer_receiver.lock().unwrap().try_next() {
-                let peers: CurrentPeers = match p {
-                    Some(event) => match event {
-                        PeerEvent::PeersUpdated(list) => list,
-                        event => {
-                            let _ = peer_event_sender.send(event);
-                            return Continue(true);
-                        }
-                    },
-                    None => {
-                        error!("Failed to get peers from the queue");
+            if let Ok(event) = peer_receiver.lock().unwrap().try_recv() {
+                let peers: CurrentPeers = match event {
+                    PeerEvent::PeersUpdated(list) => list,
+                    event => {
+                        let _ = peer_event_sender.send(event);
                         return Continue(true);
                     }
                 };

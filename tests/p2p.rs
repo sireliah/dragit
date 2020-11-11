@@ -2,12 +2,10 @@ use std::fs;
 use std::sync::Arc;
 use std::time::Duration;
 
-use async_std::{sync::Mutex, task};
-use futures::{
-    channel::mpsc::{channel, Receiver, Sender},
-    future,
-    prelude::*,
-};
+use async_std::sync::{channel, Mutex, Receiver, Sender};
+use async_std::task;
+
+use futures::{future, prelude::*};
 use libp2p::{
     core::muxing,
     core::transport::timeout::TransportTimeout,
@@ -32,8 +30,8 @@ fn test_transfer() {
         .try_init()
         .unwrap();
 
-    let (mut tx, mut rx) = channel::<Multiaddr>(10);
-    let (peer1, mut sender, mut peer_receiver1, mut swarm1) = build_swarm();
+    let (tx, mut rx) = channel::<Multiaddr>(10);
+    let (peer1, sender, peer_receiver1, mut swarm1) = build_swarm();
     let (_, _, _, mut swarm2) = build_swarm();
 
     // File should be accepted from the beginning
@@ -52,7 +50,7 @@ fn test_transfer() {
         }
 
         for addr in Swarm::listeners(&mut swarm1) {
-            tx.send(addr.clone()).await.unwrap();
+            tx.send(addr.clone()).await;
         }
 
         loop {
@@ -134,7 +132,7 @@ fn test_transfer() {
 
     let mut tries = 0;
     let (name, path) = loop {
-        match peer_receiver1.try_next().unwrap().unwrap() {
+        match peer_receiver1.try_recv().unwrap() {
             PeerEvent::FileCorrect(name, path) => break (name, path),
             other => {
                 println!("Other event: {:?}", other);

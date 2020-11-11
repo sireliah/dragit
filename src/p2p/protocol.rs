@@ -12,8 +12,9 @@ use std::time::Instant;
 use std::{io, iter, pin::Pin};
 
 use async_std::sync::Mutex;
+use async_std::sync::{Receiver, Sender};
 use async_std::task;
-use futures::channel::mpsc::{Receiver, Sender};
+
 use futures::future;
 use futures::io as futio;
 use futures::prelude::*;
@@ -32,6 +33,7 @@ pub struct FileToSend {
 
 impl FileToSend {
     pub fn new(path: &str, peer: &PeerId) -> Result<Self, Box<dyn Error>> {
+        info!("Dragged path: {}", path);
         metadata(path)?;
         let name = Self::extract_name(path)?;
         Ok(FileToSend {
@@ -93,9 +95,7 @@ impl TransferPayload {
 
     async fn notify_incoming_file_event(&self, name: &str, hash: &str) {
         let event = PeerEvent::FileIncoming(name.to_string(), hash.to_string());
-        if let Err(e) = self.sender_queue.to_owned().send(event).await {
-            error!("{:?}", e);
-        }
+        self.sender_queue.to_owned().send(event).await;
     }
 
     async fn block_for_answer(

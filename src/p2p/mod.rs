@@ -1,12 +1,10 @@
 use std::sync::Arc;
 
 use async_std::sync::Mutex;
+use async_std::sync::{Receiver, Sender};
 use async_std::task;
-use futures::{
-    channel::mpsc::{Receiver, Sender},
-    executor, future, pin_mut,
-    stream::StreamExt,
-};
+
+use futures::{executor, future, pin_mut, stream::StreamExt};
 use libp2p::{
     core::muxing,
     core::transport::timeout::TransportTimeout,
@@ -68,7 +66,7 @@ impl NetworkBehaviourEventProcess<MdnsEvent> for MyBehaviour {
 }
 
 impl NetworkBehaviourEventProcess<TransferPayload> for MyBehaviour {
-    fn inject_event(&mut self, mut event: TransferPayload) {
+    fn inject_event(&mut self, event: TransferPayload) {
         info!("Injected {}", event);
         match event.check_file() {
             Ok(_) => {

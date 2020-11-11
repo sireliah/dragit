@@ -1,7 +1,7 @@
 use std::error::Error;
 use std::sync::{Arc, Mutex};
 
-use futures::channel::mpsc::Sender;
+use async_std::sync::Sender;
 
 use gdk::DragAction;
 use gtk::prelude::*;
@@ -104,7 +104,7 @@ impl PeerItem {
                         return ();
                     }
                 };
-                let mut sender = file_sender.lock().unwrap();
+                let sender = file_sender.lock().unwrap();
                 sender.try_send(file).expect("Sending failed");
             });
 
@@ -113,10 +113,21 @@ impl PeerItem {
 
     fn clean_filename(path: &str) -> Result<String, Box<dyn Error>> {
         let value = percent_decode_str(path).decode_utf8()?;
-        // Windows paths contain one extra slash
-        let path = value.replace("file:///", "").replace("file://", "");
+
+        let path = clean_file_proto(&value);
         Ok(path.trim().to_string())
     }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn clean_file_proto(value: &str) -> String {
+    value.replace("file://", "")
+}
+
+#[cfg(target_os = "windows")]
+fn clean_file_proto(value: &str) -> String {
+    // Windows paths contain one extra slash
+    value.replace("file:///", "")
 }
 
 pub fn remove_expired_boxes(layout: &gtk::Box, peers: &Vec<Peer>) {

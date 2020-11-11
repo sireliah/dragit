@@ -13,7 +13,7 @@ mod events;
 use glib::Continue;
 use gtk::GtkWindowExt;
 
-use futures::channel::mpsc::{channel, Receiver, Sender};
+use async_std::sync::{channel, Receiver, Sender};
 
 use crate::p2p::{run_server, FileToSend, PeerEvent, TransferCommand};
 use components::{AcceptFileDialog, AppNotification, ProgressNotification, STYLE};

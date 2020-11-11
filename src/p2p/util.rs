@@ -6,7 +6,8 @@ use std::thread::{self, JoinHandle};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use directories::UserDirs;
-use futures::channel::mpsc::Sender as FutSender;
+use async_std::sync::Sender as FutSender;
+
 use futures::prelude::*;
 use hex;
 use md5::{Digest, Md5};
@@ -135,9 +136,7 @@ pub async fn notify_progress(
     total_size: usize,
 ) {
     let event = PeerEvent::TransferProgress((counter, total_size));
-    if let Err(e) = sender_queue.to_owned().send(event).await {
-        error!("{:?}", e);
-    }
+    sender_queue.to_owned().send(event).await;
 }
 
 fn get_timestamp() -> u64 {
@@ -226,7 +225,8 @@ pub fn time_to_notify(current_size: usize, total_size: usize) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use self::super::*;
+    use crate::p2p::util::{generate_full_path, hash_contents};
+    use std::path::Path;
 
     #[test]
     fn test_hash_local_file() {
