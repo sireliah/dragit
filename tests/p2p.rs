@@ -15,7 +15,7 @@ use libp2p::{
     core::upgrade,
     dns, identity,
     mdns::Mdns,
-    mplex,
+    mplex, noise,
     swarm::{NetworkBehaviourAction, NotifyHandler, SwarmEvent},
     tcp, websocket, Multiaddr, PeerId, Swarm,
 };
@@ -186,10 +186,16 @@ fn build_swarm() -> (
         .max_buffer_len(40960)
         .split_send_size(1024 * 512);
 
+    let noise_keys = noise::Keypair::<noise::X25519Spec>::new()
+        .into_authentic(&local_keys)
+        .unwrap();
+
+    let noise = noise::NoiseConfig::xx(noise_keys).into_authenticated();
+
     let transport = TransportTimeout::with_outgoing_timeout(
         transport
             .upgrade(upgrade::Version::V1)
-            .authenticate(secio::SecioConfig::new(local_keys.clone()))
+            .authenticate(noise)
             .multiplex(mp.clone())
             .map(|(peer, muxer), _| (peer, muxing::StreamMuxerBox::new(muxer)))
             .timeout(timeout),

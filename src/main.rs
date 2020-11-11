@@ -1,4 +1,5 @@
-#![windows_subsystem = "windows"]
+// Uncomment to hide the terminal on Windows
+// #![windows_subsystem = "windows"]
 use env_logger::Env;
 
 use dragit::dnd;
