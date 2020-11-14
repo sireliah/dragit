@@ -1,4 +1,10 @@
-use std::sync::Arc;
+use std::{
+    error::Error,
+    sync::Arc,
+    task::{Context, Poll},
+    thread::sleep,
+    time::Duration,
+};
 
 use async_std::sync::Mutex;
 use async_std::sync::{Receiver, Sender};
@@ -16,12 +22,6 @@ use libp2p::{
     swarm::NetworkBehaviourEventProcess,
     tcp::TcpConfig,
     websocket, NetworkBehaviour, PeerId, Swarm,
-};
-
-use std::{
-    error::Error,
-    task::{Context, Poll},
-    time::Duration,
 };
 
 pub mod behaviour;
@@ -191,6 +191,17 @@ pub fn run_server(
     file_receiver: Receiver<FileToSend>,
     command_receiver: Receiver<TransferCommand>,
 ) -> Result<(), Box<dyn Error>> {
+    loop {
+        match util::check_network_interfaces() {
+            Ok(_) => break,
+            Err(e) => {
+                let _ = sender.try_send(PeerEvent::Error(e.to_string()))?;
+                sleep(Duration::from_secs(5));
+                continue;
+            }
+        };
+    }
+
     let future = execute_swarm(sender, file_receiver, command_receiver);
     executor::block_on(future)?;
     Ok(())

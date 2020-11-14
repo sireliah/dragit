@@ -2,16 +2,17 @@ use std::fs;
 use std::io::{self, Error, ErrorKind, Read, Write};
 use std::path::Path;
 use std::str::FromStr;
+use std::sync::mpsc::{Receiver, SyncSender};
 use std::thread::{self, JoinHandle};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use async_std::sync::Sender as AsyncSender;
 use directories::UserDirs;
+use pnet::datalink;
 
 use futures::prelude::*;
 use hex;
 use md5::{Digest, Md5};
-use std::sync::mpsc::{Receiver, SyncSender};
 
 use super::peer::PeerEvent;
 
@@ -220,6 +221,28 @@ pub fn time_to_notify(current_size: usize, total_size: usize) -> bool {
         true
     } else {
         false
+    }
+}
+
+pub fn check_network_interfaces() -> Result<(), Error> {
+    let interfaces = datalink::interfaces();
+    let default_interface = interfaces
+        .iter()
+        .filter(|e| e.is_up() && !e.is_loopback() && e.ips.len() > 0)
+        .next();
+
+    match default_interface {
+        Some(_) => {
+            info!("Interfaces: {:?}", interfaces);
+            Ok(())
+        }
+        None => {
+            error!("No network interfaces found!");
+            Err(Error::new(
+                ErrorKind::AddrNotAvailable,
+                "There is no network connection available",
+            ))
+        }
     }
 }
 
