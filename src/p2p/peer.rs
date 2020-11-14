@@ -1,9 +1,15 @@
 use libp2p::{Multiaddr, PeerId};
 
 #[derive(Debug, Clone)]
+pub enum Direction {
+    Incoming,
+    Outgoing,
+}
+
+#[derive(Debug, Clone)]
 pub enum PeerEvent {
     PeersUpdated(CurrentPeers),
-    TransferProgress((usize, usize)),
+    TransferProgress((usize, usize, Direction)),
     TransferError,
     FileCorrect(String, String),
     FileIncorrect,

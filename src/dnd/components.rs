@@ -166,8 +166,22 @@ impl ProgressNotification {
         }
     }
 
-    pub fn show(&self) {
+    fn show(&self) {
         self.revealer.set_reveal_child(true)
+    }
+
+    fn show_progress(&self, size: f64, total: f64, text: &str) {
+        self.show();
+        self.progress_bar.set_fraction(size / total);
+        self.progress_bar.set_text(Some(text));
+    }
+
+    pub fn show_incoming(&self, size: f64, total: f64) {
+        self.show_progress(size, total, "Receiving file");
+    }
+
+    pub fn show_outgoing(&self, size: f64, total: f64) {
+        self.show_progress(size, total, "Sending file");
     }
 
     pub fn hide(&self) {

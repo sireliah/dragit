@@ -21,7 +21,7 @@ use futures::prelude::*;
 use libp2p::core::{InboundUpgrade, OutboundUpgrade, PeerId, UpgradeInfo};
 
 use super::commands::TransferCommand;
-use super::peer::PeerEvent;
+use super::peer::{Direction, PeerEvent};
 use super::util::{self, CHUNK_SIZE};
 
 #[derive(Clone, Debug)]
@@ -61,6 +61,7 @@ pub enum ProtocolEvent {
     Sent,
 }
 
+// Outgoing transfer to remote peer
 #[derive(Clone, Debug)]
 pub struct TransferOut {
     pub name: String,
@@ -68,6 +69,7 @@ pub struct TransferOut {
     pub sender_queue: Sender<PeerEvent>,
 }
 
+// Incoming transfer to current host
 #[derive(Clone, Debug)]
 pub struct TransferPayload {
     pub name: String,
@@ -124,6 +126,7 @@ impl TransferPayload {
         socket: impl AsyncRead + AsyncWrite + Send + Unpin,
         name: &str,
         size: usize,
+        direction: &Direction,
     ) -> Result<(usize, String), io::Error> {
         let mut reader = futio::BufReader::new(socket);
 
@@ -149,14 +152,20 @@ impl TransferPayload {
                             payloads.clear();
 
                             if util::time_to_notify(current_size, size) {
-                                util::notify_progress(&self.sender_queue, counter, size).await;
+                                util::notify_progress(
+                                    &self.sender_queue,
+                                    counter,
+                                    size,
+                                    &direction,
+                                )
+                                .await;
                                 current_size = 0;
                             }
                         }
                     } else {
                         sender.send(payloads.clone()).expect("sending failed");
                         sender.send(vec![]).expect("sending failed");
-                        util::notify_progress(&self.sender_queue, counter, size).await;
+                        util::notify_progress(&self.sender_queue, counter, size, &direction).await;
                         break;
                     }
                 }
@@ -174,6 +183,7 @@ impl TransferPayload {
     where
         TSocket: AsyncRead + AsyncWrite + Send + Unpin,
     {
+        let direction = Direction::Incoming;
         let (meta, mut socket): (util::Metadata, TSocket) =
             util::Metadata::read_metadata(socket).await?;
 
@@ -186,10 +196,10 @@ impl TransferPayload {
                 socket.write(b"Y").await?;
                 socket.flush().await?;
 
-                util::notify_progress(&self.sender_queue, 0, meta.size).await;
+                util::notify_progress(&self.sender_queue, 0, meta.size, &direction).await;
 
                 let (counter, path) = self
-                    .read_file_payload(socket, &meta.name, meta.size)
+                    .read_file_payload(socket, &meta.name, meta.size, &direction)
                     .await?;
                 self.name = meta.name;
                 self.hash = meta.hash;
@@ -230,6 +240,7 @@ impl TransferOut {
     where
         TSocket: AsyncRead + AsyncWrite + Send + Unpin,
     {
+        let direction = Direction::Outgoing;
         let (sender, receiver) = sync_channel::<Vec<u8>>(CHUNK_SIZE * 128);
         info!("Name: {:?}, Path: {:?}", self.name, &self.path);
 
@@ -246,7 +257,7 @@ impl TransferOut {
             let mut writer = futio::BufWriter::new(socket);
             let job = util::spawn_read_file_job(sender.clone(), self.path.clone());
 
-            util::notify_progress(&self.sender_queue, 0, size).await;
+            util::notify_progress(&self.sender_queue, 0, size, &direction).await;
 
             let mut counter: usize = 0;
             let mut current_size: usize = 0;
@@ -260,12 +271,13 @@ impl TransferOut {
                         current_size += payload.len();
 
                         if util::time_to_notify(current_size, size) {
-                            util::notify_progress(&self.sender_queue, counter, size).await;
+                            util::notify_progress(&self.sender_queue, counter, size, &direction)
+                                .await;
                             current_size = 0;
                         }
                     }
                     Ok(_) => {
-                        util::notify_progress(&self.sender_queue, counter, size).await;
+                        util::notify_progress(&self.sender_queue, counter, size, &direction).await;
                         break;
                     }
                     Err(e) => panic!(e),

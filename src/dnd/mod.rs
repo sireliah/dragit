@@ -15,7 +15,7 @@ use gtk::GtkWindowExt;
 
 use async_std::sync::{channel, Receiver, Sender};
 
-use crate::p2p::{run_server, FileToSend, PeerEvent, TransferCommand};
+use crate::p2p::{peer::Direction, run_server, FileToSend, PeerEvent, TransferCommand};
 use components::{
     AcceptFileDialog, AppNotification, NotificationType, ProgressNotification, STYLE,
 };
@@ -53,11 +53,13 @@ pub fn build_window(
 
     let window_weak = window.downgrade();
     gtk_receiver.attach(None, move |values| match values {
-        PeerEvent::TransferProgress((v, t)) => {
+        PeerEvent::TransferProgress((v, t, direction)) => {
             let size = v as f64;
             let total = t as f64;
-            progress.show();
-            progress.progress_bar.set_fraction(size / total);
+            match direction {
+                Direction::Incoming => progress.show_incoming(size, total),
+                Direction::Outgoing => progress.show_outgoing(size, total),
+            }
             Continue(true)
         }
         PeerEvent::FileCorrect(file_name, path) => {

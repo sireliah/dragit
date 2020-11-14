@@ -14,7 +14,7 @@ use futures::prelude::*;
 use hex;
 use md5::{Digest, Md5};
 
-use super::peer::PeerEvent;
+use super::peer::{Direction, PeerEvent};
 
 pub const CHUNK_SIZE: usize = 4096;
 pub const HASH_BUFFER_SIZE: usize = 1024;
@@ -135,8 +135,9 @@ pub async fn notify_progress(
     sender_queue: &AsyncSender<PeerEvent>,
     counter: usize,
     total_size: usize,
+    direction: &Direction,
 ) {
-    let event = PeerEvent::TransferProgress((counter, total_size));
+    let event = PeerEvent::TransferProgress((counter, total_size, direction.to_owned()));
     sender_queue.to_owned().send(event).await;
 }
 
