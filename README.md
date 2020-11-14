@@ -28,7 +28,6 @@ App can use Bluetooth OBEX protocol for file transfer through the D-Bus BlueZ in
 
 ## TODOs:
 - crashes when no network interface is available
-- TransferCommand::Accept should specify which file should be accepted
 - add timeout on the Accept/Deny event
 - implement error events
 - fix the outbound memory issue (consumes too much memory on file reading)
@@ -40,6 +39,7 @@ App can use Bluetooth OBEX protocol for file transfer through the D-Bus BlueZ in
 - re-enable the Bluetooth
 
 ## Done
+- TransferCommand::Accept should specify which file should be accepted
 - add sender side progress bar
 - fix the inbound memory issue
 - add logging

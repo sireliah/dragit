@@ -98,7 +98,7 @@ async fn execute_swarm(
     sender: Sender<PeerEvent>,
     receiver: Receiver<FileToSend>,
     command_receiver: Receiver<TransferCommand>,
-) {
+) -> Result<(), Box<dyn Error>> {
     let local_keys = identity::Keypair::generate_ed25519();
     let local_peer_id = PeerId::from(local_keys.public());
     info!("I am Peer: {:?}", local_peer_id);
@@ -108,7 +108,7 @@ async fn execute_swarm(
 
     let mut swarm = {
         let transfer_behaviour = TransferBehaviour::new(sender, command_receiver_c, None);
-        let mdns = Mdns::new().unwrap();
+        let mdns = Mdns::new()?;
         let behaviour = MyBehaviour {
             mdns,
             transfer_behaviour,
@@ -116,7 +116,7 @@ async fn execute_swarm(
         let timeout = Duration::from_secs(60);
         let transport = {
             let tcp = TcpConfig::new().nodelay(true);
-            let transport = dns::DnsConfig::new(tcp).unwrap();
+            let transport = dns::DnsConfig::new(tcp)?;
             let trans_clone = transport.clone();
             transport.or_transport(websocket::WsConfig::new(trans_clone))
         };
@@ -127,9 +127,7 @@ async fn execute_swarm(
             .max_buffer_len(40960)
             .split_send_size(1024 * 512);
 
-        let noise_keys = noise::Keypair::<noise::X25519Spec>::new()
-            .into_authentic(&local_keys)
-            .unwrap();
+        let noise_keys = noise::Keypair::<noise::X25519Spec>::new().into_authentic(&local_keys)?;
 
         let noise = noise::NoiseConfig::xx(noise_keys).into_authenticated();
 
@@ -145,13 +143,7 @@ async fn execute_swarm(
         Swarm::new(transport, behaviour, local_peer_id)
     };
 
-    Swarm::listen_on(
-        &mut swarm,
-        "/ip4/0.0.0.0/tcp/0"
-            .parse()
-            .expect("Failed to parse address"),
-    )
-    .expect("Failed to listen");
+    Swarm::listen_on(&mut swarm, "/ip4/0.0.0.0/tcp/0".parse()?)?;
 
     let mut listening = false;
 
@@ -191,6 +183,7 @@ async fn execute_swarm(
         }
         Poll::Pending
     }));
+    Ok(())
 }
 
 pub fn run_server(
@@ -199,6 +192,6 @@ pub fn run_server(
     command_receiver: Receiver<TransferCommand>,
 ) -> Result<(), Box<dyn Error>> {
     let future = execute_swarm(sender, file_receiver, command_receiver);
-    executor::block_on(future);
+    executor::block_on(future)?;
     Ok(())
 }

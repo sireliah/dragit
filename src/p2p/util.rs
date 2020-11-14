@@ -5,8 +5,8 @@ use std::str::FromStr;
 use std::thread::{self, JoinHandle};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use async_std::sync::Sender as AsyncSender;
 use directories::UserDirs;
-use async_std::sync::Sender as FutSender;
 
 use futures::prelude::*;
 use hex;
@@ -131,7 +131,7 @@ pub fn spawn_read_file_job(sender: SyncSender<Vec<u8>>, path: String) -> JoinHan
 }
 
 pub async fn notify_progress(
-    sender_queue: &FutSender<PeerEvent>,
+    sender_queue: &AsyncSender<PeerEvent>,
     counter: usize,
     total_size: usize,
 ) {

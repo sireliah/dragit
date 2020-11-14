@@ -4,6 +4,7 @@ use std::sync::{Arc, Mutex};
 use async_std::sync::Sender;
 
 use gdk::DragAction;
+use gio;
 use gtk::prelude::*;
 use gtk::{DestDefaults, Label, TargetEntry, TargetFlags};
 
@@ -23,6 +24,7 @@ pub const STYLE: &str = "
 #notification-alert {
     padding: 10px;
     border-radius: 10px;
+    color: rgb(0, 0, 0);
     background-color: rgb(100, 100, 100);
 }
 #button-close {
@@ -190,6 +192,11 @@ impl ProgressNotification {
     }
 }
 
+pub enum NotificationType {
+    Alert,
+    Error,
+}
+
 pub struct AppNotification {
     revealer: gtk::Revealer,
     pub overlay: gtk::Overlay,
@@ -197,11 +204,14 @@ pub struct AppNotification {
 }
 
 impl AppNotification {
-    pub fn new(main_overlay: &gtk::Overlay) -> Self {
+    pub fn new(main_overlay: &gtk::Overlay, notification_type: NotificationType) -> Self {
         let layout = gtk::Box::new(gtk::Orientation::Horizontal, 5);
         let overlay = gtk::Overlay::new();
         let revealer = gtk::Revealer::new();
         let label = Label::new(Some("File correct"));
+
+        layout.set_widget_name("notification-alert");
+
         let button_close = gtk::Button::new_from_icon_name(
             Some("window-close-symbolic"),
             gtk::IconSize::SmallToolbar,
@@ -233,9 +243,11 @@ impl AppNotification {
 
         revealer.set_transition_type(gtk::RevealerTransitionType::SlideDown);
 
+        let icon = AppNotification::set_icon(notification_type);
+
+        layout.pack_start(&icon, true, false, 0);
         layout.pack_start(&label, true, false, 0);
         layout.pack_start(&button_close, true, false, 0);
-        layout.set_widget_name("notification-alert");
 
         revealer.add(&layout);
         overlay.add_overlay(&revealer);
@@ -250,19 +262,26 @@ impl AppNotification {
         }
     }
 
+    fn set_icon(notification_type: NotificationType) -> gtk::Image {
+        match notification_type {
+            NotificationType::Alert => {
+                let ico = gio::Icon::new_for_string("dialog-information").unwrap();
+                gtk::Image::new_from_gicon(&ico, gtk::IconSize::Button)
+            }
+            NotificationType::Error => {
+                let ico = gio::Icon::new_for_string("dialog-warning").unwrap();
+                gtk::Image::new_from_gicon(&ico, gtk::IconSize::Button)
+            }
+        }
+    }
+
     fn reveal(&self, overlay: &gtk::Overlay) {
         overlay.reorder_overlay(&self.overlay, 10);
         self.revealer.set_reveal_child(true);
     }
 
-    pub fn show_ok(&self, overlay: &gtk::Overlay, text: String) {
+    pub fn show(&self, overlay: &gtk::Overlay, text: String) {
         self.label.set_text(&text);
-
-        self.reveal(overlay);
-    }
-
-    pub fn show_failure(&self, overlay: &gtk::Overlay) {
-        self.label.set_text("File is incorrect");
 
         self.reveal(overlay);
     }

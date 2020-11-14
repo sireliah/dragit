@@ -16,7 +16,9 @@ use gtk::GtkWindowExt;
 use async_std::sync::{channel, Receiver, Sender};
 
 use crate::p2p::{run_server, FileToSend, PeerEvent, TransferCommand};
-use components::{AcceptFileDialog, AppNotification, ProgressNotification, STYLE};
+use components::{
+    AcceptFileDialog, AppNotification, NotificationType, ProgressNotification, STYLE,
+};
 use events::pool_peers;
 
 pub fn build_window(
@@ -39,7 +41,8 @@ pub fn build_window(
     let (gtk_sender, gtk_receiver) =
         glib::MainContext::channel::<PeerEvent>(glib::PRIORITY_DEFAULT);
 
-    let app_notification = AppNotification::new(&overlay);
+    let alert_notif = AppNotification::new(&overlay, NotificationType::Alert);
+    let error_notif = AppNotification::new(&overlay, NotificationType::Error);
     let progress = ProgressNotification::new(&overlay);
 
     scroll.add(&layout);
@@ -61,13 +64,13 @@ pub fn build_window(
             progress.progress_bar.set_fraction(0.0);
             progress.hide();
             let text = format!("Received {} \nSaved in {}", file_name, path);
-            app_notification.show_ok(&overlay, text);
+            alert_notif.show(&overlay, text);
             Continue(true)
         }
         PeerEvent::FileIncorrect => {
             progress.progress_bar.set_fraction(0.0);
             progress.hide();
-            app_notification.show_failure(&overlay);
+            error_notif.show(&overlay, "File is incorrect".to_string());
             Continue(true)
         }
         PeerEvent::FileIncoming(name, hash) => {
@@ -83,6 +86,12 @@ pub fn build_window(
 
                 let _ = command_sender.lock().unwrap().try_send(command);
             }
+            Continue(true)
+        }
+        PeerEvent::Error(error) => {
+            error!("Got error: {}", error);
+            let error = format!("Encountered an error: {:?}", error);
+            error_notif.show(&overlay, error);
             Continue(true)
         }
         _ => Continue(false),
@@ -107,10 +116,16 @@ pub fn start_window() {
     let (command_sender, command_receiver) = channel::<TransferCommand>(1024 * 24);
 
     // Start the p2p server in separate thread
+    let sender_clone = peer_sender.clone();
     thread::spawn(
         move || match run_server(peer_sender, file_receiver, command_receiver) {
             Ok(_) => {}
-            Err(e) => error!("{:?}", e),
+            Err(e) => {
+                error!("Server error: {:?}", e);
+                let _ = sender_clone
+                    .try_send(PeerEvent::Error(e.to_string()))
+                    .unwrap();
+            }
         },
     );
 
@@ -141,7 +156,7 @@ pub fn start_window() {
 
         match build_window(app, file_sender_c, peer_receiver_c, command_sender_c) {
             Ok(_) => info!("Window started"),
-            Err(e) => error!("{:?}", e),
+            Err(e) => error!("Window error: {:?}", e),
         };
     });
     application.connect_activate(|_| {});

@@ -5,7 +5,6 @@ use gtk::prelude::*;
 
 use async_std::sync::{Receiver, Sender};
 
-// use futures::channel::mpsc::{Receiver, Sender};
 use glib::Continue;
 use gtk::{timeout_add, ApplicationWindow};
 
