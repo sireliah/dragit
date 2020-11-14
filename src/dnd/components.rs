@@ -4,7 +4,6 @@ use std::sync::{Arc, Mutex};
 use async_std::sync::Sender;
 
 use gdk::DragAction;
-use gio;
 use gtk::prelude::*;
 use gtk::{DestDefaults, Label, TargetEntry, TargetFlags};
 
@@ -132,22 +131,6 @@ fn clean_file_proto(value: &str) -> String {
     value.replace("file:///", "")
 }
 
-pub fn remove_expired_boxes(layout: &gtk::Box, peers: &Vec<Peer>) {
-    for peer_box in layout.get_children() {
-        if let Some(box_name) = peer_box.get_widget_name() {
-            let box_name = box_name.as_str().to_string();
-            let box_in_peers = peers
-                .iter()
-                .map(|p| p.name.clone())
-                .collect::<Vec<String>>()
-                .contains(&box_name);
-            if !box_in_peers && box_name != "notification" {
-                peer_box.destroy();
-            }
-        }
-    }
-}
-
 pub struct ProgressNotification {
     revealer: gtk::Revealer,
     pub progress_bar: gtk::ProgressBar,
@@ -265,12 +248,10 @@ impl AppNotification {
     fn set_icon(notification_type: NotificationType) -> gtk::Image {
         match notification_type {
             NotificationType::Alert => {
-                let ico = gio::Icon::new_for_string("dialog-information").unwrap();
-                gtk::Image::new_from_gicon(&ico, gtk::IconSize::Button)
+                gtk::Image::new_from_icon_name(Some("dialog-information"), gtk::IconSize::Button)
             }
             NotificationType::Error => {
-                let ico = gio::Icon::new_for_string("dialog-warning").unwrap();
-                gtk::Image::new_from_gicon(&ico, gtk::IconSize::Button)
+                gtk::Image::new_from_icon_name(Some("dialog-warning"), gtk::IconSize::Button)
             }
         }
     }
@@ -305,5 +286,52 @@ impl AcceptFileDialog {
         let resp = self.0.run();
         self.0.destroy();
         resp
+    }
+}
+
+pub struct EmptyListItem {
+    pub revealer: gtk::Revealer,
+    pub container: gtk::Box,
+}
+
+impl EmptyListItem {
+    pub fn new() -> EmptyListItem {
+        let label = Label::new(Some("Looking for hosts..."));
+        let revealer = gtk::Revealer::new();
+        let container = gtk::Box::new(gtk::Orientation::Vertical, 10);
+        let inner_container = gtk::Box::new(gtk::Orientation::Vertical, 10);
+
+        label.set_halign(gtk::Align::Center);
+        label.set_size_request(500, 100);
+
+        let image =
+            gtk::Image::new_from_icon_name(Some("network-transmit-receive"), gtk::IconSize::Dialog);
+
+        revealer.set_halign(gtk::Align::Center);
+        revealer.set_valign(gtk::Align::Start);
+
+        inner_container.pack_start(&image, false, false, 10);
+        inner_container.pack_start(&label, false, false, 10);
+
+        revealer.add(&inner_container);
+
+        revealer.set_transition_type(gtk::RevealerTransitionType::SlideDown);
+        container.set_widget_name("empty-item");
+        revealer.set_reveal_child(true);
+
+        container.pack_start(&revealer, false, false, 10);
+
+        EmptyListItem {
+            revealer,
+            container,
+        }
+    }
+
+    pub fn show(&self) {
+        self.revealer.set_reveal_child(true)
+    }
+
+    pub fn hide(&self) {
+        self.revealer.set_reveal_child(false)
     }
 }

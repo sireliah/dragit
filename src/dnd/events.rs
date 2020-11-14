@@ -8,8 +8,8 @@ use async_std::sync::{Receiver, Sender};
 use glib::Continue;
 use gtk::{timeout_add, ApplicationWindow};
 
-use crate::dnd::components::{remove_expired_boxes, PeerItem};
-use crate::p2p::{CurrentPeers, FileToSend, PeerEvent};
+use crate::dnd::components::{EmptyListItem, PeerItem};
+use crate::p2p::{CurrentPeers, FileToSend, Peer, PeerEvent};
 
 pub fn pool_peers(
     window: &ApplicationWindow,
@@ -18,6 +18,10 @@ pub fn pool_peers(
     peer_receiver: Arc<Mutex<Receiver<PeerEvent>>>,
     peer_event_sender: glib::Sender<PeerEvent>,
 ) {
+    let empty_item = EmptyListItem::new();
+    layout.pack_start(&empty_item.container, false, false, 10);
+    empty_item.show();
+
     let layout_weak = layout.downgrade();
     let weak_window = window.downgrade();
 
@@ -44,6 +48,8 @@ pub fn pool_peers(
                     })
                     .collect();
 
+                empty_item.hide();
+
                 for peer in peers.iter().filter(|p| !children.contains(&p.name)) {
                     let name: &str = &peer.name;
                     let addr = &peer.address;
@@ -56,6 +62,9 @@ pub fn pool_peers(
                 }
                 remove_expired_boxes(&layout_in, &peers);
             };
+            if layout_in.get_children().len() == 0 {
+                empty_item.show();
+            }
         }
 
         if let Some(win) = weak_window.upgrade() {
@@ -63,4 +72,20 @@ pub fn pool_peers(
         }
         Continue(true)
     });
+}
+
+pub fn remove_expired_boxes(layout: &gtk::Box, peers: &Vec<Peer>) {
+    for peer_box in layout.get_children() {
+        if let Some(box_name) = peer_box.get_widget_name() {
+            let box_name = box_name.as_str().to_string();
+            let box_in_peers = peers
+                .iter()
+                .map(|p| p.name.clone())
+                .collect::<Vec<String>>()
+                .contains(&box_name);
+            if !box_in_peers && box_name != "notification" && box_name != "empty-item" {
+                peer_box.destroy();
+            }
+        }
+    }
 }
