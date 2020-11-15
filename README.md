@@ -27,9 +27,13 @@ $ ./target/release/dragit
 App can use Bluetooth OBEX protocol for file transfer through the D-Bus BlueZ interface, which should work on most of the Linux devices. (currently disabled)
 
 ## TODOs:
-- crashes when no network interface is available
+- choose directory
+- show easy to understand instruction on startup
+- have list of trusted devices
+- show version in the title bar
+- TCP retransmissions - what is wrong?
+
 - add timeout on the Accept/Deny event
-- implement error events
 - fix the outbound memory issue (consumes too much memory on file reading)
 - show details about the host
 - add files queue
@@ -39,6 +43,8 @@ App can use Bluetooth OBEX protocol for file transfer through the D-Bus BlueZ in
 - re-enable the Bluetooth
 
 ## Done
+- crashes when no network interface is available
+- implement error events
 - TransferCommand::Accept should specify which file should be accepted
 - add sender side progress bar
 - fix the inbound memory issue

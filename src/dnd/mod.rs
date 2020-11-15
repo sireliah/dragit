@@ -27,7 +27,9 @@ pub fn build_window(
     peer_receiver: Arc<Mutex<Receiver<PeerEvent>>>,
     command_sender: Arc<Mutex<Sender<TransferCommand>>>,
 ) -> Result<(), Box<dyn Error>> {
-    glib::set_program_name(Some("Dragit"));
+    let title = format!("Dragit {}", env!("CARGO_PKG_VERSION"));
+
+    glib::set_program_name(Some(&title));
     let window = gtk::ApplicationWindow::new(application);
 
     let scroll = gtk::ScrolledWindow::new(gtk::NONE_ADJUSTMENT, gtk::NONE_ADJUSTMENT);
@@ -103,7 +105,7 @@ pub fn build_window(
         _ => Continue(false),
     });
 
-    window.set_title("Dragit");
+    window.set_title(&title);
     window.set_default_size(600, 600);
     window.set_border_width(10);
 
