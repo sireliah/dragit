@@ -10,6 +10,7 @@ pub enum Direction {
 pub enum PeerEvent {
     PeersUpdated(CurrentPeers),
     TransferProgress((usize, usize, Direction)),
+    TransferCompleted,
     TransferError,
     FileCorrect(String, String),
     FileIncorrect,

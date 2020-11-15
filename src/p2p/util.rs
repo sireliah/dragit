@@ -141,6 +141,13 @@ pub async fn notify_progress(
     sender_queue.to_owned().send(event).await;
 }
 
+pub async fn notify_completed(sender_queue: &AsyncSender<PeerEvent>) {
+    sender_queue
+        .to_owned()
+        .send(PeerEvent::TransferCompleted)
+        .await;
+}
+
 fn get_timestamp() -> u64 {
     let now = SystemTime::now();
     now.duration_since(UNIX_EPOCH)

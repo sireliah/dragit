@@ -62,6 +62,10 @@ pub fn build_window(
             }
             Continue(true)
         }
+        PeerEvent::TransferCompleted => {
+            progress.hide();
+            Continue(true)
+        }
         PeerEvent::FileCorrect(file_name, path) => {
             progress.progress_bar.set_fraction(0.0);
             progress.hide();

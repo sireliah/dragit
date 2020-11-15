@@ -249,8 +249,7 @@ impl TransferOut {
 
         let mut received = [0u8; 1];
         socket.read_exact(&mut received).await?;
-        let received = String::from_utf8(received.to_vec()).unwrap();
-        info!("Received answer: '{}'", received);
+        let received = TransferOut::decode_received(received)?;
 
         if received == "Y" {
             info!("Writing data to the socket");
@@ -287,9 +286,23 @@ impl TransferOut {
             job.join().expect("Joining failed");
             writer.close().await?;
             drop(writer);
+            util::notify_completed(&self.sender_queue).await;
             Ok(())
         } else {
             Ok(())
+        }
+    }
+
+    fn decode_received(received: [u8; 1]) -> Result<String, io::Error> {
+        match String::from_utf8(received.to_vec()) {
+            Ok(v) => Ok(v),
+            Err(e) => {
+                error!("Answer decoding error: {}", e);
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "Couldn't decode the answer",
+                ));
+            }
         }
     }
 }
