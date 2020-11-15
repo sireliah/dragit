@@ -22,5 +22,11 @@ md-5 = "0.8.0"
 percent-encoding = "2.1.0"
 pnet = "0.26.0"
 
+[target.'cfg(unix)'.dependencies]
+pnet_datalink = "0.26.0"
+
+[target.'cfg(windows)'.dependencies]
+ipconfig = "0.2.2"
+
 [target.'cfg(windows)'.build-dependencies]
 autovcpkg = { git = "https://github.com/fungos/autovcpkg.git", version = "0.1.2019-10", features = ["gtk", "cairo"]}

@@ -8,7 +8,12 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use async_std::sync::Sender as AsyncSender;
 use directories::UserDirs;
-use pnet::datalink;
+
+#[cfg(unix)]
+use pnet_datalink;
+
+#[cfg(windows)]
+use ipconfig;
 
 use futures::prelude::*;
 use hex;
@@ -232,16 +237,49 @@ pub fn time_to_notify(current_size: usize, total_size: usize) -> bool {
     }
 }
 
+#[cfg(unix)]
 pub fn check_network_interfaces() -> Result<(), Error> {
-    let interfaces = datalink::interfaces();
+    let interfaces = pnet_datalink::interfaces();
     let default_interface = interfaces
         .iter()
-        .filter(|e| e.is_up() && !e.is_loopback() && e.ips.len() > 0)
+        .filter(|e| !e.is_loopback() && e.ips.len() > 0)
         .next();
-
+    info!("Default network interface: {:?}", default_interface);
     match default_interface {
         Some(_) => {
             info!("Interfaces: {:?}", interfaces);
+            Ok(())
+        }
+        None => {
+            error!("No network interfaces found!");
+            Err(Error::new(
+                ErrorKind::AddrNotAvailable,
+                "There is no network connection available",
+            ))
+        }
+    }
+}
+
+#[cfg(windows)]
+pub fn check_network_interfaces() -> Result<(), Error> {
+    let adapter = match ipconfig::get_adapters() {
+        Ok(ad) => {
+            let ada = ad
+                .into_iter()
+                .filter(|a| {
+                    a.ip_addresses().len() > 0
+                        && a.oper_status() == ipconfig::OperStatus::IfOperStatusUp
+                        && a.if_type() != ipconfig::IfType::SoftwareLoopback
+                })
+                .next();
+            ada
+        }
+        Err(_) => None,
+    };
+
+    match adapter {
+        Some(adapter) => {
+            info!("Adapters: {:?}", adapter);
             Ok(())
         }
         None => {
