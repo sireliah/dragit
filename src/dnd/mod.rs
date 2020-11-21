@@ -17,7 +17,7 @@ use async_std::sync::{channel, Receiver, Sender};
 
 use crate::p2p::{peer::Direction, run_server, FileToSend, PeerEvent, TransferCommand};
 use components::{
-    AcceptFileDialog, AppNotification, NotificationType, ProgressNotification, STYLE,
+    AcceptFileDialog, AppNotification, MainLayout, NotificationType, ProgressNotification, STYLE,
 };
 use events::pool_peers;
 
@@ -32,13 +32,8 @@ pub fn build_window(
     glib::set_program_name(Some(&title));
     let window = gtk::ApplicationWindow::new(application);
 
-    let scroll = gtk::ScrolledWindow::new(gtk::NONE_ADJUSTMENT, gtk::NONE_ADJUSTMENT);
-    scroll.set_policy(gtk::PolicyType::Automatic, gtk::PolicyType::Automatic);
-
+    let layout = MainLayout::new();
     let overlay = gtk::Overlay::new();
-    let layout = gtk::Box::new(gtk::Orientation::Vertical, 20);
-    layout.set_halign(gtk::Align::Center);
-    layout.set_margin_top(60);
 
     let (gtk_sender, gtk_receiver) =
         glib::MainContext::channel::<PeerEvent>(glib::PRIORITY_DEFAULT);
@@ -47,11 +42,18 @@ pub fn build_window(
     let error_notif = AppNotification::new(&overlay, NotificationType::Error);
     let progress = ProgressNotification::new(&overlay);
 
-    scroll.add(&layout);
-    overlay.add_overlay(&scroll);
+    overlay.add_overlay(&layout.layout);
+
+    // Application window has overlay on the top, so we can show notifications on it
     window.add(&overlay);
 
-    pool_peers(&window, &layout, file_sender, peer_receiver, gtk_sender);
+    pool_peers(
+        &window,
+        &layout.item_layout,
+        file_sender,
+        peer_receiver,
+        gtk_sender,
+    );
 
     let window_weak = window.downgrade();
     gtk_receiver.attach(None, move |values| match values {

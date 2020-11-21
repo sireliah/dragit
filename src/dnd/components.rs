@@ -11,6 +11,7 @@ use libp2p::{multiaddr::Protocol, Multiaddr};
 use percent_encoding::percent_decode_str;
 
 use crate::p2p::{FileToSend, Peer};
+use crate::user_data;
 
 pub const STYLE: &str = "
 #drop-zone {
@@ -35,6 +36,57 @@ pub const STYLE: &str = "
 #button-close:hover {
     background-image: none;
 }";
+
+pub struct MainLayout {
+    pub layout: gtk::Box,
+    pub item_layout: gtk::Box,
+}
+
+impl MainLayout {
+    pub fn new() -> MainLayout {
+        let layout = gtk::Box::new(gtk::Orientation::Vertical, 20);
+
+        let item_layout = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        let header_layout = gtk::Box::new(gtk::Orientation::Vertical, 0);
+
+        layout.set_halign(gtk::Align::Center);
+        // layout.set_margin_top(60);
+
+        let label = gtk::Label::new(Some("Downloads directory"));
+        label.set_halign(gtk::Align::Start);
+
+        let file_chooser =
+            gtk::FileChooserButton::new("Choose file", gtk::FileChooserAction::SelectFolder);
+
+        if let Ok(downloads) = user_data::get_downloads_dir() {
+            info!("Getting downloads dir: {:?}", downloads);
+            file_chooser.set_filename(downloads);
+        };
+
+        file_chooser.connect_file_set(|chooser| {
+            let file = chooser.get_filename();
+            info!("File: {:?}", file);
+        });
+
+        header_layout.pack_start(&label, false, false, 10);
+        header_layout.pack_start(&file_chooser, false, false, 10);
+
+        layout.pack_start(&header_layout, false, false, 10);
+
+        let scroll = gtk::ScrolledWindow::new(gtk::NONE_ADJUSTMENT, gtk::NONE_ADJUSTMENT);
+        scroll.set_policy(gtk::PolicyType::Automatic, gtk::PolicyType::Automatic);
+        scroll.set_min_content_width(500);
+
+        scroll.add(&item_layout);
+
+        layout.pack_start(&scroll, true, true, 10);
+
+        MainLayout {
+            layout,
+            item_layout,
+        }
+    }
+}
 
 #[derive(Debug)]
 pub struct PeerItem {

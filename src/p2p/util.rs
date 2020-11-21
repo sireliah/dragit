@@ -1,13 +1,10 @@
 use std::fs;
 use std::io::{self, Error, ErrorKind, Read, Write};
-use std::path::Path;
 use std::str::FromStr;
 use std::sync::mpsc::{Receiver, SyncSender};
 use std::thread::{self, JoinHandle};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use async_std::sync::Sender as AsyncSender;
-use directories::UserDirs;
 
 #[cfg(unix)]
 use pnet_datalink;
@@ -153,49 +150,6 @@ pub async fn notify_completed(sender_queue: &AsyncSender<PeerEvent>) {
         .await;
 }
 
-fn get_timestamp() -> u64 {
-    let now = SystemTime::now();
-    now.duration_since(UNIX_EPOCH)
-        .expect("Time failed")
-        .as_secs()
-}
-
-fn generate_full_path<F>(name: &str, path: &Path, timestamp: F) -> Result<String, Error>
-where
-    F: Fn() -> u64,
-{
-    let name = format!("{}_{}", timestamp(), name);
-    let path = Path::new(path);
-    let joined = path.join(name);
-    let result = joined.into_os_string().into_string().or_else(|_| {
-        Err(Error::new(
-            ErrorKind::InvalidData,
-            "Could not return target path as string",
-        ))
-    });
-    result
-}
-
-pub fn get_target_path(name: &str, target_path: Option<&String>) -> Result<String, Error> {
-    // TODO: make this a future
-    match target_path {
-        Some(path) => {
-            let path = Path::new(path);
-            generate_full_path(name, path, get_timestamp)
-        }
-        None => match UserDirs::new() {
-            Some(dirs) => match dirs.download_dir() {
-                Some(path) => generate_full_path(name, path, get_timestamp),
-                None => Err(Error::new(
-                    ErrorKind::NotFound,
-                    "Downloads directory could not be found",
-                )),
-            },
-            None => Err(Error::new(ErrorKind::NotFound, "Could not check user dirs")),
-        },
-    }
-}
-
 pub fn add_row(value: &str) -> Vec<u8> {
     format!("{}\n", value).into_bytes()
 }
@@ -294,20 +248,12 @@ pub fn check_network_interfaces() -> Result<(), Error> {
 
 #[cfg(test)]
 mod tests {
-    use crate::p2p::util::{generate_full_path, hash_contents};
-    use std::path::Path;
+    use crate::p2p::util::hash_contents;
 
     #[test]
     fn test_hash_local_file() {
         let result = hash_contents("src/file.txt").unwrap();
 
         assert_eq!(result, "696c56be6d4c4a48d3de0d17e237f82a");
-    }
-
-    #[test]
-    fn test_generate_full_path() {
-        let result = generate_full_path("a-file.txt", Path::new("/home/user/"), || 1111).unwrap();
-
-        assert_eq!(result, "/home/user/1111_a-file.txt");
     }
 }

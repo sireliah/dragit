@@ -21,6 +21,8 @@ env_logger = "0.7"
 md-5 = "0.8.0"
 percent-encoding = "2.1.0"
 pnet = "0.26.0"
+serde = { version = "1.0", features = ["derive"] }
+toml = "0.5.7"
 
 [target.'cfg(unix)'.dependencies]
 pnet_datalink = "0.26.0"
