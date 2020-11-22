@@ -18,9 +18,27 @@ fn generate_full_path<F>(name: &str, path: &Path, timestamp: F) -> Result<String
 where
     F: Fn() -> u64,
 {
-    let name = format!("{}_{}", timestamp(), name);
-    let path = Path::new(path);
-    let joined = path.join(name);
+    let path = Path::new(&path);
+    let joined = path.join(&name);
+
+    // Add timestamp to the file name if the file already exists in target directory
+    let joined = if joined.exists() {
+        let extension: String = match joined.extension() {
+            Some(v) => v.to_string_lossy().to_string(),
+            None => "".to_string(),
+        };
+        let basename = match joined.file_stem() {
+            Some(v) => v.to_string_lossy().to_string(),
+            None => "file".to_string(),
+        };
+        let name = format!("{}_{}", basename, timestamp());
+        let mut path = path.join(&name);
+        path.set_extension(extension);
+        path
+    } else {
+        joined
+    };
+
     let result = joined.into_os_string().into_string().or_else(|_| {
         Err(Error::new(
             ErrorKind::InvalidData,
