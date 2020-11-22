@@ -402,10 +402,10 @@ impl EmptyListItem {
     }
 
     pub fn show(&self) {
-        self.revealer.set_reveal_child(true)
+        self.revealer.set_reveal_child(true);
     }
 
     pub fn hide(&self) {
-        self.revealer.set_reveal_child(false)
+        self.revealer.set_reveal_child(false);
     }
 }

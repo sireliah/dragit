@@ -150,6 +150,6 @@ mod tests {
     fn test_generate_full_path() {
         let result = generate_full_path("a-file.txt", Path::new("/home/user/"), || 1111).unwrap();
 
-        assert_eq!(result, "/home/user/1111_a-file.txt");
+        assert_eq!(result, "/home/user/a-file.txt");
     }
 }
