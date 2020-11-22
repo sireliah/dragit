@@ -1,6 +1,6 @@
 use std::fs;
 use std::io::{Error, ErrorKind, Read, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use directories::{BaseDirs, UserDirs};
@@ -36,22 +36,12 @@ pub fn get_target_path(name: &str, target_path: Option<&String>) -> Result<Strin
             let path = Path::new(path);
             generate_full_path(name, path, get_timestamp)
         }
-        None => match get_downloads_dir() {
-            Ok(path) => generate_full_path(name, Path::new(&path), get_timestamp),
-            Err(_) => Err(Error::new(
-                ErrorKind::NotFound,
-                "Downloads directory could not be found",
-            )),
-        },
+        None => {
+            let config = UserConfig::new()?;
+            let dir = config.get_downloads_dir();
+            generate_full_path(name, dir.as_path(), get_timestamp)
+        }
     }
-}
-
-pub fn get_downloads_dir() -> Result<String, Error> {
-    let config = UserConfig::new()?;
-
-    info!("Config struct: {}", config.get_downloads());
-
-    Ok(config.get_downloads())
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -59,8 +49,9 @@ struct Config {
     downloads: String,
 }
 
-struct UserConfig {
+pub struct UserConfig {
     conf: Config,
+    conf_path: PathBuf,
 }
 
 impl UserConfig {
@@ -89,30 +80,47 @@ impl UserConfig {
                     None => base_dirs.home_dir().to_string_lossy().to_string(),
                 },
             };
-            let toml = toml::to_string(&config).expect("Failed creating config file");
+            let toml = Self::serialize_config(config)?;
             let mut file = fs::File::create(&joined_path)?;
             file.write_all(&toml.as_bytes())?;
         }
-        let mut file = fs::File::open(joined_path)?;
+        let mut file = fs::File::open(&joined_path)?;
         let mut contents = String::new();
         file.read_to_string(&mut contents)?;
 
-        info!("Contents: {:?}", contents);
-
         let conf: Config = toml::from_str(&contents)?;
 
-        Ok(UserConfig { conf })
+        Ok(UserConfig {
+            conf,
+            conf_path: joined_path.to_owned(),
+        })
     }
 
-    pub fn get_downloads(&self) -> String {
-        self.conf.downloads.to_owned()
+    pub fn get_downloads_dir(&self) -> PathBuf {
+        Path::new(&self.conf.downloads).to_owned()
     }
-}
 
-pub fn get_user_config() {
-    let base_dir = BaseDirs::new().unwrap();
-    let config_dir = base_dir.config_dir();
-    info!("Config dir: {:?}", config_dir);
+    pub fn set_downloads_dir(&self, path: &Path) -> Result<(), Error> {
+        // Watch out, this ::create will truncate the file
+        let mut file = fs::File::create(&self.conf_path.as_path())?;
+
+        let config: Config = Config {
+            downloads: path.to_string_lossy().to_string(),
+        };
+        let toml = Self::serialize_config(config)?;
+        file.write_all(&toml.as_bytes())?;
+        Ok(())
+    }
+
+    fn serialize_config(config: Config) -> Result<String, Error> {
+        match toml::to_string(&config) {
+            Ok(v) => Ok(v),
+            Err(e) => {
+                error!("Problem parsing toml: {:?}", e);
+                return Err(Error::new(ErrorKind::Other, "Problem parsing toml"));
+            }
+        }
+    }
 }
 
 #[cfg(test)]

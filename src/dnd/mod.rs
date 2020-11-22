@@ -32,7 +32,7 @@ pub fn build_window(
     glib::set_program_name(Some(&title));
     let window = gtk::ApplicationWindow::new(application);
 
-    let layout = MainLayout::new();
+    let layout = MainLayout::new()?;
     let overlay = gtk::Overlay::new();
 
     let (gtk_sender, gtk_receiver) =

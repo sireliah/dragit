@@ -11,7 +11,7 @@ use libp2p::{multiaddr::Protocol, Multiaddr};
 use percent_encoding::percent_decode_str;
 
 use crate::p2p::{FileToSend, Peer};
-use crate::user_data;
+use crate::user_data::UserConfig;
 
 pub const STYLE: &str = "
 #drop-zone {
@@ -43,7 +43,7 @@ pub struct MainLayout {
 }
 
 impl MainLayout {
-    pub fn new() -> MainLayout {
+    pub fn new() -> Result<MainLayout, Box<dyn Error>> {
         let layout = gtk::Box::new(gtk::Orientation::Vertical, 20);
 
         let item_layout = gtk::Box::new(gtk::Orientation::Vertical, 0);
@@ -58,14 +58,22 @@ impl MainLayout {
         let file_chooser =
             gtk::FileChooserButton::new("Choose file", gtk::FileChooserAction::SelectFolder);
 
-        if let Ok(downloads) = user_data::get_downloads_dir() {
-            info!("Getting downloads dir: {:?}", downloads);
-            file_chooser.set_filename(downloads);
-        };
+        let config = UserConfig::new()?;
+        let downloads = config.get_downloads_dir();
+        file_chooser.set_filename(downloads);
 
-        file_chooser.connect_file_set(|chooser| {
-            let file = chooser.get_filename();
-            info!("File: {:?}", file);
+        file_chooser.connect_file_set(move |chooser| {
+            match chooser.get_filename() {
+                Some(path) => {
+                    info!("Setting downloads directory: {:?}", path);
+                    if let Err(e) = config.set_downloads_dir(path.as_path()) {
+                        error!("Failed to set downloads directory: {:?}", e);
+                    };
+                }
+                None => {
+                    error!("Failed to get new downloads dir");
+                }
+            };
         });
 
         header_layout.pack_start(&label, false, false, 10);
@@ -75,16 +83,16 @@ impl MainLayout {
 
         let scroll = gtk::ScrolledWindow::new(gtk::NONE_ADJUSTMENT, gtk::NONE_ADJUSTMENT);
         scroll.set_policy(gtk::PolicyType::Automatic, gtk::PolicyType::Automatic);
-        scroll.set_min_content_width(500);
+        scroll.set_min_content_width(550);
 
         scroll.add(&item_layout);
 
         layout.pack_start(&scroll, true, true, 10);
 
-        MainLayout {
+        Ok(MainLayout {
             layout,
             item_layout,
-        }
+        })
     }
 }
 
