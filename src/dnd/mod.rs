@@ -108,7 +108,7 @@ pub fn build_window(
     });
 
     window.set_title(&title);
-    window.set_default_size(600, 700);
+    window.set_default_size(600, 750);
     window.set_border_width(10);
 
     window.show_all();

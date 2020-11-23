@@ -50,7 +50,8 @@ impl MainLayout {
         let header_layout = gtk::Box::new(gtk::Orientation::Vertical, 0);
 
         layout.set_halign(gtk::Align::Center);
-        // layout.set_margin_top(60);
+        layout.set_margin_top(0);
+        header_layout.set_margin_top(30);
 
         let label = gtk::Label::new(Some("Downloads directory"));
         label.set_halign(gtk::Align::Start);
