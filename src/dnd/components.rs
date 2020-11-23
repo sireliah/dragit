@@ -14,10 +14,17 @@ use crate::p2p::{FileToSend, Peer};
 use crate::user_data::UserConfig;
 
 pub const STYLE: &str = "
+#downloads border {
+    margin-left: 10px;
+    margin-right: 10px;
+    padding: 20px;
+    border-style: dashed;
+    border-radius: 15px;
+}
 #drop-zone {
     padding: 10px;
     margin: 10px;
-    border: 1px;
+    border: 0.5px;
     border-style: dashed;
     border-radius: 15px;
 }
@@ -44,17 +51,18 @@ pub struct MainLayout {
 
 impl MainLayout {
     pub fn new() -> Result<MainLayout, Box<dyn Error>> {
-        let layout = gtk::Box::new(gtk::Orientation::Vertical, 20);
+        let layout = gtk::Box::new(gtk::Orientation::Vertical, 10);
 
         let item_layout = gtk::Box::new(gtk::Orientation::Vertical, 0);
         let header_layout = gtk::Box::new(gtk::Orientation::Vertical, 0);
 
         layout.set_halign(gtk::Align::Center);
         layout.set_margin_top(0);
-        header_layout.set_margin_top(30);
+        header_layout.set_margin_top(40);
 
-        let label = gtk::Label::new(Some("Downloads directory"));
-        label.set_halign(gtk::Align::Start);
+        let frame = gtk::Frame::new(Some("Downloads directory"));
+        frame.set_widget_name("downloads");
+        // frame.set_size_request(480, 50);
 
         let file_chooser =
             gtk::FileChooserButton::new("Choose file", gtk::FileChooserAction::SelectFolder);
@@ -76,9 +84,8 @@ impl MainLayout {
                 }
             };
         });
-
-        header_layout.pack_start(&label, false, false, 10);
-        header_layout.pack_start(&file_chooser, false, false, 10);
+        frame.add(&file_chooser);
+        header_layout.pack_start(&frame, false, false, 10);
 
         layout.pack_start(&header_layout, false, false, 10);
 

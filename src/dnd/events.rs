@@ -58,7 +58,7 @@ pub fn pool_peers(
                     let sender = file_sender.clone();
                     let item = item.bind_drag_and_drop(peer, sender);
 
-                    layout_in.pack_start(&item.container, false, false, 10);
+                    layout_in.pack_start(&item.container, false, false, 0);
                 }
                 remove_expired_boxes(&layout_in, &peers);
             };
