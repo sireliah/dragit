@@ -61,25 +61,25 @@ pub fn build_window(
             let size = v as f64;
             let total = t as f64;
             match direction {
-                Direction::Incoming => progress.show_incoming(size, total),
-                Direction::Outgoing => progress.show_outgoing(size, total),
+                Direction::Incoming => progress.show_incoming(&overlay, size, total),
+                Direction::Outgoing => progress.show_outgoing(&overlay, size, total),
             }
             Continue(true)
         }
         PeerEvent::TransferCompleted => {
-            progress.hide();
+            progress.hide(&overlay);
             Continue(true)
         }
         PeerEvent::FileCorrect(file_name, path) => {
             progress.progress_bar.set_fraction(0.0);
-            progress.hide();
+            progress.hide(&overlay);
             let text = format!("Received {} \nSaved in {}", file_name, path);
             alert_notif.show(&overlay, text);
             Continue(true)
         }
         PeerEvent::FileIncorrect => {
             progress.progress_bar.set_fraction(0.0);
-            progress.hide();
+            progress.hide(&overlay);
             error_notif.show(&overlay, "File is incorrect".to_string());
             Continue(true)
         }

@@ -28,11 +28,11 @@ pub const STYLE: &str = "
     border-style: dashed;
     border-radius: 15px;
 }
-#notification-alert {
+#notification {
     padding: 10px;
     border-radius: 10px;
     color: rgb(0, 0, 0);
-    background-color: rgb(100, 100, 100);
+    background-color: rgba(100, 100, 100, 1.0);
 }
 #button-close {
     padding: 0;
@@ -42,7 +42,11 @@ pub const STYLE: &str = "
 }
 #button-close:hover {
     background-image: none;
-}";
+}
+progressbar {
+    color: rgb(0, 0, 0);
+}
+";
 
 pub struct MainLayout {
     pub layout: gtk::Box,
@@ -58,11 +62,10 @@ impl MainLayout {
 
         layout.set_halign(gtk::Align::Center);
         layout.set_margin_top(0);
-        header_layout.set_margin_top(40);
+        header_layout.set_margin_top(10);
 
         let frame = gtk::Frame::new(Some("Downloads directory"));
         frame.set_widget_name("downloads");
-        // frame.set_size_request(480, 50);
 
         let file_chooser =
             gtk::FileChooserButton::new("Choose file", gtk::FileChooserAction::SelectFolder);
@@ -201,58 +204,69 @@ fn clean_file_proto(value: &str) -> String {
 
 pub struct ProgressNotification {
     revealer: gtk::Revealer,
+    overlay: gtk::Overlay,
     pub progress_bar: gtk::ProgressBar,
 }
 
 impl ProgressNotification {
-    pub fn new(overlay: &gtk::Overlay) -> Self {
+    pub fn new(main_overlay: &gtk::Overlay) -> Self {
+        let layout = gtk::Box::new(gtk::Orientation::Horizontal, 5);
+        layout.set_widget_name("notification");
+
+        let overlay = gtk::Overlay::new();
         let revealer = gtk::Revealer::new();
-        let ov = gtk::Overlay::new();
         let progress_bar = gtk::ProgressBar::new();
+
         revealer.set_halign(gtk::Align::Center);
         revealer.set_valign(gtk::Align::Start);
-
         revealer.set_transition_type(gtk::RevealerTransitionType::SlideDown);
+
+        progress_bar.set_text(Some("Receiving file"));
+        progress_bar.set_show_text(true);
 
         progress_bar.set_halign(gtk::Align::Center);
         progress_bar.set_valign(gtk::Align::Start);
-        progress_bar.set_text(Some("Receiving file"));
-        progress_bar.set_show_text(true);
         progress_bar.set_hexpand(true);
         progress_bar.set_size_request(500, 50);
         revealer.set_margin_bottom(30);
 
-        ov.add_overlay(&revealer);
-        revealer.add(&progress_bar);
-        revealer.set_widget_name("notification");
-        overlay.add_overlay(&ov);
+        layout.pack_start(&progress_bar, true, false, 0);
+        revealer.add(&layout);
+
+        overlay.add_overlay(&revealer);
+
+        main_overlay.add_overlay(&overlay);
         revealer.set_reveal_child(false);
 
         ProgressNotification {
             revealer,
+            overlay,
             progress_bar,
         }
     }
 
-    fn show(&self) {
+    fn show(&self, main_overlay: &gtk::Overlay) {
+        main_overlay.reorder_overlay(&self.overlay, 10);
         self.revealer.set_reveal_child(true)
     }
 
-    fn show_progress(&self, size: f64, total: f64, text: &str) {
-        self.show();
+    fn show_progress(&self, main_overlay: &gtk::Overlay, size: f64, total: f64, text: &str) {
+        self.show(main_overlay);
         self.progress_bar.set_fraction(size / total);
         self.progress_bar.set_text(Some(text));
     }
 
-    pub fn show_incoming(&self, size: f64, total: f64) {
-        self.show_progress(size, total, "Receiving file");
+    pub fn show_incoming(&self, main_overlay: &gtk::Overlay, size: f64, total: f64) {
+        self.show_progress(main_overlay, size, total, "Receiving file");
     }
 
-    pub fn show_outgoing(&self, size: f64, total: f64) {
-        self.show_progress(size, total, "Sending file");
+    pub fn show_outgoing(&self, main_overlay: &gtk::Overlay, size: f64, total: f64) {
+        self.show_progress(main_overlay, size, total, "Sending file");
     }
 
-    pub fn hide(&self) {
+    pub fn hide(&self, main_overlay: &gtk::Overlay) {
+        main_overlay.reorder_overlay(&self.overlay, 0);
+
         self.revealer.set_reveal_child(false)
     }
 }
@@ -275,7 +289,7 @@ impl AppNotification {
         let revealer = gtk::Revealer::new();
         let label = Label::new(Some("File correct"));
 
-        layout.set_widget_name("notification-alert");
+        layout.set_widget_name("notification");
 
         let button_close = gtk::Button::new_from_icon_name(
             Some("window-close-symbolic"),
