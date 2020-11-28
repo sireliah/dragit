@@ -17,6 +17,9 @@ The frontend is ran on `gtk-rs`.
 
 
 ## How to use
+
+![demo](./static/dragit.gif)
+
 Please download the latest [release](https://github.com/sireliah/dragit/releases/) for your OS and unpack it. Currently you can use `dragit` on 64-bit Linux and Windows (Please check [Windows requirements](#windows-requirements) for details).
 
 1. Start the application on two machines:
