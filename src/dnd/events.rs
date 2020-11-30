@@ -27,6 +27,18 @@ pub fn pool_peers(
 
     timeout_add(200, move || {
         if let Some(layout_in) = layout_weak.upgrade() {
+            let children: Vec<String> = layout_in
+                .get_children()
+                .iter()
+                .map(|c| match c.get_widget_name() {
+                    Some(name) => name.as_str().to_string(),
+                    None => {
+                        error!("Failed to get widget name");
+                        "".to_string()
+                    }
+                })
+                .filter(|c| c != "empty-item")
+                .collect();
             if let Ok(event) = peer_receiver.lock().unwrap().try_recv() {
                 let peers: CurrentPeers = match event {
                     PeerEvent::PeersUpdated(list) => list,
@@ -35,19 +47,6 @@ pub fn pool_peers(
                         return Continue(true);
                     }
                 };
-
-                let children: Vec<String> = layout_in
-                    .get_children()
-                    .iter()
-                    .map(|c| match c.get_widget_name() {
-                        Some(name) => name.as_str().to_string(),
-                        None => {
-                            error!("Failed to get widget name");
-                            "".to_string()
-                        }
-                    })
-                    .collect();
-
                 empty_item.hide();
 
                 for peer in peers.iter().filter(|p| !children.contains(&p.name)) {
@@ -62,7 +61,7 @@ pub fn pool_peers(
                 }
                 remove_expired_boxes(&layout_in, &peers);
             };
-            if layout_in.get_children().len() == 0 {
+            if children.len() == 0 {
                 empty_item.show();
             }
         }

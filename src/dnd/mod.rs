@@ -141,7 +141,6 @@ pub fn start_window() {
 
     let peer_receiver_arc = Arc::new(Mutex::new(peer_receiver));
 
-    // TODO: remove me
     let now = SystemTime::now();
     let timestamp = now.duration_since(UNIX_EPOCH).expect("Time failed");
     let name = format!("com.drag_and_drop_{}", timestamp.as_secs());

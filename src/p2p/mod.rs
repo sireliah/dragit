@@ -48,16 +48,16 @@ impl NetworkBehaviourEventProcess<MdnsEvent> for MyBehaviour {
                 for (peer_id, addr) in list {
                     match self.transfer_behaviour.add_peer(peer_id, addr) {
                         Ok(_) => (),
-                        Err(e) => error!("{:?}", e),
+                        Err(e) => error!("Adding peer failed: {:?}", e),
                     };
                 }
             }
             MdnsEvent::Expired(list) => {
                 for (peer_id, _addr) in list {
-                    error!("Address expired: {:?}", peer_id);
+                    info!("Address expired: {:?}", peer_id);
                     match self.transfer_behaviour.remove_peer(&peer_id) {
                         Ok(_) => (),
-                        Err(e) => error!("{:?}", e),
+                        Err(e) => error!("Removing peer failed: {:?}", e),
                     }
                 }
             }

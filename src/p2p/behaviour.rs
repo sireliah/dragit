@@ -79,6 +79,7 @@ impl TransferBehaviour {
 
     pub fn remove_peer(&mut self, peer_id: &PeerId) -> Result<(), Box<dyn Error>> {
         self.connected_peers.remove(peer_id);
+        self.peers.remove(peer_id);
 
         Ok(self.notify_frontend(None)?)
     }
