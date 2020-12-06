@@ -26,18 +26,21 @@ use libp2p::{
 
 pub mod behaviour;
 pub mod commands;
+pub mod discovery;
 pub mod peer;
 pub mod protocol;
 pub mod util;
 
 pub use behaviour::TransferBehaviour;
 pub use commands::TransferCommand;
+pub use discovery::{DiscoveryBehaviour, DiscoveryEvent};
 pub use peer::{CurrentPeers, Peer, PeerEvent};
 pub use protocol::{FileToSend, TransferOut, TransferPayload};
 
 #[derive(NetworkBehaviour)]
 pub struct MyBehaviour {
     pub mdns: Mdns,
+    pub discovery: DiscoveryBehaviour,
     pub transfer_behaviour: TransferBehaviour,
 }
 
@@ -46,6 +49,9 @@ impl NetworkBehaviourEventProcess<MdnsEvent> for MyBehaviour {
         match event {
             MdnsEvent::Discovered(list) => {
                 for (peer_id, addr) in list {
+                    // info!("Discovered: {:?}", peer_id);
+                    self.discovery.add_peer(peer_id.clone());
+
                     match self.transfer_behaviour.add_peer(peer_id, addr) {
                         Ok(_) => (),
                         Err(e) => error!("Adding peer failed: {:?}", e),
@@ -62,6 +68,12 @@ impl NetworkBehaviourEventProcess<MdnsEvent> for MyBehaviour {
                 }
             }
         }
+    }
+}
+
+impl NetworkBehaviourEventProcess<DiscoveryEvent> for MyBehaviour {
+    fn inject_event(&mut self, event: DiscoveryEvent) {
+        info!("Discovered: {}", event);
     }
 }
 
@@ -108,9 +120,11 @@ async fn execute_swarm(
 
     let mut swarm = {
         let transfer_behaviour = TransferBehaviour::new(sender, command_receiver_c, None);
+        let discovery = DiscoveryBehaviour::new();
         let mdns = Mdns::new()?;
         let behaviour = MyBehaviour {
             mdns,
+            discovery,
             transfer_behaviour,
         };
         let timeout = Duration::from_secs(60);
