@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use std::error::Error;
 use std::fmt;
-use std::io::{Error as IoError, ErrorKind};
+use std::io::ErrorKind;
 use std::sync::mpsc::sync_channel;
 
 use std::fs::metadata;
@@ -88,7 +88,7 @@ impl TransferPayload {
 
         if hash_from_disk != self.hash {
             Err(io::Error::new(
-                io::ErrorKind::InvalidData,
+                ErrorKind::InvalidData,
                 "File corrupted!",
             ))
         } else {
@@ -170,7 +170,7 @@ impl TransferPayload {
                         break;
                     }
                 }
-                Err(e) => panic!("Failed reading the socket {:?}", e),
+                Err(e) => return Err(e),
             }
         }
 
@@ -212,7 +212,7 @@ impl TransferPayload {
                 warn!("Accepted hash does not match: {} {}", hash, meta.hash);
                 socket.write(b"N").await?;
                 socket.flush().await?;
-                Err(IoError::new(
+                Err(io::Error::new(
                     ErrorKind::PermissionDenied,
                     "Hash does not match",
                 ))
@@ -221,7 +221,7 @@ impl TransferPayload {
                 warn!("Denied hash: {}", hash);
                 socket.write(b"N").await?;
                 socket.flush().await?;
-                Err(IoError::new(ErrorKind::PermissionDenied, "Rejected"))
+                Err(io::Error::new(ErrorKind::PermissionDenied, "Rejected"))
             }
         }
     }
@@ -280,7 +280,13 @@ impl TransferOut {
                         util::notify_progress(&self.sender_queue, counter, size, &direction).await;
                         break;
                     }
-                    Err(e) => panic!(e),
+                    Err(e) => {
+                        error!("Channel error: {:?}", e);
+                        return Err(io::Error::new(
+                            ErrorKind::Other,
+                            "Sending half of the channel is disconnected",
+                        ));
+                    }
                 }
             }
 
@@ -300,7 +306,7 @@ impl TransferOut {
             Err(e) => {
                 error!("Answer decoding error: {}", e);
                 return Err(io::Error::new(
-                    io::ErrorKind::InvalidData,
+                    ErrorKind::InvalidData,
                     "Couldn't decode the answer",
                 ));
             }
@@ -329,12 +335,7 @@ where
         Box::pin(async move {
             info!("Upgrade inbound");
             let start = Instant::now();
-            match self.read_socket(socket).await {
-                Ok(event) => event,
-                Err(e) => {
-                    panic!("Error when reading socket: {:?}", e);
-                }
-            };
+            self.read_socket(socket).await?;
 
             info!("Finished {:?} ms", start.elapsed().as_millis());
             Ok(self)
