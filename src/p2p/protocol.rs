@@ -87,10 +87,7 @@ impl TransferPayload {
         let hash_from_disk = util::hash_contents(&self.path)?;
 
         if hash_from_disk != self.hash {
-            Err(io::Error::new(
-                ErrorKind::InvalidData,
-                "File corrupted!",
-            ))
+            Err(io::Error::new(ErrorKind::InvalidData, "File corrupted!"))
         } else {
             Ok(())
         }
@@ -148,8 +145,7 @@ impl TransferPayload {
                         current_size += n;
 
                         if payloads.len() >= (CHUNK_SIZE * 8) {
-                            sender.send(payloads.clone()).expect("sending failed");
-
+                            util::send_buffer(&sender, payloads.clone())?;
                             payloads.clear();
 
                             if util::time_to_notify(current_size, size) {
@@ -164,8 +160,8 @@ impl TransferPayload {
                             }
                         }
                     } else {
-                        sender.send(payloads.clone()).expect("sending failed");
-                        sender.send(vec![]).expect("sending failed");
+                        util::send_buffer(&sender, payloads.clone())?;
+                        util::send_buffer(&sender, vec![])?;
                         util::notify_progress(&self.sender_queue, counter, size, &direction).await;
                         break;
                     }
@@ -175,7 +171,13 @@ impl TransferPayload {
         }
 
         drop(reader);
-        job.join().expect("Joining failed");
+        let _ = job.join().or_else(|e| {
+            error!("File thread error: {:?}", e);
+            Err(io::Error::new(
+                io::ErrorKind::Other,
+                "Error in file writer thread",
+            ))
+        })?;
 
         Ok((counter, path))
     }
@@ -290,7 +292,13 @@ impl TransferOut {
                 }
             }
 
-            job.join().expect("Joining failed");
+            let _ = job.join().or_else(|e| {
+                error!("File thread error: {:?}", e);
+                Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    "Error in file writer thread",
+                ))
+            })?;
             writer.close().await?;
             drop(writer);
             util::notify_completed(&self.sender_queue).await;
