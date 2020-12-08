@@ -49,10 +49,7 @@ impl NetworkBehaviourEventProcess<MdnsEvent> for MyBehaviour {
         match event {
             MdnsEvent::Discovered(list) => {
                 for (peer_id, addr) in list {
-                    // info!("Discovered: {:?}", peer_id);
-                    self.discovery.add_peer(peer_id.clone());
-
-                    match self.transfer_behaviour.add_peer(peer_id, addr) {
+                    match self.discovery.add_peer(peer_id.clone(), addr) {
                         Ok(_) => (),
                         Err(e) => error!("Adding peer failed: {:?}", e),
                     };
@@ -61,7 +58,7 @@ impl NetworkBehaviourEventProcess<MdnsEvent> for MyBehaviour {
             MdnsEvent::Expired(list) => {
                 for (peer_id, _addr) in list {
                     info!("Address expired: {:?}", peer_id);
-                    match self.transfer_behaviour.remove_peer(&peer_id) {
+                    match self.discovery.remove_peer(&peer_id) {
                         Ok(_) => (),
                         Err(e) => error!("Removing peer failed: {:?}", e),
                     }
@@ -74,6 +71,15 @@ impl NetworkBehaviourEventProcess<MdnsEvent> for MyBehaviour {
 impl NetworkBehaviourEventProcess<DiscoveryEvent> for MyBehaviour {
     fn inject_event(&mut self, event: DiscoveryEvent) {
         info!("Discovered: {}", event);
+        match event.result {
+            Ok(hostname) => {
+                self.discovery.update_peer(event.peer, hostname);
+                self.discovery.notify_frontend(None).unwrap();
+            }
+            Err(e) => {
+                error!("Failed to get hostname: {:?}", e);
+            }
+        }
     }
 }
 
@@ -119,8 +125,8 @@ async fn execute_swarm(
     let command_receiver_c = Arc::clone(&command_rec);
 
     let mut swarm = {
-        let transfer_behaviour = TransferBehaviour::new(sender, command_receiver_c, None);
-        let discovery = DiscoveryBehaviour::new();
+        let transfer_behaviour = TransferBehaviour::new(sender.clone(), command_receiver_c, None);
+        let discovery = DiscoveryBehaviour::new(sender);
         let mdns = Mdns::new()?;
         let behaviour = MyBehaviour {
             mdns,

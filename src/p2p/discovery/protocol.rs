@@ -90,8 +90,7 @@ where
 
     fn upgrade_outbound(self, mut socket: TSocket, _info: Self::Info) -> Self::Future {
         Box::pin(async move {
-            let hostname = "Hdzia".to_string();
-            upgrade::write_one(&mut socket, hostname).await?;
+            upgrade::write_one(&mut socket, self.hostname).await?;
             Ok(())
         })
     }

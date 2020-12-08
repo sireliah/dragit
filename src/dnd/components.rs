@@ -114,9 +114,17 @@ pub struct PeerItem {
 }
 
 impl PeerItem {
-    pub fn new(name: &str, address: &Multiaddr) -> PeerItem {
+    // TODO: is this safe to use &str here?
+    pub fn new(name: &str, address: &Multiaddr, hostname: String) -> PeerItem {
         let ip = PeerItem::extract_ip(&address);
-        let display_name = format!("<big><b>{}</b></big> \n<small>{}</small>", ip, name);
+        let display_name = format!(
+            concat!(
+                "<big><b>Host Name</b>: {}</big>\n",
+                "<big><b>IP Address</b>: {}</big>\n",
+                "<small>{}</small>"
+            ),
+            hostname, ip, name
+        );
 
         let label = Label::new(None);
         label.set_markup(&display_name);

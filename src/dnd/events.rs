@@ -39,6 +39,9 @@ pub fn pool_peers(
                 })
                 .filter(|c| c != "empty-item")
                 .collect();
+            if children.len() == 0 {
+                empty_item.show();
+            }
             if let Ok(event) = peer_receiver.lock().unwrap().try_recv() {
                 let peers: CurrentPeers = match event {
                     PeerEvent::PeersUpdated(list) => list,
@@ -48,12 +51,13 @@ pub fn pool_peers(
                     }
                 };
                 empty_item.hide();
-
                 for peer in peers.iter().filter(|p| !children.contains(&p.name)) {
-                    let name: &str = &peer.name;
+                    let name = &peer.name;
                     let addr = &peer.address;
+                    let hostname = &peer.hostname;
+                    let host = hostname.to_owned().unwrap_or("".to_string());
 
-                    let item = PeerItem::new(name, addr);
+                    let item = PeerItem::new(name, addr, host);
                     let sender = file_sender.clone();
                     let item = item.bind_drag_and_drop(peer, sender);
 
@@ -61,9 +65,6 @@ pub fn pool_peers(
                 }
                 remove_expired_boxes(&layout_in, &peers);
             };
-            if children.len() == 0 {
-                empty_item.show();
-            }
         }
 
         if let Some(win) = weak_window.upgrade() {

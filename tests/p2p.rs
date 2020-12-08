@@ -19,7 +19,8 @@ use libp2p::{
 };
 
 use dragit::p2p::{
-    FileToSend, MyBehaviour, PeerEvent, TransferBehaviour, TransferCommand, TransferOut,
+    DiscoveryBehaviour, FileToSend, MyBehaviour, PeerEvent, TransferBehaviour, TransferCommand,
+    TransferOut,
 };
 
 #[test]
@@ -118,7 +119,6 @@ fn test_transfer() {
                 }
                 other => {
                     println!("Other2: {:?}", other);
-                    break;
                 }
             }
         }
@@ -165,10 +165,15 @@ fn build_swarm() -> (
     let command_receiver = Arc::new(Mutex::new(command_receiver));
 
     let mdns = Mdns::new().unwrap();
-    let transfer_behaviour =
-        TransferBehaviour::new(peer_sender, command_receiver, Some("/tmp/".to_string()));
+    let transfer_behaviour = TransferBehaviour::new(
+        peer_sender.clone(),
+        command_receiver,
+        Some("/tmp/".to_string()),
+    );
+    let discovery = DiscoveryBehaviour::new(peer_sender);
     let behaviour = MyBehaviour {
         mdns,
+        discovery,
         transfer_behaviour,
     };
     let timeout = Duration::from_secs(60);

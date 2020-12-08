@@ -1,16 +1,20 @@
 use std::{
-    collections::{HashSet, VecDeque},
+    collections::{HashMap, VecDeque},
+    error::Error,
     fmt,
     task::{Context, Poll},
 };
 
-use libp2p::core::{connection::ConnectionId, Multiaddr, PeerId};
+use async_std::sync::Sender;
+use hostname;
+use libp2p::core::{connection::ConnectionId, ConnectedPoint, Multiaddr, PeerId};
 use libp2p::swarm::{
     protocols_handler::SubstreamProtocol, DialPeerCondition, NetworkBehaviour,
     NetworkBehaviourAction, NotifyHandler, OneShotHandler, PollParameters, ProtocolsHandler,
 };
 
 use crate::p2p::discovery::protocol::{Discovery, DiscoveryEvent};
+use crate::p2p::peer::{CurrentPeers, Peer, PeerEvent};
 
 #[derive(Debug)]
 pub enum InnerMessage {
@@ -44,29 +48,73 @@ impl From<()> for InnerMessage {
 #[derive(Debug)]
 pub struct DiscoveryBehaviour {
     events: VecDeque<NetworkBehaviourAction<Discovery, DiscoveryEvent>>,
-    peers: HashSet<PeerId>,
+    peers: HashMap<PeerId, Peer>,
+    hostname: String,
+    sender: Sender<PeerEvent>,
 }
 
 impl DiscoveryBehaviour {
-    pub fn new() -> Self {
+    pub fn new(sender: Sender<PeerEvent>) -> Self {
         DiscoveryBehaviour {
             events: VecDeque::new(),
-            peers: HashSet::new(),
+            peers: HashMap::new(),
+            hostname: Self::get_hostname(),
+            sender,
         }
     }
 
-    pub fn add_peer(&mut self, peer_id: PeerId) {
+    fn get_hostname() -> String {
+        match hostname::get() {
+            Ok(value) => value.to_string_lossy().into(),
+            Err(e) => {
+                error!("Failed to get hostname: {:?}", e);
+                "".to_string()
+            }
+        }
+    }
+
+    fn peers_event(&mut self) -> CurrentPeers {
+        self.peers
+            .clone()
+            .into_iter()
+            .map(|(_, peer)| peer.to_owned())
+            .collect::<CurrentPeers>()
+    }
+
+    pub fn notify_frontend(&mut self, peers: Option<CurrentPeers>) -> Result<(), Box<dyn Error>> {
+        let current_peers = match peers {
+            Some(peers) => peers,
+            None => self.peers_event(),
+        };
+        let event = PeerEvent::PeersUpdated(current_peers);
+        Ok(self.sender.try_send(event)?)
+    }
+
+    pub fn add_peer(&mut self, peer_id: PeerId, addr: Multiaddr) -> Result<(), Box<dyn Error>> {
         self.events.push_back(NetworkBehaviourAction::DialPeer {
             condition: DialPeerCondition::Disconnected,
             peer_id: peer_id.clone(),
         });
 
-        let event = NetworkBehaviourAction::NotifyHandler {
-            peer_id,
-            handler: NotifyHandler::Any,
-            event: Discovery::default(),
+        let peer = Peer {
+            name: peer_id.to_base58(),
+            peer_id: peer_id.clone(),
+            address: addr,
+            hostname: None,
         };
-        self.events.push_back(event);
+        self.peers.insert(peer_id, peer);
+        Ok(())
+    }
+
+    pub fn remove_peer(&mut self, peer_id: &PeerId) -> Result<(), Box<dyn Error>> {
+        self.peers.remove(peer_id);
+        Ok(())
+    }
+
+    pub fn update_peer(&mut self, peer_id: PeerId, hostname: String) {
+        if let Some(peer) = self.peers.get_mut(&peer_id) {
+            peer.hostname = Some(hostname);
+        }
     }
 }
 
@@ -76,7 +124,9 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 
     fn new_handler(&mut self) -> Self::ProtocolsHandler {
         Self::ProtocolsHandler::new(
-            SubstreamProtocol::new(Discovery::default()),
+            SubstreamProtocol::new(Discovery {
+                hostname: self.hostname.clone(),
+            }),
             Default::default(),
         )
     }
@@ -85,12 +135,43 @@ impl NetworkBehaviour for DiscoveryBehaviour {
         Vec::new()
     }
 
-    fn inject_connected(&mut self, _: &PeerId) {}
+    fn inject_connected(&mut self, _peer_id: &PeerId) {}
 
-    fn inject_disconnected(&mut self, _: &PeerId) {}
+    fn inject_connection_established(
+        &mut self,
+        peer_id: &PeerId,
+        c: &ConnectionId,
+        endpoint: &ConnectedPoint,
+    ) {
+        info!("Discovery: connection established: {:?}", endpoint);
+        match endpoint {
+            ConnectedPoint::Dialer { address } => {
+                if let Some(peer) = self.peers.get_mut(peer_id) {
+                    peer.address = address.to_owned();
+                };
+                let event = NetworkBehaviourAction::NotifyHandler {
+                    peer_id: peer_id.to_owned(),
+                    handler: NotifyHandler::One(*c),
+                    event: Discovery {
+                        hostname: self.hostname.clone(),
+                    },
+                };
+                self.events.push_back(event);
+            }
+            ConnectedPoint::Listener {
+                local_addr: _,
+                send_back_addr,
+            } => {
+                if let Some(peer) = self.peers.get_mut(peer_id) {
+                    peer.address = send_back_addr.to_owned();
+                };
+            }
+        };
+    }
+
+    fn inject_disconnected(&mut self, _peer: &PeerId) {}
 
     fn inject_event(&mut self, peer: PeerId, _connection: ConnectionId, event: InnerMessage) {
-        // info!("Inject discovery event: {}", event);
         match event {
             InnerMessage::Received(ev) => {
                 let message = DiscoveryEvent {

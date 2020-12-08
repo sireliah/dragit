@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::error::Error;
 use std::sync::Arc;
 use std::task::{Context, Poll};
@@ -13,13 +13,12 @@ use libp2p::swarm::{
 };
 
 use crate::p2p::commands::TransferCommand;
-use crate::p2p::peer::{CurrentPeers, Peer, PeerEvent};
+use crate::p2p::peer::PeerEvent;
 use crate::p2p::protocol::{FileToSend, ProtocolEvent, TransferOut, TransferPayload};
 
 const TIMEOUT: u64 = 600;
 
 pub struct TransferBehaviour {
-    pub peers: HashMap<PeerId, Peer>,
     pub connected_peers: HashSet<PeerId>,
     pub events: Vec<NetworkBehaviourAction<TransferOut, TransferPayload>>,
     payloads: Vec<FileToSend>,
@@ -35,7 +34,6 @@ impl TransferBehaviour {
         target_path: Option<String>,
     ) -> Self {
         TransferBehaviour {
-            peers: HashMap::new(),
             connected_peers: HashSet::new(),
             events: vec![],
             payloads: vec![],
@@ -47,41 +45,6 @@ impl TransferBehaviour {
 
     pub fn push_file(&mut self, file: FileToSend) -> Result<(), Box<dyn Error>> {
         Ok(self.payloads.push(file))
-    }
-
-    fn peers_event(&mut self) -> CurrentPeers {
-        self.peers
-            .clone()
-            .into_iter()
-            .map(|(_, peer)| peer.to_owned())
-            .collect::<CurrentPeers>()
-    }
-
-    fn notify_frontend(&mut self, peers: Option<CurrentPeers>) -> Result<(), Box<dyn Error>> {
-        let current_peers = match peers {
-            Some(peers) => peers,
-            None => self.peers_event(),
-        };
-        let event = PeerEvent::PeersUpdated(current_peers);
-        Ok(self.sender.try_send(event)?)
-    }
-
-    pub fn add_peer(&mut self, peer_id: PeerId, addr: Multiaddr) -> Result<(), Box<dyn Error>> {
-        let peer = Peer {
-            name: peer_id.to_base58(),
-            peer_id: peer_id.clone(),
-            address: addr,
-        };
-        self.peers.insert(peer_id, peer);
-
-        Ok(self.notify_frontend(None)?)
-    }
-
-    pub fn remove_peer(&mut self, peer_id: &PeerId) -> Result<(), Box<dyn Error>> {
-        self.connected_peers.remove(peer_id);
-        self.peers.remove(peer_id);
-
-        Ok(self.notify_frontend(None)?)
     }
 }
 
@@ -112,21 +75,14 @@ impl NetworkBehaviour for TransferBehaviour {
         Vec::new()
     }
 
-    fn inject_connected(&mut self, peer: &PeerId) {
-        info!("Connected to: {:?}", peer);
-        self.connected_peers.insert(peer.to_owned());
-        if let Err(e) = self.notify_frontend(None) {
-            error!("Failed to notify frontend {:?}", e);
-        };
-    }
+    fn inject_connected(&mut self, _peer: &PeerId) {}
 
     fn inject_connection_established(
         &mut self,
         peer: &PeerId,
         c: &ConnectionId,
-        endpoint: &ConnectedPoint,
+        _endpoint: &ConnectedPoint,
     ) {
-        info!("Connection established: {:?}", peer);
         match self.payloads.pop() {
             Some(message) => {
                 let transfer = TransferOut {
@@ -144,29 +100,6 @@ impl NetworkBehaviour for TransferBehaviour {
             }
             None => (),
         }
-
-        let peers = self
-            .peers
-            .clone()
-            .into_iter()
-            .map(|(_, mut peer)| match endpoint {
-                ConnectedPoint::Dialer { address } => {
-                    peer.address = address.clone();
-                    peer
-                }
-                ConnectedPoint::Listener {
-                    local_addr,
-                    send_back_addr: _,
-                } => {
-                    peer.address = local_addr.clone();
-                    peer
-                }
-            })
-            .collect::<CurrentPeers>();
-
-        if let Err(e) = self.notify_frontend(Some(peers)) {
-            error!("Failed to notify frontend {:?}", e);
-        };
     }
 
     fn inject_dial_failure(&mut self, peer: &PeerId) {
@@ -174,12 +107,7 @@ impl NetworkBehaviour for TransferBehaviour {
         self.connected_peers.remove(peer);
     }
 
-    fn inject_disconnected(&mut self, peer: &PeerId) {
-        info!("Disconnected: {:?}", peer);
-        if let Err(e) = self.remove_peer(peer) {
-            error!("{:?}", e);
-        }
-    }
+    fn inject_disconnected(&mut self, _peer: &PeerId) {}
 
     fn inject_event(&mut self, _: PeerId, _: ConnectionId, event: ProtocolEvent) {
         info!("Inject event: {}", event);
