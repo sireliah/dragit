@@ -129,7 +129,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
             hostname: self.hostname.clone(),
         });
         let handler_config = OneShotHandlerConfig {
-            keep_alive_timeout: Duration::from_secs(5),
+            keep_alive_timeout: Duration::from_secs(1),
             outbound_substream_timeout: Duration::from_secs(2),
         };
         Self::ProtocolsHandler::new(substream_proto, handler_config)

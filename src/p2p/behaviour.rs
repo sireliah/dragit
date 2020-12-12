@@ -1,4 +1,3 @@
-use std::collections::HashSet;
 use std::error::Error;
 use std::sync::Arc;
 use std::task::{Context, Poll};
@@ -19,7 +18,6 @@ use crate::p2p::protocol::{FileToSend, ProtocolEvent, TransferOut, TransferPaylo
 const TIMEOUT: u64 = 600;
 
 pub struct TransferBehaviour {
-    pub connected_peers: HashSet<PeerId>,
     pub events: Vec<NetworkBehaviourAction<TransferOut, TransferPayload>>,
     payloads: Vec<FileToSend>,
     pub sender: Sender<PeerEvent>,
@@ -34,7 +32,6 @@ impl TransferBehaviour {
         target_path: Option<String>,
     ) -> Self {
         TransferBehaviour {
-            connected_peers: HashSet::new(),
             events: vec![],
             payloads: vec![],
             sender,
@@ -104,7 +101,6 @@ impl NetworkBehaviour for TransferBehaviour {
 
     fn inject_dial_failure(&mut self, peer: &PeerId) {
         warn!("Dial failure: {:?}", peer);
-        self.connected_peers.remove(peer);
     }
 
     fn inject_disconnected(&mut self, _peer: &PeerId) {}
@@ -125,12 +121,10 @@ impl NetworkBehaviour for TransferBehaviour {
         _: &mut impl PollParameters,
     ) -> Poll<NetworkBehaviourAction<TransferOut, TransferPayload>> {
         for file in self.payloads.iter() {
-            if !self.connected_peers.contains(&file.peer) {
-                return Poll::Ready(NetworkBehaviourAction::DialPeer {
-                    condition: DialPeerCondition::Always,
-                    peer_id: file.peer.to_owned(),
-                });
-            }
+            return Poll::Ready(NetworkBehaviourAction::DialPeer {
+                condition: DialPeerCondition::Disconnected,
+                peer_id: file.peer.to_owned(),
+            });
         }
 
         if let Some(event) = self.events.pop() {
