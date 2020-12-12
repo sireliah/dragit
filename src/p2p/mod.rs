@@ -45,10 +45,10 @@ pub struct MyBehaviour {
 }
 
 impl NetworkBehaviourEventProcess<MdnsEvent> for MyBehaviour {
-    fn inject_event(&mut self, event: MdnsEvent) {
+    fn inject_event(&mut self, mut event: MdnsEvent) {
         match event {
-            MdnsEvent::Discovered(list) => {
-                for (peer_id, addr) in list {
+            MdnsEvent::Discovered(ref mut list) => {
+                if let Some((peer_id, addr)) = list.next() {
                     match self.discovery.add_peer(peer_id.clone(), addr) {
                         Ok(_) => (),
                         Err(e) => error!("Adding peer failed: {:?}", e),

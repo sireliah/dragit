@@ -3,6 +3,7 @@ use std::{
     error::Error,
     fmt,
     task::{Context, Poll},
+    time::Duration,
 };
 
 use async_std::sync::Sender;
@@ -10,7 +11,8 @@ use hostname;
 use libp2p::core::{connection::ConnectionId, ConnectedPoint, Multiaddr, PeerId};
 use libp2p::swarm::{
     protocols_handler::SubstreamProtocol, DialPeerCondition, NetworkBehaviour,
-    NetworkBehaviourAction, NotifyHandler, OneShotHandler, PollParameters, ProtocolsHandler,
+    NetworkBehaviourAction, NotifyHandler, OneShotHandler, OneShotHandlerConfig, PollParameters,
+    ProtocolsHandler,
 };
 
 use crate::p2p::discovery::protocol::{Discovery, DiscoveryEvent};
@@ -92,7 +94,7 @@ impl DiscoveryBehaviour {
 
     pub fn add_peer(&mut self, peer_id: PeerId, addr: Multiaddr) -> Result<(), Box<dyn Error>> {
         self.events.push_back(NetworkBehaviourAction::DialPeer {
-            condition: DialPeerCondition::Disconnected,
+            condition: DialPeerCondition::NotDialing,
             peer_id: peer_id.clone(),
         });
 
@@ -123,12 +125,14 @@ impl NetworkBehaviour for DiscoveryBehaviour {
     type OutEvent = DiscoveryEvent;
 
     fn new_handler(&mut self) -> Self::ProtocolsHandler {
-        Self::ProtocolsHandler::new(
-            SubstreamProtocol::new(Discovery {
-                hostname: self.hostname.clone(),
-            }),
-            Default::default(),
-        )
+        let substream_proto = SubstreamProtocol::new(Discovery {
+            hostname: self.hostname.clone(),
+        });
+        let handler_config = OneShotHandlerConfig {
+            keep_alive_timeout: Duration::from_secs(5),
+            outbound_substream_timeout: Duration::from_secs(2),
+        };
+        Self::ProtocolsHandler::new(substream_proto, handler_config)
     }
 
     fn addresses_of_peer(&mut self, _peer_id: &PeerId) -> Vec<Multiaddr> {

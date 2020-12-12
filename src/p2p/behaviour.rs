@@ -127,7 +127,7 @@ impl NetworkBehaviour for TransferBehaviour {
         for file in self.payloads.iter() {
             if !self.connected_peers.contains(&file.peer) {
                 return Poll::Ready(NetworkBehaviourAction::DialPeer {
-                    condition: DialPeerCondition::Disconnected,
+                    condition: DialPeerCondition::Always,
                     peer_id: file.peer.to_owned(),
                 });
             }
