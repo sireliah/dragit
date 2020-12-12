@@ -20,9 +20,9 @@ use futures::io as futio;
 use futures::prelude::*;
 use libp2p::core::{InboundUpgrade, OutboundUpgrade, PeerId, UpgradeInfo};
 
-use super::commands::TransferCommand;
-use super::peer::{Direction, PeerEvent};
-use super::util::{self, CHUNK_SIZE};
+use crate::p2p::commands::TransferCommand;
+use crate::p2p::peer::{Direction, PeerEvent};
+use crate::p2p::util::{self, CHUNK_SIZE};
 use crate::user_data;
 
 #[derive(Clone, Debug)]

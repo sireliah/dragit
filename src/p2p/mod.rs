@@ -24,18 +24,16 @@ use libp2p::{
     websocket, NetworkBehaviour, PeerId, Swarm,
 };
 
-pub mod behaviour;
 pub mod commands;
 pub mod discovery;
 pub mod peer;
-pub mod protocol;
+pub mod transfer;
 pub mod util;
 
-pub use behaviour::TransferBehaviour;
 pub use commands::TransferCommand;
 pub use discovery::{DiscoveryBehaviour, DiscoveryEvent};
 pub use peer::{CurrentPeers, Peer, PeerEvent};
-pub use protocol::{FileToSend, TransferOut, TransferPayload};
+pub use transfer::{FileToSend, TransferBehaviour, TransferOut, TransferPayload};
 
 #[derive(NetworkBehaviour)]
 pub struct MyBehaviour {

@@ -11,9 +11,9 @@ use libp2p::swarm::{
     OneShotHandlerConfig, PollParameters, SubstreamProtocol,
 };
 
+use super::protocol::{FileToSend, ProtocolEvent, TransferOut, TransferPayload};
 use crate::p2p::commands::TransferCommand;
 use crate::p2p::peer::PeerEvent;
-use crate::p2p::protocol::{FileToSend, ProtocolEvent, TransferOut, TransferPayload};
 
 const TIMEOUT: u64 = 600;
 
