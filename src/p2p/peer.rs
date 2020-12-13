@@ -27,8 +27,8 @@ pub struct Peer {
     pub name: String,
     pub address: Multiaddr,
     pub peer_id: PeerId,
-    pub hostname: Option<String>,
-    pub os: Option<OperatingSystem>,
+    pub hostname: String,
+    pub os: OperatingSystem,
 }
 
 impl PartialEq for Peer {

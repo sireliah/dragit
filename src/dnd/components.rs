@@ -10,7 +10,7 @@ use gtk::{DestDefaults, Label, TargetEntry, TargetFlags};
 use libp2p::{multiaddr::Protocol, Multiaddr};
 use percent_encoding::percent_decode_str;
 
-use crate::p2p::{FileToSend, Peer};
+use crate::p2p::{FileToSend, OperatingSystem, Peer};
 use crate::user_data::UserConfig;
 
 pub const STYLE: &str = "
@@ -115,15 +115,16 @@ pub struct PeerItem {
 
 impl PeerItem {
     // TODO: is this safe to use &str here?
-    pub fn new(name: &str, address: &Multiaddr, hostname: String) -> PeerItem {
+    pub fn new(name: &str, address: &Multiaddr, hostname: &str, os: &OperatingSystem) -> PeerItem {
         let ip = PeerItem::extract_ip(&address);
         let display_name = format!(
             concat!(
                 "<big><b>Host Name</b>: {}</big>\n",
                 "<big><b>IP Address</b>: {}</big>\n",
+                "<big><b>System</b>: {:?}</big>\n",
                 "<small>{}</small>"
             ),
-            hostname, ip, name
+            hostname, ip, os, name
         );
 
         let label = Label::new(None);

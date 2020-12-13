@@ -32,7 +32,7 @@ pub mod util;
 
 pub use commands::TransferCommand;
 pub use discovery::{DiscoveryBehaviour, DiscoveryEvent};
-pub use peer::{CurrentPeers, Peer, PeerEvent};
+pub use peer::{CurrentPeers, OperatingSystem, Peer, PeerEvent};
 pub use transfer::{FileToSend, TransferBehaviour, TransferOut, TransferPayload};
 
 #[derive(NetworkBehaviour)]
@@ -72,7 +72,6 @@ impl NetworkBehaviourEventProcess<DiscoveryEvent> for MyBehaviour {
         match event.result {
             Ok((hostname, os)) => {
                 self.discovery.update_peer(event.peer, hostname, os);
-                self.discovery.notify_frontend(None).unwrap();
             }
             Err(e) => {
                 error!("Failed to get hostname: {:?}", e);

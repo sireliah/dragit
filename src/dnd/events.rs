@@ -55,9 +55,9 @@ pub fn pool_peers(
                     let name = &peer.name;
                     let addr = &peer.address;
                     let hostname = &peer.hostname;
-                    let host = hostname.to_owned().unwrap_or("".to_string());
+                    let os = &peer.os;
 
-                    let item = PeerItem::new(name, addr, host);
+                    let item = PeerItem::new(name, addr, &hostname, &os);
                     let sender = file_sender.clone();
                     let item = item.bind_drag_and_drop(peer, sender);
 

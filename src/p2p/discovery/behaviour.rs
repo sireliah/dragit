@@ -105,31 +105,40 @@ impl DiscoveryBehaviour {
     }
 
     pub fn add_peer(&mut self, peer_id: PeerId, addr: Multiaddr) -> Result<(), Box<dyn Error>> {
-        self.events.push_back(NetworkBehaviourAction::DialPeer {
-            condition: DialPeerCondition::NotDialing,
-            peer_id: peer_id.clone(),
-        });
+        if !self.peers.contains_key(&peer_id) {
+            self.events.push_back(NetworkBehaviourAction::DialPeer {
+                condition: DialPeerCondition::NotDialing,
+                peer_id: peer_id.clone(),
+            });
 
-        let peer = Peer {
-            name: peer_id.to_base58(),
-            peer_id: peer_id.clone(),
-            address: addr,
-            hostname: None,
-            os: None,
-        };
-        self.peers.insert(peer_id, peer);
+            let peer = Peer {
+                name: peer_id.to_base58(),
+                peer_id: peer_id.clone(),
+                address: addr,
+                hostname: "".to_string(),
+                os: OperatingSystem::Unknown,
+            };
+            self.peers.insert(peer_id, peer);
+        }
         Ok(())
     }
 
     pub fn remove_peer(&mut self, peer_id: &PeerId) -> Result<(), Box<dyn Error>> {
         self.peers.remove(peer_id);
+
+        if let Err(e) = self.notify_frontend(None) {
+            error!("Failed to notify the frontend: {:?}", e);
+        }
         Ok(())
     }
 
     pub fn update_peer(&mut self, peer_id: PeerId, hostname: String, os: OperatingSystem) {
         if let Some(peer) = self.peers.get_mut(&peer_id) {
-            peer.hostname = Some(hostname);
-            peer.os = Some(os);
+            peer.hostname = hostname;
+            peer.os = os;
+        }
+        if let Err(e) = self.notify_frontend(None) {
+            error!("Failed to notify the frontend: {:?}", e);
         }
     }
 }
