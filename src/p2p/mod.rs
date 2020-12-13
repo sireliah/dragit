@@ -70,8 +70,8 @@ impl NetworkBehaviourEventProcess<DiscoveryEvent> for MyBehaviour {
     fn inject_event(&mut self, event: DiscoveryEvent) {
         info!("Discovered: {}", event);
         match event.result {
-            Ok(hostname) => {
-                self.discovery.update_peer(event.peer, hostname);
+            Ok((hostname, os)) => {
+                self.discovery.update_peer(event.peer, hostname, os);
                 self.discovery.notify_frontend(None).unwrap();
             }
             Err(e) => {

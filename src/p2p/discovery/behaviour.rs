@@ -16,7 +16,7 @@ use libp2p::swarm::{
 };
 
 use crate::p2p::discovery::protocol::{Discovery, DiscoveryEvent};
-use crate::p2p::peer::{CurrentPeers, Peer, PeerEvent};
+use crate::p2p::peer::{CurrentPeers, OperatingSystem, Peer, PeerEvent};
 
 #[derive(Debug)]
 pub enum InnerMessage {
@@ -52,6 +52,7 @@ pub struct DiscoveryBehaviour {
     events: VecDeque<NetworkBehaviourAction<Discovery, DiscoveryEvent>>,
     peers: HashMap<PeerId, Peer>,
     hostname: String,
+    os: OperatingSystem,
     sender: Sender<PeerEvent>,
 }
 
@@ -61,6 +62,7 @@ impl DiscoveryBehaviour {
             events: VecDeque::new(),
             peers: HashMap::new(),
             hostname: Self::get_hostname(),
+            os: Self::get_os(),
             sender,
         }
     }
@@ -72,6 +74,16 @@ impl DiscoveryBehaviour {
                 error!("Failed to get hostname: {:?}", e);
                 "".to_string()
             }
+        }
+    }
+
+    fn get_os() -> OperatingSystem {
+        if cfg!(target_os = "linux") {
+            OperatingSystem::Linux
+        } else if cfg!(target_os = "windows") {
+            OperatingSystem::Windows
+        } else {
+            OperatingSystem::Other
         }
     }
 
@@ -103,6 +115,7 @@ impl DiscoveryBehaviour {
             peer_id: peer_id.clone(),
             address: addr,
             hostname: None,
+            os: None,
         };
         self.peers.insert(peer_id, peer);
         Ok(())
@@ -113,9 +126,10 @@ impl DiscoveryBehaviour {
         Ok(())
     }
 
-    pub fn update_peer(&mut self, peer_id: PeerId, hostname: String) {
+    pub fn update_peer(&mut self, peer_id: PeerId, hostname: String, os: OperatingSystem) {
         if let Some(peer) = self.peers.get_mut(&peer_id) {
             peer.hostname = Some(hostname);
+            peer.os = Some(os);
         }
     }
 }
@@ -127,6 +141,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
     fn new_handler(&mut self) -> Self::ProtocolsHandler {
         let substream_proto = SubstreamProtocol::new(Discovery {
             hostname: self.hostname.clone(),
+            os: self.os,
         });
         let handler_config = OneShotHandlerConfig {
             keep_alive_timeout: Duration::from_secs(1),
@@ -158,6 +173,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                     handler: NotifyHandler::One(*c),
                     event: Discovery {
                         hostname: self.hostname.clone(),
+                        os: self.os.clone(),
                     },
                 };
                 self.events.push_back(event);
@@ -180,7 +196,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
             InnerMessage::Received(ev) => {
                 let message = DiscoveryEvent {
                     peer,
-                    result: Ok(ev.hostname),
+                    result: Ok((ev.hostname, ev.os)),
                 };
                 self.events
                     .push_back(NetworkBehaviourAction::GenerateEvent(message));

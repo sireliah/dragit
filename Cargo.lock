@@ -780,6 +780,8 @@ dependencies = [
  "percent-encoding",
  "pnet",
  "pnet_datalink",
+ "prost",
+ "prost-build",
  "serde",
  "toml",
 ]

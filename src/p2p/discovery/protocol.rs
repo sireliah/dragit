@@ -2,8 +2,13 @@ use std::{fmt, io, iter, pin::Pin};
 
 use futures::prelude::*;
 use libp2p::core::{upgrade, InboundUpgrade, OutboundUpgrade, PeerId, UpgradeInfo};
+use prost::Message;
 
-type DiscoverySuccess = String;
+use super::proto::Host;
+
+use crate::p2p::peer::OperatingSystem;
+
+type DiscoverySuccess = (String, OperatingSystem);
 type DiscoveryFailure = io::Error;
 pub type DiscoveryResult = Result<DiscoverySuccess, DiscoveryFailure>;
 
@@ -26,12 +31,14 @@ impl fmt::Display for DiscoveryEvent {
 #[derive(Clone, Debug)]
 pub struct Discovery {
     pub hostname: String,
+    pub os: OperatingSystem,
 }
 
 impl Default for Discovery {
     fn default() -> Self {
         Discovery {
             hostname: "".to_string(),
+            os: OperatingSystem::Linux,
         }
     }
 }
@@ -66,7 +73,7 @@ where
                         requested: _,
                         max: _,
                     } => {
-                        error!("Too large!");
+                        error!("Payload too large!");
                         return Err(io::Error::new(
                             io::ErrorKind::InvalidData,
                             "Payload too large",
@@ -74,8 +81,15 @@ where
                     }
                 },
             };
-            let hostname = String::from_utf8_lossy(&data).into_owned();
-            Ok(Discovery { hostname })
+            let host = Host::decode(&data[..])?;
+            let os = match OperatingSystem::from_i32(host.os) {
+                Some(v) => v,
+                None => OperatingSystem::Unknown,
+            };
+            Ok(Discovery {
+                hostname: host.hostname,
+                os,
+            })
         })
     }
 }
@@ -90,7 +104,14 @@ where
 
     fn upgrade_outbound(self, mut socket: TSocket, _info: Self::Info) -> Self::Future {
         Box::pin(async move {
-            upgrade::write_one(&mut socket, self.hostname).await?;
+            let proto = Host {
+                hostname: self.hostname,
+                os: self.os as i32,
+            };
+            let mut buf = Vec::with_capacity(proto.encoded_len());
+
+            proto.encode(&mut buf)?;
+            upgrade::write_one(&mut socket, buf).await?;
             Ok(())
         })
     }
