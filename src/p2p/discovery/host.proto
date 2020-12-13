@@ -1,0 +1,15 @@
+syntax = "proto3";
+package dragit.p2p.discovery.host;
+
+enum OperatingSystem {
+    LINUX = 0;
+    WINDOWS = 1;
+    MACOS = 2;
+    OTHER = 3;
+    UNKNOWN = 4;
+}
+
+message Host {
+    string hostname = 1;
+    OperatingSystem os = 2;
+}
