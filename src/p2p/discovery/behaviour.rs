@@ -104,30 +104,36 @@ impl DiscoveryBehaviour {
         Ok(self.sender.try_send(event)?)
     }
 
-    fn dial_peer(&mut self, peer_id: PeerId, addr: Multiaddr) {
+    fn dial_peer(&mut self, peer_id: PeerId, addr: Multiaddr, insert_peer: bool) {
         self.events.push_back(NetworkBehaviourAction::DialPeer {
             condition: DialPeerCondition::NotDialing,
             peer_id: peer_id.clone(),
         });
 
-        let peer = Peer {
-            name: peer_id.to_base58(),
-            peer_id: peer_id.clone(),
-            address: addr,
-            hostname: "Not known yet".to_string(),
-            os: OperatingSystem::Unknown,
-        };
-        self.peers.insert(peer_id, peer);
+        if insert_peer {
+            let peer = Peer {
+                name: peer_id.to_base58(),
+                peer_id: peer_id.clone(),
+                address: addr,
+                hostname: "Not known yet".to_string(),
+                os: OperatingSystem::Unknown,
+            };
+            self.peers.insert(peer_id, peer);
+        }
     }
 
     pub fn add_peer(&mut self, peer_id: PeerId, addr: Multiaddr) {
         match self.peers.get(&peer_id) {
             // Keep dialing if server didn't get host details yet
             Some(peer) if peer.os == OperatingSystem::Unknown => {
-                self.dial_peer(peer_id, addr);
+                info!("OS unknown, dialing... {:?}", peer_id);
+                self.dial_peer(peer_id, addr, false);
             }
             Some(_) => (),
-            None => self.dial_peer(peer_id, addr),
+            None => {
+                info!("Peer not found, dialing... {:?}", peer_id);
+                self.dial_peer(peer_id, addr, true);
+            }
         }
     }
 
