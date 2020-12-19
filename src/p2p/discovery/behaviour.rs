@@ -104,23 +104,31 @@ impl DiscoveryBehaviour {
         Ok(self.sender.try_send(event)?)
     }
 
-    pub fn add_peer(&mut self, peer_id: PeerId, addr: Multiaddr) -> Result<(), Box<dyn Error>> {
-        if !self.peers.contains_key(&peer_id) {
-            self.events.push_back(NetworkBehaviourAction::DialPeer {
-                condition: DialPeerCondition::NotDialing,
-                peer_id: peer_id.clone(),
-            });
+    fn dial_peer(&mut self, peer_id: PeerId, addr: Multiaddr) {
+        self.events.push_back(NetworkBehaviourAction::DialPeer {
+            condition: DialPeerCondition::NotDialing,
+            peer_id: peer_id.clone(),
+        });
 
-            let peer = Peer {
-                name: peer_id.to_base58(),
-                peer_id: peer_id.clone(),
-                address: addr,
-                hostname: "".to_string(),
-                os: OperatingSystem::Unknown,
-            };
-            self.peers.insert(peer_id, peer);
+        let peer = Peer {
+            name: peer_id.to_base58(),
+            peer_id: peer_id.clone(),
+            address: addr,
+            hostname: "Not known yet".to_string(),
+            os: OperatingSystem::Unknown,
+        };
+        self.peers.insert(peer_id, peer);
+    }
+
+    pub fn add_peer(&mut self, peer_id: PeerId, addr: Multiaddr) {
+        match self.peers.get(&peer_id) {
+            // Keep dialing if server didn't get host details yet
+            Some(peer) if peer.os == OperatingSystem::Unknown => {
+                self.dial_peer(peer_id, addr);
+            }
+            Some(_) => (),
+            None => self.dial_peer(peer_id, addr),
         }
-        Ok(())
     }
 
     pub fn remove_peer(&mut self, peer_id: &PeerId) -> Result<(), Box<dyn Error>> {
@@ -136,9 +144,10 @@ impl DiscoveryBehaviour {
         if let Some(peer) = self.peers.get_mut(&peer_id) {
             peer.hostname = hostname;
             peer.os = os;
-        }
-        if let Err(e) = self.notify_frontend(None) {
-            error!("Failed to notify the frontend: {:?}", e);
+
+            if let Err(e) = self.notify_frontend(None) {
+                error!("Failed to notify the frontend: {:?}", e);
+            }
         }
     }
 }

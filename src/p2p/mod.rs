@@ -47,10 +47,7 @@ impl NetworkBehaviourEventProcess<MdnsEvent> for MyBehaviour {
         match event {
             MdnsEvent::Discovered(ref mut list) => {
                 if let Some((peer_id, addr)) = list.next() {
-                    match self.discovery.add_peer(peer_id.clone(), addr) {
-                        Ok(_) => (),
-                        Err(e) => error!("Adding peer failed: {:?}", e),
-                    };
+                    self.discovery.add_peer(peer_id.clone(), addr);
                 }
             }
             MdnsEvent::Expired(list) => {

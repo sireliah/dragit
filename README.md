@@ -74,7 +74,6 @@ $ ./target/release/dragit
 - TCP retransmissions - what is wrong?
 - add timeout on the Accept/Deny event
 - fix the outbound memory issue (consumes too much memory on file reading)
-- show details about the host
 - add files queue
 - inject_dial_upgrade_error - but why not inbound?
 
@@ -82,6 +81,7 @@ $ ./target/release/dragit
 - re-enable the Bluetooth
 
 ### Done
+- show details about the host
 - choose directory
 - show version in the title bar
 - crashes when no network interface is available
