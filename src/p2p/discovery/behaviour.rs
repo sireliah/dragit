@@ -146,14 +146,34 @@ impl DiscoveryBehaviour {
         Ok(())
     }
 
-    pub fn update_peer(&mut self, peer_id: PeerId, hostname: String, os: OperatingSystem) {
-        if let Some(peer) = self.peers.get_mut(&peer_id) {
-            peer.hostname = hostname;
-            peer.os = os;
-
-            if let Err(e) = self.notify_frontend(None) {
-                error!("Failed to notify the frontend: {:?}", e);
+    pub fn update_peer(
+        &mut self,
+        peer_id: PeerId,
+        address: Multiaddr,
+        hostname: String,
+        os: OperatingSystem,
+    ) {
+        match self.peers.get_mut(&peer_id) {
+            Some(peer) => {
+                info!("Updating peer. {:?}", peer_id);
+                peer.hostname = hostname;
+                peer.os = os;
             }
+            None => {
+                error!("Peer not found! {:?}", peer_id);
+                let peer = Peer {
+                    name: peer_id.to_base58(),
+                    peer_id: peer_id.clone(),
+                    address,
+                    hostname,
+                    os,
+                };
+                self.peers.insert(peer_id, peer);
+            }
+        }
+
+        if let Err(e) = self.notify_frontend(None) {
+            error!("Failed to notify the frontend: {:?}", e);
         }
     }
 }
@@ -166,6 +186,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
         let substream_proto = SubstreamProtocol::new(Discovery {
             hostname: self.hostname.clone(),
             os: self.os,
+            address: Multiaddr::empty(),
         });
         let handler_config = OneShotHandlerConfig {
             keep_alive_timeout: Duration::from_secs(1),
@@ -190,7 +211,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
         match endpoint {
             ConnectedPoint::Dialer { address } => {
                 if let Some(peer) = self.peers.get_mut(peer_id) {
-                    peer.address = address.to_owned();
+                    peer.address = address.clone();
                 };
                 let event = NetworkBehaviourAction::NotifyHandler {
                     peer_id: peer_id.to_owned(),
@@ -198,17 +219,31 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                     event: Discovery {
                         hostname: self.hostname.clone(),
                         os: self.os.clone(),
+                        address: address.to_owned(),
                     },
                 };
                 self.events.push_back(event);
             }
             ConnectedPoint::Listener {
-                local_addr: _,
+                local_addr,
                 send_back_addr,
             } => {
+                info!(
+                    "Listener: remote: {:?}, local: {:?}",
+                    send_back_addr, local_addr
+                );
                 if let Some(peer) = self.peers.get_mut(peer_id) {
                     peer.address = send_back_addr.to_owned();
-                };
+                } else {
+                    let peer = Peer {
+                        name: peer_id.to_base58(),
+                        peer_id: peer_id.clone(),
+                        address: send_back_addr.to_owned(),
+                        hostname: "Not known yet".to_string(),
+                        os: OperatingSystem::Unknown,
+                    };
+                    self.peers.insert(peer_id.to_owned(), peer);
+                }
             }
         };
     }
@@ -220,6 +255,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
             InnerMessage::Received(ev) => {
                 let message = DiscoveryEvent {
                     peer,
+                    address: ev.address,
                     result: Ok((ev.hostname, ev.os)),
                 };
                 self.events

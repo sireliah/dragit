@@ -68,10 +68,11 @@ impl NetworkBehaviourEventProcess<DiscoveryEvent> for MyBehaviour {
         info!("Discovered: {}", event);
         match event.result {
             Ok((hostname, os)) => {
-                self.discovery.update_peer(event.peer, hostname, os);
+                self.discovery
+                    .update_peer(event.peer, event.address, hostname, os);
             }
             Err(e) => {
-                error!("Failed to get hostname: {:?}", e);
+                error!("Failed to get host info: {:?}", e);
             }
         }
     }

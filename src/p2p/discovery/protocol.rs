@@ -1,7 +1,7 @@
 use std::{fmt, io, iter, pin::Pin};
 
 use futures::prelude::*;
-use libp2p::core::{upgrade, InboundUpgrade, OutboundUpgrade, PeerId, UpgradeInfo};
+use libp2p::core::{upgrade, InboundUpgrade, Multiaddr, OutboundUpgrade, PeerId, UpgradeInfo};
 use prost::Message;
 
 use super::proto::Host;
@@ -15,6 +15,7 @@ pub type DiscoveryResult = Result<DiscoverySuccess, DiscoveryFailure>;
 #[derive(Debug)]
 pub struct DiscoveryEvent {
     pub peer: PeerId,
+    pub address: Multiaddr,
     pub result: DiscoveryResult,
 }
 
@@ -22,8 +23,8 @@ impl fmt::Display for DiscoveryEvent {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "DiscoveryEvent: result: {:?}, peer: {}",
-            self.result, self.peer
+            "DiscoveryEvent: result: {:?}, peer: {}, address: {}",
+            self.result, self.peer, self.address
         )
     }
 }
@@ -32,6 +33,7 @@ impl fmt::Display for DiscoveryEvent {
 pub struct Discovery {
     pub hostname: String,
     pub os: OperatingSystem,
+    pub address: Multiaddr,
 }
 
 impl Default for Discovery {
@@ -39,6 +41,7 @@ impl Default for Discovery {
         Discovery {
             hostname: "".to_string(),
             os: OperatingSystem::Linux,
+            address: Multiaddr::empty(),
         }
     }
 }
@@ -89,6 +92,7 @@ where
             Ok(Discovery {
                 hostname: host.hostname,
                 os,
+                address: self.address,
             })
         })
     }
