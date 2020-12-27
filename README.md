@@ -5,6 +5,8 @@ Experimental application for intuitive file sharing between devices.
 The network part is using `libp2p` and custom protocol for file transfer.
 The frontend is ran on `gtk-rs`.
 
+**Important note**: This is software in early development phase and you should use it at your own risk.
+
 - [How to use](#how-to-use)
 - [Development](#development)
     - [How to build on Linux](#how-to-build-on-linux)
@@ -68,7 +70,7 @@ $ ./target/release/dragit
 ### Bluetooth support
 `Dragit` can use Bluetooth OBEX protocol for file transfer through the D-Bus BlueZ interface, which should work on most of the Linux devices. This future needs some work and is disabled now.
 
-### TODOs:
+### TODOs
 - show easy to understand instruction on startup
 - have list of trusted devices
 - TCP retransmissions - what is wrong?
@@ -76,7 +78,6 @@ $ ./target/release/dragit
 - fix the outbound memory issue (consumes too much memory on file reading)
 - add files queue
 - inject_dial_upgrade_error - but why not inbound?
-
 - adjust network timeouts
 - re-enable the Bluetooth
 
