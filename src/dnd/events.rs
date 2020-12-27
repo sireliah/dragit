@@ -9,7 +9,7 @@ use glib::Continue;
 use gtk::{timeout_add, ApplicationWindow};
 
 use crate::dnd::components::{EmptyListItem, PeerItem};
-use crate::p2p::{CurrentPeers, FileToSend, Peer, PeerEvent};
+use crate::p2p::{CurrentPeers, FileToSend, PeerEvent};
 
 pub fn pool_peers(
     window: &ApplicationWindow,
@@ -30,12 +30,10 @@ pub fn pool_peers(
             let children: Vec<String> = layout_in
                 .get_children()
                 .iter()
-                .map(|c| match c.get_widget_name() {
-                    Some(name) => name.as_str().to_string(),
-                    None => {
-                        error!("Failed to get widget name");
-                        "".to_string()
-                    }
+                .map(|c| {
+                    c.get_widget_name()
+                        .unwrap_or(glib::GString::from(""))
+                        .to_string()
                 })
                 .filter(|c| c != "empty-item")
                 .collect();
@@ -51,7 +49,11 @@ pub fn pool_peers(
                     }
                 };
                 empty_item.hide();
-                for peer in peers.iter().filter(|p| !children.contains(&p.name)) {
+
+                // Clear the item list before receiving new list of peers from event
+                remove_items(&layout_in);
+
+                for peer in peers.iter() {
                     let name = &peer.name;
                     let addr = &peer.address;
                     let hostname = &peer.hostname;
@@ -63,7 +65,6 @@ pub fn pool_peers(
 
                     layout_in.pack_start(&item.container, false, false, 0);
                 }
-                remove_expired_boxes(&layout_in, &peers);
             };
         }
 
@@ -74,18 +75,15 @@ pub fn pool_peers(
     });
 }
 
-pub fn remove_expired_boxes(layout: &gtk::Box, peers: &Vec<Peer>) {
-    for peer_box in layout.get_children() {
-        if let Some(box_name) = peer_box.get_widget_name() {
-            let box_name = box_name.as_str().to_string();
-            let box_in_peers = peers
-                .iter()
-                .map(|p| p.name.clone())
-                .collect::<Vec<String>>()
-                .contains(&box_name);
-            if !box_in_peers && box_name != "notification" && box_name != "empty-item" {
-                peer_box.destroy();
-            }
-        }
+fn remove_items(layout: &gtk::Box) {
+    for child in layout.get_children().iter().filter(|c| {
+        let name = c
+            .get_widget_name()
+            .unwrap_or(glib::GString::from(""))
+            .to_string();
+        name != "notification" && name != "empty-item"
+    }) {
+        layout.remove(child);
+        child.destroy();
     }
 }
