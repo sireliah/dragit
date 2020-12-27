@@ -11,17 +11,12 @@ use libp2p::{
     core::transport::timeout::TransportTimeout,
     core::transport::Transport,
     core::upgrade,
-    dns, identity,
-    mdns::Mdns,
-    mplex, noise,
+    dns, identity, mplex, noise,
     swarm::{NetworkBehaviourAction, NotifyHandler, SwarmEvent},
     tcp, websocket, Multiaddr, PeerId, Swarm,
 };
 
-use dragit::p2p::{
-    DiscoveryBehaviour, FileToSend, MyBehaviour, PeerEvent, TransferBehaviour, TransferCommand,
-    TransferOut,
-};
+use dragit::p2p::{FileToSend, PeerEvent, TransferBehaviour, TransferCommand, TransferOut};
 
 #[test]
 fn test_transfer() {
@@ -32,7 +27,7 @@ fn test_transfer() {
         .unwrap();
 
     let (tx, mut rx) = channel::<Multiaddr>(10);
-    let (peer1, sender, peer_receiver1, mut swarm1) = build_swarm();
+    let (peer1, sender, _, mut swarm1) = build_swarm();
     let (_, _, _, mut swarm2) = build_swarm();
 
     // File should be accepted from the beginning
@@ -63,12 +58,11 @@ fn test_transfer() {
                     num_established: _,
                     cause,
                 } => {
-                    println!("Closed1: {:?}", cause);
-                    break;
+                    panic!("Conn1 closed! {:?}", cause);
                 }
                 SwarmEvent::Behaviour(event) => {
                     println!("Event1: {:?}", event);
-                    break;
+                    return event;
                 }
                 event => {
                     println!("Other1: {:?}", event);
@@ -93,14 +87,14 @@ fn test_transfer() {
                         let transfer = TransferOut {
                             name: "a-file".to_string(),
                             path: "tests/file.txt".to_string(),
-                            sender_queue: swarm2.transfer_behaviour.sender.clone(),
+                            sender_queue: swarm2.sender.clone(),
                         };
                         let event = NetworkBehaviourAction::NotifyHandler {
                             handler: NotifyHandler::Any,
                             peer_id: peer1.to_owned(),
                             event: transfer,
                         };
-                        swarm2.transfer_behaviour.events.push(event);
+                        swarm2.events.push(event);
                         pushed = true;
                     }
                 }
@@ -110,12 +104,11 @@ fn test_transfer() {
                     num_established: _,
                     cause,
                 } => {
-                    println!("Closed2: {:?}", cause);
-                    break;
+                    panic!("Conn2 closed {:?}", cause);
                 }
                 SwarmEvent::Behaviour(event) => {
                     println!("Event2: {:?}", event);
-                    break;
+                    return event;
                 }
                 other => {
                     println!("Other2: {:?}", other);
@@ -127,24 +120,11 @@ fn test_transfer() {
     let result = future::select(Box::pin(sw1), Box::pin(sw2));
     let (p1, _) = task::block_on(result).factor_first();
 
-    // TODO: behaviour should return out event, fix it
-    assert_eq!(p1, ());
+    print!("P1: {:?}", p1);
 
-    let mut tries = 0;
-    let (name, path) = loop {
-        match peer_receiver1.try_recv().unwrap() {
-            PeerEvent::FileCorrect(name, path) => break (name, path),
-            other => {
-                println!("Other event: {:?}", other);
-            }
-        }
-        tries += 1;
-        assert_ne!(tries, 10);
-    };
+    assert_eq!(p1.name, "a-file".to_string());
 
-    assert_eq!(name, "a-file".to_string());
-
-    let meta = fs::metadata(path).expect("No file found");
+    let meta = fs::metadata(p1.path).expect("No file found");
 
     assert!(meta.is_file());
 }
@@ -153,7 +133,7 @@ fn build_swarm() -> (
     PeerId,
     Sender<TransferCommand>,
     Receiver<PeerEvent>,
-    Swarm<MyBehaviour>,
+    Swarm<TransferBehaviour>,
 ) {
     let (_, _) = channel::<FileToSend>(1024 * 24);
     let (command_sender, command_receiver) = channel::<TransferCommand>(1024 * 24);
@@ -164,18 +144,12 @@ fn build_swarm() -> (
 
     let command_receiver = Arc::new(Mutex::new(command_receiver));
 
-    let mdns = Mdns::new().unwrap();
     let transfer_behaviour = TransferBehaviour::new(
         peer_sender.clone(),
         command_receiver,
         Some("/tmp/".to_string()),
     );
-    let discovery = DiscoveryBehaviour::new(peer_sender);
-    let behaviour = MyBehaviour {
-        mdns,
-        discovery,
-        transfer_behaviour,
-    };
+
     let timeout = Duration::from_secs(60);
     let transport = {
         let tcp = tcp::TcpConfig::new().nodelay(true);
@@ -209,6 +183,6 @@ fn build_swarm() -> (
         peer_id,
         command_sender,
         peer_receiver,
-        Swarm::new(transport, behaviour, local_peer_id),
+        Swarm::new(transport, transfer_behaviour, local_peer_id),
     )
 }
