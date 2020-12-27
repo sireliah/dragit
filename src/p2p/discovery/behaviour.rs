@@ -185,7 +185,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
         c: &ConnectionId,
         endpoint: &ConnectedPoint,
     ) {
-        info!("Connection established: {:?}", endpoint);
+        info!("Connection established: {:?}, c: {:?}", endpoint, c);
         match endpoint {
             ConnectedPoint::Dialer { address } => {
                 if let Some(peer) = self.peers.get_mut(peer_id) {
@@ -238,7 +238,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
     }
 
     fn inject_disconnected(&mut self, peer: &PeerId) {
-        warn!("Peer disconnected: {:?}", peer);
+        info!("Peer disconnected: {:?}", peer);
         self.peers.remove(peer);
 
         if let Err(e) = self.notify_frontend() {

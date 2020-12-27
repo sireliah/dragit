@@ -7,8 +7,8 @@ use async_std::sync::{Mutex, Receiver, Sender};
 
 use libp2p::core::{connection::ConnectionId, ConnectedPoint, Multiaddr, PeerId};
 use libp2p::swarm::{
-    DialPeerCondition, NetworkBehaviour, NetworkBehaviourAction, NotifyHandler, OneShotHandler,
-    OneShotHandlerConfig, PollParameters, SubstreamProtocol,
+    NetworkBehaviour, NetworkBehaviourAction, NotifyHandler, OneShotHandler, OneShotHandlerConfig,
+    PollParameters, SubstreamProtocol,
 };
 
 use super::protocol::{FileToSend, ProtocolEvent, TransferOut, TransferPayload};
@@ -78,25 +78,12 @@ impl NetworkBehaviour for TransferBehaviour {
         &mut self,
         peer: &PeerId,
         c: &ConnectionId,
-        _endpoint: &ConnectedPoint,
+        endpoint: &ConnectedPoint,
     ) {
-        match self.payloads.pop() {
-            Some(message) => {
-                let transfer = TransferOut {
-                    name: message.name,
-                    path: message.path,
-                    sender_queue: self.sender.clone(),
-                };
-
-                let event = NetworkBehaviourAction::NotifyHandler {
-                    handler: NotifyHandler::One(c.to_owned()),
-                    peer_id: peer.to_owned(),
-                    event: transfer,
-                };
-                self.events.push(event);
-            }
-            None => (),
-        }
+        debug!(
+            "Connection established: {:?}, {:?}, c: {:?}",
+            peer, endpoint, c
+        )
     }
 
     fn inject_dial_failure(&mut self, peer: &PeerId) {
@@ -120,43 +107,25 @@ impl NetworkBehaviour for TransferBehaviour {
         _: &mut Context,
         _: &mut impl PollParameters,
     ) -> Poll<NetworkBehaviourAction<TransferOut, TransferPayload>> {
-        for file in self.payloads.iter() {
-            return Poll::Ready(NetworkBehaviourAction::DialPeer {
-                condition: DialPeerCondition::Disconnected,
-                peer_id: file.peer.to_owned(),
-            });
+        if let Some(file_to_send) = self.payloads.pop() {
+            let transfer = TransferOut {
+                name: file_to_send.name,
+                path: file_to_send.path,
+                sender_queue: self.sender.clone(),
+            };
+
+            let event = NetworkBehaviourAction::NotifyHandler {
+                // TODO: Notify particular handler, not Any
+                handler: NotifyHandler::Any,
+                peer_id: file_to_send.peer.to_owned(),
+                event: transfer,
+            };
+            self.events.push(event);
         }
 
-        if let Some(event) = self.events.pop() {
-            match event {
-                NetworkBehaviourAction::NotifyHandler {
-                    peer_id,
-                    handler,
-                    event: send_event,
-                } => {
-                    let out = TransferOut {
-                        name: send_event.name,
-                        path: send_event.path,
-                        sender_queue: self.sender.clone(),
-                    };
-                    let event = NetworkBehaviourAction::NotifyHandler {
-                        handler,
-                        peer_id,
-                        event: out,
-                    };
-
-                    return Poll::Ready(event);
-                }
-                NetworkBehaviourAction::GenerateEvent(e) => {
-                    return Poll::Ready(NetworkBehaviourAction::GenerateEvent(e));
-                }
-                _ => {
-                    info!("Another event");
-                    return Poll::Pending;
-                }
-            }
-        } else {
-            return Poll::Pending;
+        match self.events.pop() {
+            Some(event) => Poll::Ready(event),
+            None => Poll::Pending,
         }
     }
 }
