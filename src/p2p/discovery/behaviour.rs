@@ -11,10 +11,10 @@ use hostname;
 use libp2p::core::{connection::ConnectionId, ConnectedPoint, Multiaddr, PeerId};
 use libp2p::swarm::{
     protocols_handler::SubstreamProtocol, DialPeerCondition, NetworkBehaviour,
-    NetworkBehaviourAction, NotifyHandler, OneShotHandler, OneShotHandlerConfig, PollParameters,
-    ProtocolsHandler,
+    NetworkBehaviourAction, NotifyHandler, PollParameters, ProtocolsHandler,
 };
 
+use crate::p2p::discovery::handler::KeepAliveHandler;
 use crate::p2p::discovery::protocol::{Discovery, DiscoveryEvent};
 use crate::p2p::peer::{CurrentPeers, OperatingSystem, Peer, PeerEvent};
 
@@ -95,12 +95,8 @@ impl DiscoveryBehaviour {
             .collect::<CurrentPeers>()
     }
 
-    pub fn notify_frontend(&mut self, peers: Option<CurrentPeers>) -> Result<(), Box<dyn Error>> {
-        let current_peers = match peers {
-            Some(peers) => peers,
-            None => self.peers_event(),
-        };
-        let event = PeerEvent::PeersUpdated(current_peers);
+    pub fn notify_frontend(&mut self) -> Result<(), Box<dyn Error>> {
+        let event = PeerEvent::PeersUpdated(self.peers_event());
         Ok(self.sender.try_send(event)?)
     }
 
@@ -140,7 +136,7 @@ impl DiscoveryBehaviour {
     pub fn remove_peer(&mut self, peer_id: &PeerId) -> Result<(), Box<dyn Error>> {
         self.peers.remove(peer_id);
 
-        if let Err(e) = self.notify_frontend(None) {
+        if let Err(e) = self.notify_frontend() {
             error!("Failed to notify the frontend: {:?}", e);
         }
         Ok(())
@@ -158,14 +154,14 @@ impl DiscoveryBehaviour {
             }
         }
 
-        if let Err(e) = self.notify_frontend(None) {
+        if let Err(e) = self.notify_frontend() {
             error!("Failed to notify the frontend: {:?}", e);
         }
     }
 }
 
 impl NetworkBehaviour for DiscoveryBehaviour {
-    type ProtocolsHandler = OneShotHandler<Discovery, Discovery, InnerMessage>;
+    type ProtocolsHandler = KeepAliveHandler<Discovery, Discovery, InnerMessage>;
     type OutEvent = DiscoveryEvent;
 
     fn new_handler(&mut self) -> Self::ProtocolsHandler {
@@ -173,11 +169,8 @@ impl NetworkBehaviour for DiscoveryBehaviour {
             hostname: self.hostname.clone(),
             os: self.os,
         });
-        let handler_config = OneShotHandlerConfig {
-            keep_alive_timeout: Duration::from_secs(1),
-            outbound_substream_timeout: Duration::from_secs(2),
-        };
-        Self::ProtocolsHandler::new(substream_proto, handler_config)
+        let outbound_substream_timeout = Duration::from_secs(2);
+        Self::ProtocolsHandler::new(substream_proto, outbound_substream_timeout)
     }
 
     fn addresses_of_peer(&mut self, _peer_id: &PeerId) -> Vec<Multiaddr> {
@@ -244,7 +237,14 @@ impl NetworkBehaviour for DiscoveryBehaviour {
         };
     }
 
-    fn inject_disconnected(&mut self, _peer: &PeerId) {}
+    fn inject_disconnected(&mut self, peer: &PeerId) {
+        warn!("Peer disconnected: {:?}", peer);
+        self.peers.remove(peer);
+
+        if let Err(e) = self.notify_frontend() {
+            error!("Failed to notify the frontend: {:?}", e);
+        }
+    }
 
     fn inject_event(&mut self, peer: PeerId, _connection: ConnectionId, event: InnerMessage) {
         match event {

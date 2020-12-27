@@ -783,6 +783,7 @@ dependencies = [
  "prost",
  "prost-build",
  "serde",
+ "smallvec",
  "toml",
 ]
 
