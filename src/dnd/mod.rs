@@ -83,9 +83,9 @@ pub fn build_window(
             error_notif.show(&overlay, "File is incorrect".to_string());
             Continue(true)
         }
-        PeerEvent::FileIncoming(name, hash) => {
+        PeerEvent::FileIncoming(name, hash, size) => {
             if let Some(win) = window_weak.upgrade() {
-                let accept_dialog = AcceptFileDialog::new(&win, name);
+                let accept_dialog = AcceptFileDialog::new(&win, name, size);
                 let response = accept_dialog.run();
 
                 let command = match response {

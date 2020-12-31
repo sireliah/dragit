@@ -93,8 +93,11 @@ impl TransferPayload {
         }
     }
 
-    async fn notify_incoming_file_event(&self, name: &str, hash: &str) {
-        let event = PeerEvent::FileIncoming(name.to_string(), hash.to_string());
+    async fn notify_incoming_file_event(&self, meta: &util::Metadata) {
+        let name = meta.name.to_string();
+        let hash = meta.hash.to_string();
+        let size = meta.size;
+        let event = PeerEvent::FileIncoming(name, hash, size);
         self.sender_queue.to_owned().send(event).await;
     }
 
@@ -190,8 +193,7 @@ impl TransferPayload {
         let (meta, mut socket): (util::Metadata, TSocket) =
             util::Metadata::read_metadata(socket).await?;
 
-        self.notify_incoming_file_event(&meta.name, &meta.hash)
-            .await;
+        self.notify_incoming_file_event(&meta).await;
         let rec_cp = Arc::clone(&self.receiver);
 
         match self.block_for_answer(rec_cp).await {

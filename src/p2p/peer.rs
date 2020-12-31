@@ -16,7 +16,7 @@ pub enum PeerEvent {
     TransferError,
     FileCorrect(String, String),
     FileIncorrect,
-    FileIncoming(String, String),
+    FileIncoming(String, String, usize),
     Error(String),
 }
 

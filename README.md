@@ -71,6 +71,8 @@ $ ./target/release/dragit
 `Dragit` can use Bluetooth OBEX protocol for file transfer through the D-Bus BlueZ interface, which should work on most of the Linux devices. This future needs some work and is disabled now.
 
 ### TODOs
+- show username in the device list
+- add Windows CI/CD
 - show easy to understand instruction on startup
 - have list of trusted devices
 - TCP retransmissions - what is wrong?

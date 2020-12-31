@@ -2,6 +2,7 @@ use std::error::Error;
 use std::sync::{Arc, Mutex};
 
 use async_std::sync::Sender;
+use bytesize::ByteSize;
 
 use gdk::DragAction;
 use gtk::prelude::*;
@@ -376,13 +377,17 @@ impl AppNotification {
 pub struct AcceptFileDialog(gtk::MessageDialog);
 
 impl AcceptFileDialog {
-    pub fn new(window: &gtk::ApplicationWindow, name: String) -> AcceptFileDialog {
+    pub fn new(window: &gtk::ApplicationWindow, name: String, size: usize) -> AcceptFileDialog {
+        let readable_size = ByteSize(size as u64);
         let dialog = gtk::MessageDialog::new(
             Some(window),
             gtk::DialogFlags::MODAL,
             gtk::MessageType::Question,
             gtk::ButtonsType::YesNo,
-            &format!("Incoming file {}. Would you like to accept it?", name),
+            &format!(
+                "Incoming file {} ({}).\n\nWould you like to accept the file?",
+                name, readable_size
+            ),
         );
         AcceptFileDialog(dialog)
     }
