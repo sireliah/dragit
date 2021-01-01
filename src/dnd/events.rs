@@ -8,18 +8,19 @@ use async_std::sync::{Receiver, Sender};
 use glib::Continue;
 use gtk::{timeout_add, ApplicationWindow};
 
-use crate::dnd::components::{EmptyListItem, PeerItem};
+use crate::dnd::components::{get_item_name, EmptyListItem, PeerItem};
 use crate::p2p::{CurrentPeers, FileToSend, PeerEvent};
 
 pub fn pool_peers(
     window: &ApplicationWindow,
-    layout: &gtk::Box,
+    layout: &gtk::ListBox,
     file_sender: Arc<Mutex<Sender<FileToSend>>>,
     peer_receiver: Arc<Mutex<Receiver<PeerEvent>>>,
     peer_event_sender: glib::Sender<PeerEvent>,
 ) {
+    // TODO: investigate why set_placeholder() doesn't work
     let empty_item = EmptyListItem::new();
-    layout.pack_start(&empty_item.container, false, false, 10);
+    layout.add(&empty_item.container);
     empty_item.show();
 
     let layout_weak = layout.downgrade();
@@ -30,13 +31,10 @@ pub fn pool_peers(
             let children: Vec<String> = layout_in
                 .get_children()
                 .iter()
-                .map(|c| {
-                    c.get_widget_name()
-                        .unwrap_or(glib::GString::from(""))
-                        .to_string()
-                })
+                .map(|c| get_item_name(c))
                 .filter(|c| c != "empty-item")
                 .collect();
+
             if children.len() == 0 {
                 empty_item.show();
             }
@@ -63,7 +61,7 @@ pub fn pool_peers(
                     let sender = file_sender.clone();
                     let item = item.bind_drag_and_drop(peer, sender);
 
-                    layout_in.pack_start(&item.container, false, false, 0);
+                    layout_in.add(&item.container);
                 }
             };
         }
@@ -75,12 +73,9 @@ pub fn pool_peers(
     });
 }
 
-fn remove_items(layout: &gtk::Box) {
+fn remove_items(layout: &gtk::ListBox) {
     for child in layout.get_children().iter().filter(|c| {
-        let name = c
-            .get_widget_name()
-            .unwrap_or(glib::GString::from(""))
-            .to_string();
+        let name = get_item_name(*c);
         name != "notification" && name != "empty-item"
     }) {
         layout.remove(child);

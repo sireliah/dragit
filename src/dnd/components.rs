@@ -5,6 +5,7 @@ use async_std::sync::Sender;
 use bytesize::ByteSize;
 
 use gdk::DragAction;
+use glib::object::IsA;
 use gtk::prelude::*;
 use gtk::{DestDefaults, Label, TargetEntry, TargetFlags};
 
@@ -22,12 +23,8 @@ pub const STYLE: &str = "
     border-style: dashed;
     border-radius: 15px;
 }
-#drop-zone {
-    padding: 10px;
-    margin: 10px;
-    border: 0.5px;
-    border-style: dashed;
-    border-radius: 15px;
+#item-frame border {
+    border-style: none;
 }
 #notification {
     padding: 10px;
@@ -47,22 +44,43 @@ pub const STYLE: &str = "
 progressbar {
     color: rgb(0, 0, 0);
 }
+#items-list {
+    padding: 10px;
+    margin: 10px;
+    border: 0.5px;
+    border-radius: 15px;
+    border-style: solid;
+    border-color: rgb(180, 180, 180);
+}
 ";
 
 pub struct MainLayout {
     pub layout: gtk::Box,
-    pub item_layout: gtk::Box,
+    pub item_layout: gtk::ListBox,
 }
 
 impl MainLayout {
     pub fn new() -> Result<MainLayout, Box<dyn Error>> {
         let layout = gtk::Box::new(gtk::Orientation::Vertical, 10);
 
-        let item_layout = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        let item_layout = gtk::ListBox::new();
+        item_layout.set_selection_mode(gtk::SelectionMode::None);
+        item_layout.set_widget_name("items-list");
+
+        // Add separator only when there is more than one item
+        item_layout.set_header_func(Some(Box::new(|current_row, next_row| {
+            if let Some(row) = next_row {
+                let row_name = get_item_name(row);
+                if row_name != "empty-item" {
+                    let separator = gtk::Separator::new(gtk::Orientation::Vertical);
+                    current_row.set_header(Some(&separator));
+                }
+            }
+        })));
+
         let header_layout = gtk::Box::new(gtk::Orientation::Vertical, 0);
 
         layout.set_halign(gtk::Align::Center);
-        layout.set_margin_top(0);
         header_layout.set_margin_top(10);
 
         let frame = gtk::Frame::new(Some("Downloads directory"));
@@ -89,15 +107,20 @@ impl MainLayout {
             };
         });
         frame.add(&file_chooser);
-        header_layout.pack_start(&frame, false, false, 10);
-
-        layout.pack_start(&header_layout, false, false, 10);
+        header_layout.pack_start(&frame, true, true, 10);
 
         let scroll = gtk::ScrolledWindow::new(gtk::NONE_ADJUSTMENT, gtk::NONE_ADJUSTMENT);
         scroll.set_policy(gtk::PolicyType::Automatic, gtk::PolicyType::Automatic);
         scroll.set_min_content_width(550);
 
-        scroll.add(&item_layout);
+        let item_frame = gtk::Frame::new(Some("Devices"));
+        item_frame.set_widget_name("item-frame");
+        item_frame.add(&item_layout);
+        let scroll_box = gtk::Box::new(gtk::Orientation::Vertical, 0);
+
+        scroll_box.pack_start(&header_layout, false, false, 0);
+        scroll_box.pack_start(&item_frame, false, false, 0);
+        scroll.add(&scroll_box);
 
         layout.pack_start(&scroll, true, true, 10);
 
@@ -110,7 +133,7 @@ impl MainLayout {
 
 #[derive(Debug)]
 pub struct PeerItem {
-    pub container: gtk::Box,
+    pub container: gtk::ListBoxRow,
     pub label: Label,
 }
 
@@ -120,12 +143,11 @@ impl PeerItem {
         let ip = PeerItem::extract_ip(&address);
         let display_name = format!(
             concat!(
-                "<big><b>Host Name</b>: {}</big>\n",
+                "<big><b>Device Name</b>: {}</big>\n",
                 "<big><b>IP Address</b>: {}</big>\n",
                 "<big><b>System</b>: {:?}</big>\n",
-                "<small>{}</small>"
             ),
-            hostname, ip, os, name
+            hostname, ip, os
         );
 
         let label = Label::new(None);
@@ -136,15 +158,17 @@ impl PeerItem {
 
         let image = gtk::Image::new_from_icon_name(Some("insert-object"), gtk::IconSize::Dialog);
 
-        let container = gtk::Box::new(gtk::Orientation::Vertical, 10);
+        let container = gtk::ListBoxRow::new();
+        container.set_vexpand(true);
+
         let inner_container = gtk::Box::new(gtk::Orientation::Vertical, 10);
 
         container.set_widget_name(name);
         inner_container.set_widget_name("drop-zone");
 
-        inner_container.pack_start(&image, false, false, 10);
-        inner_container.pack_start(&label, false, false, 10);
-        container.pack_start(&inner_container, false, false, 0);
+        inner_container.pack_start(&image, true, true, 10);
+        inner_container.pack_start(&label, true, true, 10);
+        container.add(&inner_container);
 
         PeerItem { container, label }
     }
@@ -163,6 +187,8 @@ impl PeerItem {
         let peer_id = peer.peer_id.clone();
         let targets = vec![
             TargetEntry::new("STRING", TargetFlags::OTHER_APP, 0),
+            TargetEntry::new("text/html", TargetFlags::OTHER_APP, 0),
+            TargetEntry::new("image/png", TargetFlags::OTHER_APP, 0),
             // TODO: use different content type here
             TargetEntry::new("text/uri-list", TargetFlags::OTHER_APP, 0),
         ];
@@ -399,18 +425,20 @@ impl AcceptFileDialog {
     }
 }
 
+/// Element shown when there are no devices to display yet
+/// TODO: Probably can be replaced with gtk placeholder
 pub struct EmptyListItem {
     pub revealer: gtk::Revealer,
-    pub container: gtk::Box,
+    pub container: gtk::ListBoxRow,
 }
 
 impl EmptyListItem {
     pub fn new() -> EmptyListItem {
-        let label = Label::new(Some("Looking for hosts..."));
+        let label = Label::new(Some("Looking for devices..."));
         let revealer = gtk::Revealer::new();
-        let container = gtk::Box::new(gtk::Orientation::Vertical, 10);
+        let container = gtk::ListBoxRow::new();
         let inner_container = gtk::Box::new(gtk::Orientation::Vertical, 10);
-
+        let spinner = gtk::Spinner::new();
         label.set_halign(gtk::Align::Center);
         label.set_size_request(500, 100);
 
@@ -420,8 +448,11 @@ impl EmptyListItem {
         revealer.set_halign(gtk::Align::Center);
         revealer.set_valign(gtk::Align::Start);
 
-        inner_container.pack_start(&image, false, false, 10);
-        inner_container.pack_start(&label, false, false, 10);
+        spinner.start();
+
+        inner_container.pack_start(&image, false, false, 0);
+        inner_container.pack_start(&label, false, false, 0);
+        inner_container.pack_start(&spinner, false, false, 0);
 
         revealer.add(&inner_container);
 
@@ -429,7 +460,7 @@ impl EmptyListItem {
         container.set_widget_name("empty-item");
         revealer.set_reveal_child(true);
 
-        container.pack_start(&revealer, false, false, 10);
+        container.add(&revealer);
 
         EmptyListItem {
             revealer,
@@ -444,4 +475,10 @@ impl EmptyListItem {
     pub fn hide(&self) {
         self.revealer.set_reveal_child(false);
     }
+}
+
+pub fn get_item_name<I: IsA<gtk::Widget>>(item: &I) -> String {
+    item.get_widget_name()
+        .unwrap_or(glib::GString::from(""))
+        .to_string()
 }
