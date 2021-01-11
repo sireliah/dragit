@@ -1,6 +1,6 @@
 [package]
 name = "dragit"
-version = "0.3.0"
+version = "0.3.1"
 authors = ["sireliah"]
 edition = "2018"
 build = "build.rs"
