@@ -437,7 +437,7 @@ impl EmptyListItem {
         let label = Label::new(Some("Looking for devices..."));
         let revealer = gtk::Revealer::new();
         let container = gtk::ListBoxRow::new();
-        let inner_container = gtk::Box::new(gtk::Orientation::Vertical, 10);
+        let inner_container = gtk::Box::new(gtk::Orientation::Vertical, 0);
         let spinner = gtk::Spinner::new();
         label.set_halign(gtk::Align::Center);
         label.set_size_request(500, 100);
@@ -450,6 +450,15 @@ impl EmptyListItem {
 
         spinner.start();
 
+        let text = concat!(
+            "Please run <b>Dragit</b> on another device\n",
+            "and wait until applications discover each other.\n\n",
+            "Once device appears here, drop a file on it.\n",
+        );
+        let description = gtk::Label::new(None);
+        description.set_markup(&text);
+
+        inner_container.pack_start(&description, false, false, 10);
         inner_container.pack_start(&image, false, false, 0);
         inner_container.pack_start(&label, false, false, 0);
         inner_container.pack_start(&spinner, false, false, 0);
