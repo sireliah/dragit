@@ -16,13 +16,6 @@ use crate::p2p::{FileToSend, OperatingSystem, Peer};
 use crate::user_data::UserConfig;
 
 pub const STYLE: &str = "
-#downloads border {
-    margin-left: 10px;
-    margin-right: 10px;
-    padding: 20px;
-    border-style: dashed;
-    border-radius: 15px;
-}
 #item-frame border {
     border-style: none;
 }
@@ -50,19 +43,127 @@ progressbar {
     border: 0.5px;
     border-radius: 15px;
     border-style: solid;
-    border-color: rgb(180, 180, 180);
+    border-color: @borders;
+}
+#recent-files box {
+    padding: 10px;
+    margin: 10px;
+    border: none;
+    border-radius: 15px;
+    border-style: solid;
+    background-color: @borders;
 }
 ";
 
 pub struct MainLayout {
     pub layout: gtk::Box,
     pub item_layout: gtk::ListBox,
+    recent_layout: gtk::Grid,
+    pub bar: gtk::HeaderBar,
 }
 
 impl MainLayout {
     pub fn new() -> Result<MainLayout, Box<dyn Error>> {
         let layout = gtk::Box::new(gtk::Orientation::Vertical, 10);
+        let inner_layout = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        let recent_layout = gtk::Grid::new();
+        let recent_scroll = gtk::ScrolledWindow::new(gtk::NONE_ADJUSTMENT, gtk::NONE_ADJUSTMENT);
 
+        recent_layout.set_widget_name("recent-files");
+        recent_layout.set_hexpand(false);
+        recent_scroll.set_policy(gtk::PolicyType::Automatic, gtk::PolicyType::Automatic);
+        recent_scroll.set_hexpand(false);
+        recent_scroll.add(&recent_layout);
+
+        let bar = gtk::HeaderBar::new();
+        bar.set_show_close_button(true);
+
+        let stack = gtk::Stack::new();
+        stack.set_transition_type(gtk::StackTransitionType::SlideLeftRight);
+        stack.add_titled(&inner_layout, "devices", "Devices");
+        stack.add_titled(&recent_scroll, "recent-files", "Recent Files");
+
+        let switcher = gtk::StackSwitcher::new();
+        switcher.set_stack(Some(&stack));
+
+        let header_layout = gtk::Box::new(gtk::Orientation::Vertical, 0);
+
+        inner_layout.set_halign(gtk::Align::Center);
+        header_layout.set_margin_top(10);
+
+        let scroll = gtk::ScrolledWindow::new(gtk::NONE_ADJUSTMENT, gtk::NONE_ADJUSTMENT);
+        scroll.set_policy(gtk::PolicyType::Automatic, gtk::PolicyType::Automatic);
+        scroll.set_min_content_width(550);
+
+        let item_layout = Self::setup_item_layout();
+        let item_frame = gtk::Frame::new(Some("Devices"));
+        item_frame.set_widget_name("item-frame");
+        item_frame.add(&item_layout);
+        let scroll_box = gtk::Box::new(gtk::Orientation::Vertical, 0);
+
+        scroll_box.pack_start(&header_layout, false, false, 0);
+        scroll_box.pack_start(&item_frame, false, false, 0);
+        scroll.add(&scroll_box);
+
+        inner_layout.pack_start(&scroll, true, true, 10);
+
+        let menu_button = Self::setup_menu_button()?;
+
+        bar.pack_start(&menu_button);
+        bar.pack_start(&switcher);
+
+        layout.pack_start(&stack, true, true, 0);
+
+        Ok(MainLayout {
+            layout,
+            item_layout,
+            recent_layout,
+            bar,
+        })
+    }
+}
+
+impl MainLayout {
+    pub fn add_recent_file(&self, file_name: &str, path: &str) {
+        let prefixed_path = format!("file://{}", path);
+        let recent_item = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+        let link = gtk::LinkButton::new_with_label(&prefixed_path, Some(file_name));
+        let image = gtk::Image::new_from_icon_name(Some("text-x-preview"), gtk::IconSize::Dialog);
+
+        recent_item.set_halign(gtk::Align::Start);
+        recent_item.pack_start(&image, false, false, 0);
+        recent_item.pack_start(&link, false, false, 0);
+
+        self.recent_layout.attach_next_to(
+            &recent_item,
+            None::<&gtk::Box>,
+            gtk::PositionType::Top,
+            1,
+            1,
+        );
+    }
+
+    fn setup_menu_button() -> Result<gtk::MenuButton, Box<dyn Error>> {
+        let menu_image =
+            gtk::Image::new_from_icon_name(Some("open-menu-symbolic"), gtk::IconSize::Menu);
+        let menu_button = gtk::MenuButton::new();
+        let vbox = gtk::Box::new(gtk::Orientation::Vertical, 10);
+        let popover = gtk::Popover::new(None::<&gtk::Widget>);
+        let label = gtk::Label::new(Some("Downloads directory"));
+        let file_chooser = Self::setup_file_chooser()?;
+
+        vbox.pack_start(&label, true, true, 10);
+        vbox.pack_start(&file_chooser, true, true, 10);
+        vbox.show_all();
+
+        popover.add(&vbox);
+        popover.set_position(gtk::PositionType::Bottom);
+        menu_button.add(&menu_image);
+        menu_button.set_popover(Some(&popover));
+        Ok(menu_button)
+    }
+
+    fn setup_item_layout() -> gtk::ListBox {
         let item_layout = gtk::ListBox::new();
         item_layout.set_selection_mode(gtk::SelectionMode::None);
         item_layout.set_widget_name("items-list");
@@ -77,15 +178,10 @@ impl MainLayout {
                 }
             }
         })));
+        item_layout
+    }
 
-        let header_layout = gtk::Box::new(gtk::Orientation::Vertical, 0);
-
-        layout.set_halign(gtk::Align::Center);
-        header_layout.set_margin_top(10);
-
-        let frame = gtk::Frame::new(Some("Downloads directory"));
-        frame.set_widget_name("downloads");
-
+    fn setup_file_chooser() -> Result<gtk::FileChooserButton, Box<dyn Error>> {
         let file_chooser =
             gtk::FileChooserButton::new("Choose file", gtk::FileChooserAction::SelectFolder);
 
@@ -106,28 +202,7 @@ impl MainLayout {
                 }
             };
         });
-        frame.add(&file_chooser);
-        header_layout.pack_start(&frame, true, true, 10);
-
-        let scroll = gtk::ScrolledWindow::new(gtk::NONE_ADJUSTMENT, gtk::NONE_ADJUSTMENT);
-        scroll.set_policy(gtk::PolicyType::Automatic, gtk::PolicyType::Automatic);
-        scroll.set_min_content_width(550);
-
-        let item_frame = gtk::Frame::new(Some("Devices"));
-        item_frame.set_widget_name("item-frame");
-        item_frame.add(&item_layout);
-        let scroll_box = gtk::Box::new(gtk::Orientation::Vertical, 0);
-
-        scroll_box.pack_start(&header_layout, false, false, 0);
-        scroll_box.pack_start(&item_frame, false, false, 0);
-        scroll.add(&scroll_box);
-
-        layout.pack_start(&scroll, true, true, 10);
-
-        Ok(MainLayout {
-            layout,
-            item_layout,
-        })
+        Ok(file_chooser)
     }
 }
 
@@ -159,15 +234,14 @@ impl PeerItem {
         let image = gtk::Image::new_from_icon_name(Some("insert-object"), gtk::IconSize::Dialog);
 
         let container = gtk::ListBoxRow::new();
+        container.set_widget_name(name);
         container.set_vexpand(true);
 
-        let inner_container = gtk::Box::new(gtk::Orientation::Vertical, 10);
-
-        container.set_widget_name(name);
+        let inner_container = gtk::Box::new(gtk::Orientation::Vertical, 0);
         inner_container.set_widget_name("drop-zone");
 
-        inner_container.pack_start(&image, true, true, 10);
-        inner_container.pack_start(&label, true, true, 10);
+        inner_container.pack_start(&image, true, true, 0);
+        inner_container.pack_start(&label, true, true, 0);
         container.add(&inner_container);
 
         PeerItem { container, label }

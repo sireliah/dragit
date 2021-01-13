@@ -33,7 +33,14 @@ pub fn build_window(
     let window = gtk::ApplicationWindow::new(application);
 
     let layout = MainLayout::new()?;
+    layout.add_recent_file("File.txt", "file:///tmp/File.txt");
+    layout.add_recent_file(
+        "LongFuckingFileWithLongFuckingName.txt",
+        "file:///tmp/File.txt",
+    );
+
     let overlay = gtk::Overlay::new();
+    window.set_titlebar(Some(&layout.bar));
 
     let (gtk_sender, gtk_receiver) =
         glib::MainContext::channel::<PeerEvent>(glib::PRIORITY_DEFAULT);
@@ -75,6 +82,7 @@ pub fn build_window(
             progress.hide(&overlay);
             let text = format!("Received {} \nSaved in {}", file_name, path);
             alert_notif.show(&overlay, text);
+            layout.add_recent_file(&file_name, &path);
             Continue(true)
         }
         PeerEvent::FileIncorrect => {
@@ -107,7 +115,6 @@ pub fn build_window(
         _ => Continue(false),
     });
 
-    window.set_title(&title);
     window.set_default_size(600, 750);
     window.set_border_width(10);
 
