@@ -1,0 +1,12 @@
+syntax = "proto3";
+package dragit.p2p.transfer.metadata;
+
+message Metadata {
+    string name = 1;
+    string hash = 2;
+    uint64 size = 3;
+}
+
+message Answer {
+    bool accepted = 1;
+}

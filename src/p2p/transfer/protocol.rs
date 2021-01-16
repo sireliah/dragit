@@ -22,6 +22,7 @@ use libp2p::core::{InboundUpgrade, OutboundUpgrade, PeerId, UpgradeInfo};
 
 use crate::p2p::commands::TransferCommand;
 use crate::p2p::peer::{Direction, PeerEvent};
+use crate::p2p::transfer::metadata::{hash_contents, Metadata};
 use crate::p2p::util::{self, CHUNK_SIZE};
 use crate::user_data;
 
@@ -84,7 +85,7 @@ pub struct TransferPayload {
 
 impl TransferPayload {
     pub fn check_file(&self) -> Result<(), io::Error> {
-        let hash_from_disk = util::hash_contents(&self.path)?;
+        let hash_from_disk = hash_contents(&self.path)?;
 
         if hash_from_disk != self.hash {
             Err(io::Error::new(ErrorKind::InvalidData, "File corrupted!"))
@@ -93,7 +94,7 @@ impl TransferPayload {
         }
     }
 
-    async fn notify_incoming_file_event(&self, meta: &util::Metadata) {
+    async fn notify_incoming_file_event(&self, meta: &Metadata) {
         let name = meta.name.to_string();
         let hash = meta.hash.to_string();
         let size = meta.size;
@@ -190,9 +191,8 @@ impl TransferPayload {
         TSocket: AsyncRead + AsyncWrite + Send + Unpin,
     {
         let direction = Direction::Incoming;
-        let (meta, mut socket): (util::Metadata, TSocket) =
-            util::Metadata::read_metadata(socket).await?;
-
+        let (meta, mut socket): (Metadata, TSocket) = Metadata::read(socket).await?;
+        info!("Meta received! {:?}", meta.name);
         self.notify_incoming_file_event(&meta).await;
         let rec_cp = Arc::clone(&self.receiver);
 
@@ -250,7 +250,7 @@ impl TransferOut {
         info!("Name: {:?}, Path: {:?}", self.name, &self.path);
 
         let (size, mut socket): (usize, TSocket) =
-            util::Metadata::write_metadata(&self.name, &self.path, socket).await?;
+            Metadata::write(&self.name, &self.path, socket).await?;
 
         let mut received = [0u8; 1];
         socket.read_exact(&mut received).await?;
