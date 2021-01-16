@@ -22,7 +22,7 @@ use libp2p::core::{InboundUpgrade, OutboundUpgrade, PeerId, UpgradeInfo};
 
 use crate::p2p::commands::TransferCommand;
 use crate::p2p::peer::{Direction, PeerEvent};
-use crate::p2p::transfer::metadata::{hash_contents, Metadata};
+use crate::p2p::transfer::metadata::{hash_contents, Answer, Metadata};
 use crate::p2p::util::{self, CHUNK_SIZE};
 use crate::user_data;
 
@@ -191,15 +191,14 @@ impl TransferPayload {
         TSocket: AsyncRead + AsyncWrite + Send + Unpin,
     {
         let direction = Direction::Incoming;
-        let (meta, mut socket): (Metadata, TSocket) = Metadata::read(socket).await?;
+        let (meta, mut socket): (Metadata, TSocket) = Metadata::read::<TSocket>(socket).await?;
         info!("Meta received! {:?}", meta.name);
         self.notify_incoming_file_event(&meta).await;
         let rec_cp = Arc::clone(&self.receiver);
 
         match self.block_for_answer(rec_cp).await {
             TransferCommand::Accept(hash) if hash == meta.hash => {
-                socket.write(b"Y").await?;
-                socket.flush().await?;
+                Answer::write(&mut socket, true).await?;
 
                 util::notify_progress(&self.sender_queue, 0, meta.size, &direction).await;
 
@@ -214,8 +213,7 @@ impl TransferPayload {
             }
             TransferCommand::Accept(hash) => {
                 warn!("Accepted hash does not match: {} {}", hash, meta.hash);
-                socket.write(b"N").await?;
-                socket.flush().await?;
+                Answer::write(&mut socket, false).await?;
                 Err(io::Error::new(
                     ErrorKind::PermissionDenied,
                     "Hash does not match",
@@ -223,8 +221,7 @@ impl TransferPayload {
             }
             TransferCommand::Deny(hash) => {
                 warn!("Denied hash: {}", hash);
-                socket.write(b"N").await?;
-                socket.flush().await?;
+                Answer::write(&mut socket, false).await?;
                 Err(io::Error::new(ErrorKind::PermissionDenied, "Rejected"))
             }
         }
@@ -236,7 +233,7 @@ impl UpgradeInfo for TransferPayload {
     type InfoIter = iter::Once<Self::Info>;
 
     fn protocol_info(&self) -> Self::InfoIter {
-        std::iter::once("/transfer/1.0")
+        std::iter::once("/transfer/1.1")
     }
 }
 
@@ -249,15 +246,13 @@ impl TransferOut {
         let (sender, receiver) = sync_channel::<Vec<u8>>(CHUNK_SIZE * 128);
         info!("Name: {:?}, Path: {:?}", self.name, &self.path);
 
-        let (size, mut socket): (usize, TSocket) =
-            Metadata::write(&self.name, &self.path, socket).await?;
+        let (size, socket): (usize, TSocket) =
+            Metadata::write::<TSocket>(&self.name, &self.path, socket).await?;
 
-        let mut received = [0u8; 1];
-        socket.read_exact(&mut received).await?;
-        let received = TransferOut::decode_received(received)?;
+        let (accepted, socket) = Answer::read::<TSocket>(socket).await?;
+        info!("File accepted? {:?}", accepted);
 
-        if received == "Y" {
-            info!("Writing data to the socket");
+        if accepted {
             let mut writer = futio::BufWriter::new(socket);
             let job = util::spawn_read_file_job(sender.clone(), self.path.clone());
 
@@ -309,19 +304,6 @@ impl TransferOut {
             Ok(())
         }
     }
-
-    fn decode_received(received: [u8; 1]) -> Result<String, io::Error> {
-        match String::from_utf8(received.to_vec()) {
-            Ok(v) => Ok(v),
-            Err(e) => {
-                error!("Answer decoding error: {}", e);
-                return Err(io::Error::new(
-                    ErrorKind::InvalidData,
-                    "Couldn't decode the answer",
-                ));
-            }
-        }
-    }
 }
 
 impl UpgradeInfo for TransferOut {
@@ -329,7 +311,7 @@ impl UpgradeInfo for TransferOut {
     type InfoIter = iter::Once<Self::Info>;
 
     fn protocol_info(&self) -> Self::InfoIter {
-        std::iter::once("/transfer/1.0")
+        std::iter::once("/transfer/1.1")
     }
 }
 

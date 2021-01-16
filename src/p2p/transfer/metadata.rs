@@ -1,13 +1,14 @@
 use std::fs;
 use std::io::{self, Error, Read};
 
+use super::proto::Answer as ProtoAnswer;
+use super::proto::Metadata as ProtoMetadata;
 use futures::prelude::*;
 use hex;
 use md5::{Digest, Md5};
 use prost::Message;
 
-use super::proto::Metadata as ProtoMetadata;
-
+pub const ANSWER_SIZE: usize = 2;
 pub const PACKET_SIZE: usize = 1024;
 pub const HASH_BUFFER_SIZE: usize = 1024;
 
@@ -77,6 +78,38 @@ impl Metadata {
         socket.flush().await?;
 
         Ok((size as usize, socket))
+    }
+}
+
+#[derive(Debug)]
+pub struct Answer;
+
+impl Answer {
+    pub async fn read<TSocket>(mut socket: TSocket) -> Result<(bool, TSocket), io::Error>
+    where
+        TSocket: AsyncRead + AsyncWrite + Send + Unpin,
+    {
+        // Answer size is not expected to grow, that's why constant size is used here
+        let mut received = [0u8; ANSWER_SIZE];
+        socket.read_exact(&mut received).await?;
+        let proto = ProtoAnswer::decode(&received[..])?;
+        Ok((proto.accepted, socket))
+    }
+    pub async fn write<TSocket>(
+        mut socket: TSocket,
+        accepted: bool,
+    ) -> Result<((), TSocket), io::Error>
+    where
+        TSocket: AsyncRead + AsyncWrite + Send + Unpin,
+    {
+        let proto = ProtoAnswer { accepted };
+        let len = proto.encoded_len();
+        let mut buf = Vec::with_capacity(len);
+        proto.encode(&mut buf)?;
+
+        socket.write(&buf).await?;
+        socket.flush().await?;
+        Ok(((), socket))
     }
 }
 
