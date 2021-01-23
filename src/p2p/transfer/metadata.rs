@@ -1,3 +1,4 @@
+use std::fmt;
 use std::fs;
 use std::io::{self, Error, Read};
 
@@ -6,7 +7,9 @@ use super::proto::Metadata as ProtoMetadata;
 use futures::prelude::*;
 use hex;
 use md5::{Digest, Md5};
-use prost::Message;
+use prost::{Enumeration, Message};
+
+use crate::p2p::transfer::protocol::FileToSend;
 
 pub const ANSWER_SIZE: usize = 2;
 pub const PACKET_SIZE: usize = 1024;
@@ -16,6 +19,7 @@ pub struct Metadata {
     pub name: String,
     pub hash: String,
     pub size: usize,
+    pub transfer_type: TransferType,
 }
 
 impl Metadata {
@@ -46,25 +50,35 @@ impl Metadata {
         let name = proto.name;
         let hash = proto.hash;
         let size = proto.size as usize;
+        let transfer_type =
+            TransferType::from_i32(proto.transfer_type).unwrap_or(TransferType::Other);
         info!("Read: Name: {}, Hash: {}, Size: {}", name, hash, size);
-        Ok((Metadata { name, hash, size }, socket))
+        Ok((
+            Metadata {
+                name,
+                hash,
+                size,
+                transfer_type,
+            },
+            socket,
+        ))
     }
 
     pub async fn write<TSocket>(
-        name: &str,
-        path: &str,
+        file: &FileToSend,
         mut socket: TSocket,
     ) -> Result<(usize, TSocket), io::Error>
     where
         TSocket: AsyncRead + AsyncWrite + Send + Unpin,
     {
-        let hash = calculate_hash(path).await?;
-        let size = check_size(path)?;
+        let hash = file.calculate_hash().await?;
+        let size = file.check_size()?;
 
         let proto = ProtoMetadata {
-            name: name.to_string(),
+            name: file.name.to_string(),
             hash,
             size,
+            transfer_type: file.transfer_type as i32,
         };
         let len = proto.encoded_len();
         let fill = vec![0; PACKET_SIZE - len];
@@ -113,26 +127,33 @@ impl Answer {
     }
 }
 
-async fn calculate_hash(path: &str) -> Result<String, io::Error> {
-    Ok(hash_contents(path)?)
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, Enumeration)]
+pub enum TransferType {
+    File = 0,
+    Text = 1,
+    Other = 2,
 }
 
-pub fn check_size(path: &str) -> Result<u64, Error> {
-    let meta = fs::metadata(path)?;
-    Ok(meta.len())
+impl fmt::Display for TransferType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::File => write!(f, "TransferType: File"),
+            Self::Text => write!(f, "TransferType: Text"),
+            _ => write!(f, "TransferType: Other"),
+        }
+    }
 }
 
 pub fn add_row(value: &str) -> Vec<u8> {
     format!("{}\n", value).into_bytes()
 }
 
-pub fn hash_contents(path: &str) -> Result<String, Error> {
+pub fn hash_contents(mut file: fs::File) -> Result<String, Error> {
     let mut state = Md5::default();
     let mut buffer = [0u8; HASH_BUFFER_SIZE];
-    let mut reader = fs::File::open(path)?;
 
     loop {
-        match reader.read(&mut buffer) {
+        match file.read(&mut buffer) {
             Ok(n) if n == 0 || n < HASH_BUFFER_SIZE => {
                 state.input(&buffer[..n]);
                 break;
@@ -149,10 +170,12 @@ pub fn hash_contents(path: &str) -> Result<String, Error> {
 #[cfg(test)]
 mod tests {
     use crate::p2p::transfer::metadata::hash_contents;
+    use std::fs::File;
 
     #[test]
     fn test_hash_local_file() {
-        let result = hash_contents("src/file.txt").unwrap();
+        let file = File::open("src/file.txt").unwrap();
+        let result = hash_contents(file).unwrap();
 
         assert_eq!(result, "696c56be6d4c4a48d3de0d17e237f82a");
     }

@@ -33,7 +33,7 @@ pub mod util;
 pub use commands::TransferCommand;
 pub use discovery::{DiscoveryBehaviour, DiscoveryEvent};
 pub use peer::{CurrentPeers, OperatingSystem, Peer, PeerEvent};
-pub use transfer::{FileToSend, TransferBehaviour, TransferOut, TransferPayload};
+pub use transfer::{FileToSend, TransferBehaviour, TransferOut, TransferPayload, TransferType};
 
 #[derive(NetworkBehaviour)]
 pub struct MyBehaviour {
@@ -91,7 +91,7 @@ impl NetworkBehaviourEventProcess<TransferPayload> for MyBehaviour {
                 }
             }
             Err(e) => {
-                warn!("Not correct: {:?}", e);
+                warn!("File not correct: {:?}", e);
                 if let Err(e) = event.sender_queue.try_send(PeerEvent::FileIncorrect) {
                     error!("{:?}", e);
                 }

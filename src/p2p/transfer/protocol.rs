@@ -5,11 +5,11 @@ use std::fmt;
 use std::io::ErrorKind;
 use std::sync::mpsc::sync_channel;
 
-use std::fs::metadata;
+use std::fs::{metadata, File};
 use std::path::Path;
 use std::task::{Context, Poll};
 use std::time::Instant;
-use std::{io, iter, pin::Pin};
+use std::{io, io::Write, iter, pin::Pin};
 
 use async_std::sync::Mutex;
 use async_std::sync::{Receiver, Sender};
@@ -19,33 +19,103 @@ use futures::future;
 use futures::io as futio;
 use futures::prelude::*;
 use libp2p::core::{InboundUpgrade, OutboundUpgrade, PeerId, UpgradeInfo};
+use tempfile::tempfile;
 
 use crate::p2p::commands::TransferCommand;
 use crate::p2p::peer::{Direction, PeerEvent};
+pub use crate::p2p::transfer::metadata::TransferType;
 use crate::p2p::transfer::metadata::{hash_contents, Answer, Metadata};
 use crate::p2p::util::{self, CHUNK_SIZE};
 use crate::user_data;
 
 #[derive(Clone, Debug)]
+enum Payload {
+    Path(String),
+    Text(String),
+}
+
+#[derive(Clone, Debug)]
 pub struct FileToSend {
-    pub name: String,
-    pub path: String,
     pub peer: PeerId,
+    pub name: String,
+    payload: Payload,
+    pub transfer_type: TransferType,
 }
 
 impl FileToSend {
-    pub fn new(path: &str, peer: &PeerId) -> Result<Self, Box<dyn Error>> {
-        info!("Dragged path: {}", path);
-        metadata(path)?;
-        let name = Self::extract_name(path)?;
-        Ok(FileToSend {
-            name,
-            path: path.to_string(),
-            peer: peer.to_owned(),
-        })
+    pub fn new(
+        peer: &PeerId,
+        path: Option<String>,
+        text: Option<String>,
+    ) -> Result<Self, Box<dyn Error>> {
+        info!("Got a payload! Path: {:?}, Text: {:#?}", path, text);
+        match (path, text) {
+            (Some(path), None) => {
+                let name = Self::extract_name_path(&path)?;
+                metadata(&path)?;
+                Ok(FileToSend {
+                    name,
+                    payload: Payload::Path(path),
+                    peer: peer.to_owned(),
+                    transfer_type: TransferType::File,
+                })
+            }
+            (None, Some(text)) => {
+                let name = Self::extract_name_text(&text);
+                Ok(FileToSend {
+                    name,
+                    payload: Payload::Text(text),
+                    peer: peer.to_owned(),
+                    transfer_type: TransferType::Text,
+                })
+            }
+            _ => panic!("Impossibru"),
+        }
     }
 
-    fn extract_name(path: &str) -> Result<String, Box<dyn Error>> {
+    fn get_file(&self) -> Result<File, io::Error> {
+        match &self.payload {
+            Payload::Path(path) => Ok(File::open(path)?),
+            Payload::Text(text) => Ok(Self::create_temp_file(&text)?),
+        }
+    }
+
+    pub async fn calculate_hash(&self) -> Result<String, io::Error> {
+        match &self.payload {
+            Payload::Path(path) => {
+                let file = File::open(&path)?;
+                Ok(hash_contents(file)?)
+            }
+            Payload::Text(text) => {
+                let file = Self::create_temp_file(text)?;
+                Ok(hash_contents(file)?)
+            }
+        }
+    }
+
+    pub fn check_size(&self) -> Result<u64, io::Error> {
+        match &self.payload {
+            Payload::Path(path) => {
+                let meta = metadata(path)?;
+                Ok(meta.len())
+            }
+            Payload::Text(text) => Ok(text.len() as u64),
+        }
+    }
+
+    fn create_temp_file(text: &str) -> Result<File, io::Error> {
+        let mut tmp_file = tempfile()?;
+        let _ = tmp_file.write_all(text.as_bytes());
+        Ok(tmp_file)
+    }
+
+    fn extract_name_text(text: &str) -> String {
+        let list: Vec<&str> = text.split_whitespace().collect();
+        let joined: &str = &list[..10].join(" ");
+        joined.to_string()
+    }
+
+    fn extract_name_path(path: &str) -> Result<String, Box<dyn Error>> {
         let path = Path::new(path).canonicalize()?;
         let name = path
             .file_name()
@@ -54,6 +124,16 @@ impl FileToSend {
             .expect("Expected a name")
             .to_string();
         Ok(name)
+    }
+}
+
+impl fmt::Display for FileToSend {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "FileToSend name: {}, type: {}",
+            self.name, self.transfer_type
+        )
     }
 }
 
@@ -66,8 +146,7 @@ pub enum ProtocolEvent {
 // Outgoing transfer to remote peer
 #[derive(Clone, Debug)]
 pub struct TransferOut {
-    pub name: String,
-    pub path: String,
+    pub file: FileToSend,
     pub sender_queue: Sender<PeerEvent>,
 }
 
@@ -85,7 +164,8 @@ pub struct TransferPayload {
 
 impl TransferPayload {
     pub fn check_file(&self) -> Result<(), io::Error> {
-        let hash_from_disk = hash_contents(&self.path)?;
+        let file = File::open(&self.path)?;
+        let hash_from_disk = hash_contents(file)?;
 
         if hash_from_disk != self.hash {
             Err(io::Error::new(ErrorKind::InvalidData, "File corrupted!"))
@@ -244,17 +324,18 @@ impl TransferOut {
     {
         let direction = Direction::Outgoing;
         let (sender, receiver) = sync_channel::<Vec<u8>>(CHUNK_SIZE * 128);
-        info!("Name: {:?}, Path: {:?}", self.name, &self.path);
+        info!("File to send: {}", self.file);
 
         let (size, socket): (usize, TSocket) =
-            Metadata::write::<TSocket>(&self.name, &self.path, socket).await?;
+            Metadata::write::<TSocket>(&self.file, socket).await?;
 
         let (accepted, socket) = Answer::read::<TSocket>(socket).await?;
         info!("File accepted? {:?}", accepted);
 
         if accepted {
             let mut writer = futio::BufWriter::new(socket);
-            let job = util::spawn_read_file_job(sender.clone(), self.path.clone());
+            let file = self.file.get_file()?;
+            let job = util::spawn_read_file_job(sender.clone(), file);
 
             util::notify_progress(&self.sender_queue, 0, size, &direction).await;
 
@@ -358,7 +439,7 @@ where
 
 impl fmt::Display for TransferOut {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "TransferOut name: {}, path: {}", self.name, self.path)
+        write!(f, "[TransferOut] {}", self.file)
     }
 }
 

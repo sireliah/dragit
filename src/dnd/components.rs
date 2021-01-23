@@ -1,16 +1,19 @@
 use std::error::Error;
+use std::io;
 use std::sync::{Arc, Mutex};
 
 use async_std::sync::Sender;
 use bytesize::ByteSize;
 
+use std::string::ToString;
+
 use gdk::DragAction;
+use gio::prelude::*;
 use glib::object::IsA;
 use gtk::prelude::*;
 use gtk::{DestDefaults, Label, TargetEntry, TargetFlags};
 
-use libp2p::{multiaddr::Protocol, Multiaddr};
-use percent_encoding::percent_decode_str;
+use libp2p::{multiaddr::Protocol, Multiaddr, PeerId};
 
 use crate::p2p::{FileToSend, OperatingSystem, Peer};
 use crate::user_data::UserConfig;
@@ -260,44 +263,85 @@ impl PeerItem {
     ) -> Self {
         let peer_id = peer.peer_id.clone();
         let targets = vec![
-            TargetEntry::new("STRING", TargetFlags::OTHER_APP, 0),
-            TargetEntry::new("text/html", TargetFlags::OTHER_APP, 0),
-            TargetEntry::new("image/png", TargetFlags::OTHER_APP, 0),
-            // TODO: use different content type here
             TargetEntry::new("text/uri-list", TargetFlags::OTHER_APP, 0),
+            TargetEntry::new("UTF8_STRING", TargetFlags::OTHER_APP, 0),
+            TargetEntry::new("text/plain", TargetFlags::OTHER_APP, 0),
+            TargetEntry::new("text/html", TargetFlags::OTHER_APP, 0),
+            // TargetEntry::new("STRING", TargetFlags::OTHER_APP, 0),
+            TargetEntry::new("image/png", TargetFlags::OTHER_APP, 0),
         ];
         self.container
             .drag_dest_set(DestDefaults::ALL, &targets, DragAction::COPY);
 
-        self.container
-            .connect_drag_data_received(move |_win, _, _, _, s, _, _| {
-                let path: String = match s.get_text() {
-                    Some(value) => PeerItem::clean_filename(&value).expect("Decoding path failed"),
-                    None => {
-                        // Extracting the file path from the URI works best for Windows
-                        let uri = s.get_uris().pop().unwrap().to_string();
-                        PeerItem::clean_filename(&uri).expect("Decoding path from URI failed")
-                    }
+        self.container.connect_drag_data_received(
+            move |_win, drag_context, _, _, selection_data, _, _| {
+                let data: String = String::from_utf8(selection_data.get_data()).unwrap();
+                info!("AAAAAAAAa Drag context: {:?}", drag_context);
+                info!("AAAAAAAAa Selection URI: {:?}", selection_data.get_uris());
+                info!("AAAAAAAAa Selection TEXT: {:?}", selection_data.get_text());
+                info!("AAAAAAAAa Selection DATA: {:?}", data);
+                info!(
+                    "AAAAAAAAa Can text: {:?}",
+                    selection_data.targets_include_text()
+                );
+                info!(
+                    "AAAAAAAAa Can URI: {:?}",
+                    selection_data.targets_include_uri()
+                );
+                info!(
+                    "AAAAAAAAa Can Image: {:?}",
+                    selection_data.targets_include_image(false)
+                );
+
+                let file_to_send = match selection_data.get_uris().pop() {
+                    Some(file) => Self::get_file_payload(&peer_id, file.to_string()),
+                    None => Self::get_text_payload(&selection_data, &peer_id),
                 };
-                let file = match FileToSend::new(&path, &peer_id) {
-                    Ok(v) => v,
+
+                match file_to_send {
+                    Ok(file) => {
+                        let sender = file_sender.lock().unwrap();
+                        sender.try_send(file).expect("Sending failed");
+                    }
                     Err(e) => {
-                        error!("Failed creating FileToSend {:?}", e);
-                        return ();
+                        error!("Could not extract dragged content: {:?}", e);
                     }
-                };
-                let sender = file_sender.lock().unwrap();
-                sender.try_send(file).expect("Sending failed");
-            });
+                }
+            },
+        );
 
         self
     }
 
-    fn clean_filename(path: &str) -> Result<String, Box<dyn Error>> {
-        let value = percent_decode_str(path).decode_utf8()?;
+    fn get_file_payload(peer_id: &PeerId, file: String) -> Result<FileToSend, Box<dyn Error>> {
+        let file = gio::File::new_for_uri(&file);
+        if file.is_native() {
+            match file.get_path() {
+                Some(p) => {
+                    let path = clean_file_proto(&p.display().to_string());
+                    Ok(FileToSend::new(peer_id, Some(path), None)?)
+                }
+                None => {
+                    let uri: String = file.get_uri().into();
+                    let path = clean_file_proto(&uri);
+                    Ok(FileToSend::new(peer_id, Some(path), None)?)
+                }
+            }
+        } else {
+            let uri: String = file.get_uri().into();
+            let path = clean_file_proto(&uri);
+            Ok(FileToSend::new(peer_id, Some(path), None)?)
+        }
+    }
 
-        let path = clean_file_proto(&value);
-        Ok(path.trim().to_string())
+    fn get_text_payload(
+        selection_data: &gtk::SelectionData,
+        peer_id: &PeerId,
+    ) -> Result<FileToSend, Box<dyn Error>> {
+        let text = selection_data
+            .get_text()
+            .ok_or(io::Error::new(io::ErrorKind::InvalidData, "No text found"))?;
+        Ok(FileToSend::new(peer_id, None, Some(text.to_string()))?)
     }
 }
 

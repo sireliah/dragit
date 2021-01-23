@@ -56,11 +56,9 @@ pub fn send_buffer(sender: &SyncSender<Vec<u8>>, buff: Vec<u8>) -> Result<(), io
 
 pub fn spawn_read_file_job(
     sender: SyncSender<Vec<u8>>,
-    path: String,
+    mut file: fs::File,
 ) -> JoinHandle<Result<(), io::Error>> {
     thread::spawn(move || -> Result<(), io::Error> {
-        let mut file = fs::File::open(&path)?;
-
         loop {
             let mut buff = vec![0u8; CHUNK_SIZE * 32];
             match file.read(&mut buff) {

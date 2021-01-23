@@ -35,7 +35,7 @@ pub fn build_window(
     let layout = MainLayout::new()?;
     layout.add_recent_file("File.txt", "file:///tmp/File.txt");
     layout.add_recent_file(
-        "LongFuckingFileWithLongFuckingName.txt",
+        "ExtremelyLongNameOfUnusuallyLongFile.txt",
         "file:///tmp/File.txt",
     );
 

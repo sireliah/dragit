@@ -107,17 +107,17 @@ impl NetworkBehaviour for TransferBehaviour {
         _: &mut Context,
         _: &mut impl PollParameters,
     ) -> Poll<NetworkBehaviourAction<TransferOut, TransferPayload>> {
-        if let Some(file_to_send) = self.payloads.pop() {
+        if let Some(file) = self.payloads.pop() {
+            let peer_id = file.peer.clone();
             let transfer = TransferOut {
-                name: file_to_send.name,
-                path: file_to_send.path,
+                file,
                 sender_queue: self.sender.clone(),
             };
 
             let event = NetworkBehaviourAction::NotifyHandler {
                 // TODO: Notify particular handler, not Any
                 handler: NotifyHandler::Any,
-                peer_id: file_to_send.peer.to_owned(),
+                peer_id,
                 event: transfer,
             };
             self.events.push(event);
