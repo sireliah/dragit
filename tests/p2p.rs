@@ -84,9 +84,10 @@ fn test_transfer() {
                     println!("Established!: {:?}", peer_id);
                     if !pushed {
                         println!("Pushing file");
+                        let path = "tests/file.txt".to_string();
+                        let file = FileToSend::new(&peer1, Some(path), None).unwrap();
                         let transfer = TransferOut {
-                            name: "a-file".to_string(),
-                            path: "tests/file.txt".to_string(),
+                            file,
                             sender_queue: swarm2.sender.clone(),
                         };
                         let event = NetworkBehaviourAction::NotifyHandler {
@@ -122,7 +123,7 @@ fn test_transfer() {
 
     print!("P1: {:?}", p1);
 
-    assert_eq!(p1.name, "a-file".to_string());
+    assert_eq!(p1.name, "file.txt".to_string());
 
     let meta = fs::metadata(p1.path).expect("No file found");
 

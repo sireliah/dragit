@@ -1,15 +1,13 @@
 use std::sync::Arc;
 
-use std::error::Error;
 use std::fmt;
 use std::io::ErrorKind;
 use std::sync::mpsc::sync_channel;
 
-use std::fs::{metadata, File};
-use std::path::Path;
+use std::fs::File;
 use std::task::{Context, Poll};
 use std::time::Instant;
-use std::{io, io::Write, iter, pin::Pin};
+use std::{io, iter, pin::Pin};
 
 use async_std::sync::Mutex;
 use async_std::sync::{Receiver, Sender};
@@ -18,124 +16,15 @@ use async_std::task;
 use futures::future;
 use futures::io as futio;
 use futures::prelude::*;
-use libp2p::core::{InboundUpgrade, OutboundUpgrade, PeerId, UpgradeInfo};
-use tempfile::tempfile;
+use libp2p::core::{InboundUpgrade, OutboundUpgrade, UpgradeInfo};
 
 use crate::p2p::commands::TransferCommand;
 use crate::p2p::peer::{Direction, PeerEvent};
+use crate::p2p::transfer::file::FileToSend;
 pub use crate::p2p::transfer::metadata::TransferType;
 use crate::p2p::transfer::metadata::{hash_contents, Answer, Metadata};
 use crate::p2p::util::{self, CHUNK_SIZE};
 use crate::user_data;
-
-#[derive(Clone, Debug)]
-enum Payload {
-    Path(String),
-    Text(String),
-}
-
-#[derive(Clone, Debug)]
-pub struct FileToSend {
-    pub peer: PeerId,
-    pub name: String,
-    payload: Payload,
-    pub transfer_type: TransferType,
-}
-
-impl FileToSend {
-    pub fn new(
-        peer: &PeerId,
-        path: Option<String>,
-        text: Option<String>,
-    ) -> Result<Self, Box<dyn Error>> {
-        info!("Got a payload! Path: {:?}, Text: {:#?}", path, text);
-        match (path, text) {
-            (Some(path), None) => {
-                let name = Self::extract_name_path(&path)?;
-                metadata(&path)?;
-                Ok(FileToSend {
-                    name,
-                    payload: Payload::Path(path),
-                    peer: peer.to_owned(),
-                    transfer_type: TransferType::File,
-                })
-            }
-            (None, Some(text)) => {
-                let name = Self::extract_name_text(&text);
-                Ok(FileToSend {
-                    name,
-                    payload: Payload::Text(text),
-                    peer: peer.to_owned(),
-                    transfer_type: TransferType::Text,
-                })
-            }
-            _ => panic!("Impossibru"),
-        }
-    }
-
-    fn get_file(&self) -> Result<File, io::Error> {
-        match &self.payload {
-            Payload::Path(path) => Ok(File::open(path)?),
-            Payload::Text(text) => Ok(Self::create_temp_file(&text)?),
-        }
-    }
-
-    pub async fn calculate_hash(&self) -> Result<String, io::Error> {
-        match &self.payload {
-            Payload::Path(path) => {
-                let file = File::open(&path)?;
-                Ok(hash_contents(file)?)
-            }
-            Payload::Text(text) => {
-                let file = Self::create_temp_file(text)?;
-                Ok(hash_contents(file)?)
-            }
-        }
-    }
-
-    pub fn check_size(&self) -> Result<u64, io::Error> {
-        match &self.payload {
-            Payload::Path(path) => {
-                let meta = metadata(path)?;
-                Ok(meta.len())
-            }
-            Payload::Text(text) => Ok(text.len() as u64),
-        }
-    }
-
-    fn create_temp_file(text: &str) -> Result<File, io::Error> {
-        let mut tmp_file = tempfile()?;
-        let _ = tmp_file.write_all(text.as_bytes());
-        Ok(tmp_file)
-    }
-
-    fn extract_name_text(text: &str) -> String {
-        let list: Vec<&str> = text.split_whitespace().collect();
-        let joined: &str = &list[..10].join(" ");
-        joined.to_string()
-    }
-
-    fn extract_name_path(path: &str) -> Result<String, Box<dyn Error>> {
-        let path = Path::new(path).canonicalize()?;
-        let name = path
-            .file_name()
-            .expect("There is no file name")
-            .to_str()
-            .expect("Expected a name")
-            .to_string();
-        Ok(name)
-    }
-}
-
-impl fmt::Display for FileToSend {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "FileToSend name: {}, type: {}",
-            self.name, self.transfer_type
-        )
-    }
-}
 
 #[derive(Clone, Debug)]
 pub enum ProtocolEvent {

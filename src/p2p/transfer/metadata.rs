@@ -9,7 +9,7 @@ use hex;
 use md5::{Digest, Md5};
 use prost::{Enumeration, Message};
 
-use crate::p2p::transfer::protocol::FileToSend;
+use crate::p2p::transfer::FileToSend;
 
 pub const ANSWER_SIZE: usize = 2;
 pub const PACKET_SIZE: usize = 1024;
