@@ -141,6 +141,7 @@ impl MainLayout {
             }
             Payload::Text(text) => {
                 let label = gtk::Label::new(Some(&text));
+                label.set_selectable(true);
                 recent_item.pack_start(&label, false, false, 0);
             }
         }
@@ -592,7 +593,7 @@ impl EmptyListItem {
         let text = concat!(
             "Please run <b>Dragit</b> on another device\n",
             "and wait until applications discover each other.\n\n",
-            "Once device appears here, drop a file on it.\n",
+            "Once device appears here, drop a file or text on it.\n",
         );
         let description = gtk::Label::new(None);
         description.set_markup(&text);
