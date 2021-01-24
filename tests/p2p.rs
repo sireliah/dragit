@@ -1,3 +1,4 @@
+use core::panic;
 use std::fs;
 use std::sync::Arc;
 use std::time::Duration;
@@ -16,7 +17,7 @@ use libp2p::{
     tcp, websocket, Multiaddr, PeerId, Swarm,
 };
 
-use dragit::p2p::{FileToSend, PeerEvent, TransferBehaviour, TransferCommand, TransferOut};
+use dragit::p2p::{FileToSend, Payload, PeerEvent, TransferBehaviour, TransferCommand, TransferOut};
 
 #[test]
 fn test_transfer() {
@@ -84,8 +85,8 @@ fn test_transfer() {
                     println!("Established!: {:?}", peer_id);
                     if !pushed {
                         println!("Pushing file");
-                        let path = "tests/file.txt".to_string();
-                        let file = FileToSend::new(&peer1, Some(path), None).unwrap();
+                        let payload = Payload::Path("tests/file.txt".to_string());
+                        let file = FileToSend::new(&peer1, payload).unwrap();
                         let transfer = TransferOut {
                             file,
                             sender_queue: swarm2.sender.clone(),
@@ -125,9 +126,13 @@ fn test_transfer() {
 
     assert_eq!(p1.name, "file.txt".to_string());
 
-    let meta = fs::metadata(p1.path).expect("No file found");
-
-    assert!(meta.is_file());
+    match p1.payload {
+        Payload::Path(path) => {
+            let meta = fs::metadata(path).expect("No file found");
+            assert!(meta.is_file());
+        },
+        Payload::Text(_) => panic!("Got text instead!")
+    };
 }
 
 fn build_swarm() -> (
