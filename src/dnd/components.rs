@@ -15,7 +15,7 @@ use gtk::{DestDefaults, Label, TargetEntry, TargetFlags};
 
 use libp2p::{multiaddr::Protocol, Multiaddr, PeerId};
 
-use crate::p2p::{FileToSend, OperatingSystem, Peer};
+use crate::p2p::{FileToSend, OperatingSystem, Payload, Peer, TransferType};
 use crate::user_data::UserConfig;
 
 pub const STYLE: &str = "
@@ -127,15 +127,23 @@ impl MainLayout {
 }
 
 impl MainLayout {
-    pub fn add_recent_file(&self, file_name: &str, path: &str) {
-        let prefixed_path = format!("file://{}", path);
+    pub fn add_recent_file(&self, file_name: &str, payload: Payload) {
         let recent_item = gtk::Box::new(gtk::Orientation::Horizontal, 0);
-        let link = gtk::LinkButton::new_with_label(&prefixed_path, Some(file_name));
-        let image = gtk::Image::new_from_icon_name(Some("text-x-preview"), gtk::IconSize::Dialog);
-
         recent_item.set_halign(gtk::Align::Start);
-        recent_item.pack_start(&image, false, false, 0);
-        recent_item.pack_start(&link, false, false, 0);
+        match payload {
+            Payload::Path(path) => {
+                let prefixed_path = format!("file://{}", path);
+                let link = gtk::LinkButton::new_with_label(&prefixed_path, Some(file_name));
+                let image =
+                    gtk::Image::new_from_icon_name(Some("text-x-preview"), gtk::IconSize::Dialog);
+                recent_item.pack_start(&image, false, false, 0);
+                recent_item.pack_start(&link, false, false, 0);
+            }
+            Payload::Text(text) => {
+                let label = gtk::Label::new(Some(&text));
+                recent_item.pack_start(&label, false, false, 0);
+            }
+        }
 
         self.recent_layout.attach_next_to(
             &recent_item,
@@ -319,18 +327,21 @@ impl PeerItem {
             match file.get_path() {
                 Some(p) => {
                     let path = clean_file_proto(&p.display().to_string());
-                    Ok(FileToSend::new(peer_id, Some(path), None)?)
+                    let payload = Payload::Path(path);
+                    Ok(FileToSend::new(peer_id, payload)?)
                 }
                 None => {
                     let uri: String = file.get_uri().into();
                     let path = clean_file_proto(&uri);
-                    Ok(FileToSend::new(peer_id, Some(path), None)?)
+                    let payload = Payload::Path(path);
+                    Ok(FileToSend::new(peer_id, payload)?)
                 }
             }
         } else {
             let uri: String = file.get_uri().into();
             let path = clean_file_proto(&uri);
-            Ok(FileToSend::new(peer_id, Some(path), None)?)
+            let payload = Payload::Path(path);
+            Ok(FileToSend::new(peer_id, payload)?)
         }
     }
 
@@ -341,7 +352,8 @@ impl PeerItem {
         let text = selection_data
             .get_text()
             .ok_or(io::Error::new(io::ErrorKind::InvalidData, "No text found"))?;
-        Ok(FileToSend::new(peer_id, None, Some(text.to_string()))?)
+        let payload = Payload::Text(text.to_string());
+        Ok(FileToSend::new(peer_id, payload)?)
     }
 }
 
@@ -521,17 +533,26 @@ impl AppNotification {
 pub struct AcceptFileDialog(gtk::MessageDialog);
 
 impl AcceptFileDialog {
-    pub fn new(window: &gtk::ApplicationWindow, name: String, size: usize) -> AcceptFileDialog {
+    pub fn new(
+        window: &gtk::ApplicationWindow,
+        name: String,
+        size: usize,
+        transfer_type: TransferType,
+    ) -> AcceptFileDialog {
         let readable_size = ByteSize(size as u64);
+        let message = match transfer_type {
+            TransferType::File => format!(
+                "Incoming file {} ({}).\n\nWould you like to accept?",
+                name, readable_size
+            ),
+            TransferType::Text => format!("Incoming text {}.\n\nWould you like to accept?", name),
+        };
         let dialog = gtk::MessageDialog::new(
             Some(window),
             gtk::DialogFlags::MODAL,
             gtk::MessageType::Question,
             gtk::ButtonsType::YesNo,
-            &format!(
-                "Incoming file {} ({}).\n\nWould you like to accept the file?",
-                name, readable_size
-            ),
+            &message,
         );
         AcceptFileDialog(dialog)
     }

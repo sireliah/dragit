@@ -14,7 +14,7 @@ use libp2p::swarm::{
 use super::protocol::{ProtocolEvent, TransferOut, TransferPayload};
 use crate::p2p::commands::TransferCommand;
 use crate::p2p::peer::PeerEvent;
-use crate::p2p::transfer::file::FileToSend;
+use crate::p2p::transfer::file::{FileToSend, Payload};
 
 const TIMEOUT: u64 = 600;
 
@@ -54,8 +54,8 @@ impl NetworkBehaviour for TransferBehaviour {
         let timeout = Duration::from_secs(TIMEOUT);
         let tp = TransferPayload {
             name: "default".to_string(),
-            path: "".to_string(),
             hash: "".to_string(),
+            payload: Payload::Path(".".to_string()),
             size_bytes: 0,
             sender_queue: self.sender.clone(),
             receiver: Arc::clone(&self.receiver),

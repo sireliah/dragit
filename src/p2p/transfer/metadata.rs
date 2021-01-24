@@ -1,4 +1,3 @@
-use std::fmt;
 use std::fs;
 use std::io::{self, Error, Read};
 
@@ -7,9 +6,10 @@ use super::proto::Metadata as ProtoMetadata;
 use futures::prelude::*;
 use hex;
 use md5::{Digest, Md5};
-use prost::{Enumeration, Message};
+use prost::Message;
 
 use crate::p2p::transfer::FileToSend;
+use crate::p2p::TransferType;
 
 pub const ANSWER_SIZE: usize = 2;
 pub const PACKET_SIZE: usize = 1024;
@@ -51,7 +51,7 @@ impl Metadata {
         let hash = proto.hash;
         let size = proto.size as usize;
         let transfer_type =
-            TransferType::from_i32(proto.transfer_type).unwrap_or(TransferType::Other);
+            TransferType::from_i32(proto.transfer_type).unwrap_or(TransferType::File);
         info!("Read: Name: {}, Hash: {}, Size: {}", name, hash, size);
         Ok((
             Metadata {
@@ -124,23 +124,6 @@ impl Answer {
         socket.write(&buf).await?;
         socket.flush().await?;
         Ok(((), socket))
-    }
-}
-
-#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, Enumeration)]
-pub enum TransferType {
-    File = 0,
-    Text = 1,
-    Other = 2,
-}
-
-impl fmt::Display for TransferType {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::File => write!(f, "TransferType: File"),
-            Self::Text => write!(f, "TransferType: Text"),
-            _ => write!(f, "TransferType: Other"),
-        }
     }
 }
 

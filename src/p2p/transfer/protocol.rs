@@ -1,10 +1,8 @@
-use std::sync::Arc;
-
 use std::fmt;
 use std::io::ErrorKind;
 use std::sync::mpsc::sync_channel;
+use std::sync::Arc;
 
-use std::fs::File;
 use std::task::{Context, Poll};
 use std::time::Instant;
 use std::{io, iter, pin::Pin};
@@ -20,9 +18,8 @@ use libp2p::core::{InboundUpgrade, OutboundUpgrade, UpgradeInfo};
 
 use crate::p2p::commands::TransferCommand;
 use crate::p2p::peer::{Direction, PeerEvent};
-use crate::p2p::transfer::file::FileToSend;
-pub use crate::p2p::transfer::metadata::TransferType;
-use crate::p2p::transfer::metadata::{hash_contents, Answer, Metadata};
+use crate::p2p::transfer::file::{get_hash_from_payload, FileToSend, Payload};
+use crate::p2p::transfer::metadata::{Answer, Metadata};
 use crate::p2p::util::{self, CHUNK_SIZE};
 use crate::user_data;
 
@@ -43,7 +40,7 @@ pub struct TransferOut {
 #[derive(Clone, Debug)]
 pub struct TransferPayload {
     pub name: String,
-    pub path: String,
+    pub payload: Payload,
     pub hash: String,
     pub size_bytes: usize,
     pub sender_queue: Sender<PeerEvent>,
@@ -53,8 +50,7 @@ pub struct TransferPayload {
 
 impl TransferPayload {
     pub fn check_file(&self) -> Result<(), io::Error> {
-        let file = File::open(&self.path)?;
-        let hash_from_disk = hash_contents(file)?;
+        let hash_from_disk = get_hash_from_payload(&self.payload)?;
 
         if hash_from_disk != self.hash {
             Err(io::Error::new(ErrorKind::InvalidData, "File corrupted!"))
@@ -67,7 +63,8 @@ impl TransferPayload {
         let name = meta.name.to_string();
         let hash = meta.hash.to_string();
         let size = meta.size;
-        let event = PeerEvent::FileIncoming(name, hash, size);
+        let transfer_type = meta.transfer_type;
+        let event = PeerEvent::FileIncoming(name, hash, size, transfer_type);
         self.sender_queue.to_owned().send(event).await;
     }
 
@@ -104,6 +101,7 @@ impl TransferPayload {
         let mut payloads: Vec<u8> = vec![];
         let (sender, receiver) = sync_channel::<Vec<u8>>(CHUNK_SIZE * 128);
         let path = user_data::get_target_path(&name, self.target_path.as_ref())?;
+
         let job = util::spawn_write_file_job(receiver, path.clone());
 
         let mut counter: usize = 0;
@@ -174,9 +172,10 @@ impl TransferPayload {
                 let (counter, path) = self
                     .read_file_payload(socket, &meta.name, meta.size, &direction)
                     .await?;
+
                 self.name = meta.name;
                 self.hash = meta.hash;
-                self.path = path;
+                self.payload = Payload::new(meta.transfer_type, path)?;
                 self.size_bytes = counter;
                 Ok(())
             }
@@ -336,8 +335,8 @@ impl fmt::Display for TransferPayload {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "TransferPayload name: {}, path: {}, hash: {}, size: {} bytes",
-            self.name, self.path, self.hash, self.size_bytes
+            "TransferPayload name: {}, payload: {}, hash: {}, size: {} bytes",
+            self.name, self.payload, self.hash, self.size_bytes
         )
     }
 }

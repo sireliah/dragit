@@ -33,11 +33,6 @@ pub fn build_window(
     let window = gtk::ApplicationWindow::new(application);
 
     let layout = MainLayout::new()?;
-    layout.add_recent_file("File.txt", "file:///tmp/File.txt");
-    layout.add_recent_file(
-        "ExtremelyLongNameOfUnusuallyLongFile.txt",
-        "file:///tmp/File.txt",
-    );
 
     let overlay = gtk::Overlay::new();
     window.set_titlebar(Some(&layout.bar));
@@ -77,12 +72,12 @@ pub fn build_window(
             progress.hide(&overlay);
             Continue(true)
         }
-        PeerEvent::FileCorrect(file_name, path) => {
+        PeerEvent::FileCorrect(file_name, payload) => {
             progress.progress_bar.set_fraction(0.0);
             progress.hide(&overlay);
-            let text = format!("Received {} \nSaved in {}", file_name, path);
+            let text = format!("Received {} \n{}", file_name, payload);
             alert_notif.show(&overlay, text);
-            layout.add_recent_file(&file_name, &path);
+            layout.add_recent_file(&file_name, payload);
             Continue(true)
         }
         PeerEvent::FileIncorrect => {
@@ -91,9 +86,9 @@ pub fn build_window(
             error_notif.show(&overlay, "File is incorrect".to_string());
             Continue(true)
         }
-        PeerEvent::FileIncoming(name, hash, size) => {
+        PeerEvent::FileIncoming(name, hash, size, transfer_type) => {
             if let Some(win) = window_weak.upgrade() {
-                let accept_dialog = AcceptFileDialog::new(&win, name, size);
+                let accept_dialog = AcceptFileDialog::new(&win, name, size, transfer_type);
                 let response = accept_dialog.run();
 
                 let command = match response {
