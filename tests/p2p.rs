@@ -17,7 +17,9 @@ use libp2p::{
     tcp, websocket, Multiaddr, PeerId, Swarm,
 };
 
-use dragit::p2p::{FileToSend, Payload, PeerEvent, TransferBehaviour, TransferCommand, TransferOut};
+use dragit::p2p::{
+    FileToSend, Payload, PeerEvent, TransferBehaviour, TransferCommand, TransferOut,
+};
 
 #[test]
 fn test_transfer() {
@@ -130,8 +132,8 @@ fn test_transfer() {
         Payload::Path(path) => {
             let meta = fs::metadata(path).expect("No file found");
             assert!(meta.is_file());
-        },
-        Payload::Text(_) => panic!("Got text instead!")
+        }
+        Payload::Text(_) => panic!("Got text instead!"),
     };
 }
 

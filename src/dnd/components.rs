@@ -19,14 +19,11 @@ use crate::p2p::{FileToSend, OperatingSystem, Payload, Peer, TransferType};
 use crate::user_data::UserConfig;
 
 pub const STYLE: &str = "
-#item-frame border {
-    border-style: none;
-}
 #notification {
     padding: 10px;
     border-radius: 10px;
     color: rgb(0, 0, 0);
-    background-color: rgba(100, 100, 100, 1.0);
+    background-color: rgba(130, 130, 130, 1.0);
 }
 #button-close {
     padding: 0;
@@ -99,13 +96,10 @@ impl MainLayout {
         scroll.set_min_content_width(550);
 
         let item_layout = Self::setup_item_layout();
-        let item_frame = gtk::Frame::new(Some("Devices"));
-        item_frame.set_widget_name("item-frame");
-        item_frame.add(&item_layout);
         let scroll_box = gtk::Box::new(gtk::Orientation::Vertical, 0);
 
         scroll_box.pack_start(&header_layout, false, false, 0);
-        scroll_box.pack_start(&item_frame, false, false, 0);
+        scroll_box.pack_start(&item_layout, false, false, 0);
         scroll.add(&scroll_box);
 
         inner_layout.pack_start(&scroll, true, true, 10);
@@ -132,8 +126,7 @@ impl MainLayout {
         recent_item.set_halign(gtk::Align::Start);
         match payload {
             Payload::Path(path) => {
-                let prefixed_path = format!("file://{}", path);
-                let link = gtk::LinkButton::new_with_label(&prefixed_path, Some(file_name));
+                let link = get_link(file_name, &path);
                 let image =
                     gtk::Image::new_from_icon_name(Some("text-x-preview"), gtk::IconSize::Dialog);
                 recent_item.pack_start(&image, false, false, 0);
@@ -447,16 +440,17 @@ pub struct AppNotification {
     revealer: gtk::Revealer,
     pub overlay: gtk::Overlay,
     label: Label,
+    layout: gtk::Grid,
+    link_pos: i32,
 }
 
 impl AppNotification {
     pub fn new(main_overlay: &gtk::Overlay, notification_type: NotificationType) -> Self {
-        let layout = gtk::Box::new(gtk::Orientation::Horizontal, 5);
+        let layout = gtk::Grid::new();
         let overlay = gtk::Overlay::new();
         let revealer = gtk::Revealer::new();
         let label = Label::new(Some("File correct"));
-
-        layout.set_widget_name("notification");
+        label.set_halign(gtk::Align::Start);
 
         let button_close = gtk::Button::new_from_icon_name(
             Some("window-close-symbolic"),
@@ -464,36 +458,34 @@ impl AppNotification {
         );
         button_close.set_widget_name("button-close");
         button_close.set_relief(gtk::ReliefStyle::None);
+        button_close.set_size_request(40, 40);
 
         let revealer_weak = revealer.downgrade();
         let main_overlay_weak = main_overlay.downgrade();
         let overlay_weak = overlay.downgrade();
 
         button_close.connect_clicked(move |_| {
-            if let (Some(r), Some(mo), Some(o)) = (
+            if let (Some(rev), Some(over), Some(o)) = (
                 revealer_weak.upgrade(),
                 main_overlay_weak.upgrade(),
                 overlay_weak.upgrade(),
             ) {
-                r.set_reveal_child(false);
-                mo.reorder_overlay(&o, 0);
+                rev.set_reveal_child(false);
+                over.reorder_overlay(&o, 0);
             }
         });
 
         revealer.set_halign(gtk::Align::Center);
         revealer.set_valign(gtk::Align::Start);
-
-        label.set_halign(gtk::Align::Start);
-        label.set_valign(gtk::Align::Center);
-        label.set_size_request(400, 50);
-
         revealer.set_transition_type(gtk::RevealerTransitionType::SlideDown);
 
         let icon = AppNotification::set_icon(notification_type);
+        icon.set_size_request(50, 40);
 
-        layout.pack_start(&icon, true, false, 0);
-        layout.pack_start(&label, true, false, 0);
-        layout.pack_start(&button_close, true, false, 0);
+        layout.set_widget_name("notification");
+        layout.attach(&icon, 0, 0, 1, 1);
+        layout.attach(&label, 1, 0, 1, 1);
+        layout.attach(&button_close, 4, 0, 1, 1);
 
         revealer.add(&layout);
         overlay.add_overlay(&revealer);
@@ -505,6 +497,8 @@ impl AppNotification {
             revealer,
             overlay,
             label,
+            layout,
+            link_pos: 2,
         }
     }
 
@@ -524,8 +518,30 @@ impl AppNotification {
         self.revealer.set_reveal_child(true);
     }
 
-    pub fn show(&self, overlay: &gtk::Overlay, text: String) {
-        self.label.set_text(&text);
+    pub fn show_text(&self, overlay: &gtk::Overlay, text: &str) {
+        self.label.set_text(text);
+        self.reveal(overlay);
+    }
+
+    fn remove_link(&self) {
+        if let Some(child) = self.layout.get_child_at(self.link_pos, 0) {
+            self.layout.remove(&child);
+        };
+    }
+
+    pub fn show_payload(&self, overlay: &gtk::Overlay, file_name: &str, payload: &Payload) {
+        match payload {
+            Payload::Path(path) => {
+                self.label.set_text("Received");
+                self.remove_link();
+                let link = get_link(file_name, &path);
+                self.layout.attach(&link, self.link_pos, 0, 1, 1);
+            }
+            Payload::Text(_) => {
+                self.remove_link();
+                self.label.set_text("Received text");
+            }
+        };
 
         self.reveal(overlay);
     }
@@ -630,4 +646,9 @@ pub fn get_item_name<I: IsA<gtk::Widget>>(item: &I) -> String {
     item.get_widget_name()
         .unwrap_or(glib::GString::from(""))
         .to_string()
+}
+
+pub fn get_link(file_name: &str, path: &str) -> gtk::LinkButton {
+    let prefixed_path = format!("file://{}", path);
+    gtk::LinkButton::new_with_label(&prefixed_path, Some(file_name))
 }

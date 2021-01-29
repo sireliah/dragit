@@ -75,15 +75,16 @@ pub fn build_window(
         PeerEvent::FileCorrect(file_name, payload) => {
             progress.progress_bar.set_fraction(0.0);
             progress.hide(&overlay);
-            let text = format!("Received {} \n{}", file_name, payload);
-            alert_notif.show(&overlay, text);
+
+            alert_notif.show_payload(&overlay, &file_name, &payload);
             layout.add_recent_file(&file_name, payload);
+
             Continue(true)
         }
         PeerEvent::FileIncorrect => {
             progress.progress_bar.set_fraction(0.0);
             progress.hide(&overlay);
-            error_notif.show(&overlay, "File is incorrect".to_string());
+            error_notif.show_text(&overlay, "File is incorrect");
             Continue(true)
         }
         PeerEvent::FileIncoming(name, hash, size, transfer_type) => {
@@ -104,7 +105,7 @@ pub fn build_window(
         PeerEvent::Error(error) => {
             error!("Got error: {}", error);
             let error = format!("Encountered an error: {:?}", error);
-            error_notif.show(&overlay, error);
+            error_notif.show_text(&overlay, &error);
             Continue(true)
         }
         _ => Continue(false),
