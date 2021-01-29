@@ -104,6 +104,8 @@ pub fn build_window(
         }
         PeerEvent::Error(error) => {
             error!("Got error: {}", error);
+            progress.hide(&overlay);
+
             let error = format!("Encountered an error: {:?}", error);
             error_notif.show_text(&overlay, &error);
             Continue(true)

@@ -86,6 +86,13 @@ pub async fn notify_progress(
     sender_queue.to_owned().send(event).await;
 }
 
+pub async fn notify_error(sender_queue: &AsyncSender<PeerEvent>, error_text: &str) {
+    sender_queue
+        .to_owned()
+        .send(PeerEvent::Error(error_text.to_string()))
+        .await;
+}
+
 pub async fn notify_completed(sender_queue: &AsyncSender<PeerEvent>) {
     sender_queue
         .to_owned()

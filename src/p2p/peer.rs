@@ -22,7 +22,6 @@ pub enum PeerEvent {
     PeersUpdated(CurrentPeers),
     TransferProgress((usize, usize, Direction)),
     TransferCompleted,
-    TransferError,
     FileCorrect(String, Payload),
     FileIncorrect,
     FileIncoming(String, String, usize, TransferType),

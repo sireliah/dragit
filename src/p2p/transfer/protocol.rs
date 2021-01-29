@@ -160,6 +160,7 @@ impl TransferPayload {
         let direction = Direction::Incoming;
         let (meta, mut socket): (Metadata, TSocket) = Metadata::read::<TSocket>(socket).await?;
         info!("Meta received! {:?}", meta.name);
+
         self.notify_incoming_file_event(&meta).await;
         let rec_cp = Arc::clone(&self.receiver);
 
@@ -169,9 +170,17 @@ impl TransferPayload {
 
                 util::notify_progress(&self.sender_queue, 0, meta.size, &direction).await;
 
-                let (counter, path) = self
+                let (counter, path) = match self
                     .read_file_payload(socket, &meta.name, meta.size, &direction)
-                    .await?;
+                    .await
+                {
+                    Ok((counter, path)) => (counter, path),
+                    Err(err) => {
+                        error!("Reading file payload failed: {:?}", err);
+                        util::notify_error(&self.sender_queue, "Transferring file failed").await;
+                        return Err(err);
+                    }
+                };
 
                 self.name = meta.name;
                 self.hash = meta.hash;
