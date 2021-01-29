@@ -156,6 +156,8 @@ impl MainLayout {
         let popover = gtk::Popover::new(None::<&gtk::Widget>);
         let label = gtk::Label::new(Some("Downloads directory"));
         let file_chooser = Self::setup_file_chooser()?;
+        file_chooser.set_margin_start(10);
+        file_chooser.set_margin_end(10);
 
         vbox.pack_start(&label, true, true, 10);
         vbox.pack_start(&file_chooser, true, true, 10);
