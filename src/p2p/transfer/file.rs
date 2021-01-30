@@ -109,7 +109,7 @@ impl FileToSend {
 
     fn extract_name_text(text: &str) -> String {
         match text.get(0..5) {
-            Some(t) => format!("{} (...)", t),
+            Some(t) => format!("{} (...)", t).replace("\n", ""),
             None => "text".to_string(),
         }
     }
@@ -155,5 +155,18 @@ pub fn get_hash_from_payload(payload: &Payload) -> Result<String, io::Error> {
             let file = FileToSend::create_temp_file(text)?;
             Ok(hash_contents(file)?)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::p2p::transfer::file::FileToSend;
+
+    #[test]
+    fn test_extract_name_text() {
+        let text = "here is the text I'm sending";
+        let result = FileToSend::extract_name_text(text);
+
+        assert_eq!(result, "here  (...)");
     }
 }

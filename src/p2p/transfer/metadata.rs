@@ -1,3 +1,4 @@
+use std::fmt;
 use std::fs;
 use std::io::{self, Error, Read};
 
@@ -92,6 +93,31 @@ impl Metadata {
         socket.flush().await?;
 
         Ok((size as usize, socket))
+    }
+
+    /// Produce predictable file name for both file and text payloads.
+    /// This is necessary for instance for Windows, which doesn't accept
+    /// certain characters in file names (like "\n")
+    pub fn get_safe_file_name(&self) -> String {
+        match self.transfer_type {
+            TransferType::File => self.name.to_string(),
+            TransferType::Text => {
+                let mut hasher = Md5::new();
+                hasher.input(self.name.to_string());
+                let result = hasher.result();
+                hex::encode::<Vec<u8>>(result.to_vec())
+            }
+        }
+    }
+}
+
+impl fmt::Display for Metadata {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "Metadata:\n name: {}\n hash: {}\n size: {}\n type: {}\n",
+            self.name, self.hash, self.size, self.transfer_type
+        )
     }
 }
 

@@ -19,6 +19,7 @@ use libp2p::core::{InboundUpgrade, OutboundUpgrade, UpgradeInfo};
 use crate::p2p::commands::TransferCommand;
 use crate::p2p::peer::{Direction, PeerEvent};
 use crate::p2p::transfer::file::{get_hash_from_payload, FileToSend, Payload};
+use crate::p2p::transfer::jobs;
 use crate::p2p::transfer::metadata::{Answer, Metadata};
 use crate::p2p::util::{self, CHUNK_SIZE};
 use crate::user_data;
@@ -92,7 +93,7 @@ impl TransferPayload {
     async fn read_file_payload(
         &mut self,
         socket: impl AsyncRead + AsyncWrite + Send + Unpin,
-        name: &str,
+        meta: &Metadata,
         size: usize,
         direction: &Direction,
     ) -> Result<(usize, String), io::Error> {
@@ -100,9 +101,10 @@ impl TransferPayload {
 
         let mut payloads: Vec<u8> = vec![];
         let (sender, receiver) = sync_channel::<Vec<u8>>(CHUNK_SIZE * 128);
-        let path = user_data::get_target_path(&name, self.target_path.as_ref())?;
+        let path =
+            user_data::get_target_path(&meta.get_safe_file_name(), self.target_path.as_ref())?;
 
-        let job = util::spawn_write_file_job(receiver, path.clone());
+        let job = jobs::spawn_write_file_job(receiver, path.clone());
 
         let mut counter: usize = 0;
         let mut current_size: usize = 0;
@@ -116,7 +118,7 @@ impl TransferPayload {
                         current_size += n;
 
                         if payloads.len() >= (CHUNK_SIZE * 8) {
-                            util::send_buffer(&sender, payloads.clone())?;
+                            jobs::send_buffer(&sender, payloads.clone())?;
                             payloads.clear();
 
                             if util::time_to_notify(current_size, size) {
@@ -131,8 +133,8 @@ impl TransferPayload {
                             }
                         }
                     } else {
-                        util::send_buffer(&sender, payloads.clone())?;
-                        util::send_buffer(&sender, vec![])?;
+                        jobs::send_buffer(&sender, payloads.clone())?;
+                        jobs::send_buffer(&sender, vec![])?;
                         util::notify_progress(&self.sender_queue, counter, size, &direction).await;
                         break;
                     }
@@ -159,7 +161,7 @@ impl TransferPayload {
     {
         let direction = Direction::Incoming;
         let (meta, mut socket): (Metadata, TSocket) = Metadata::read::<TSocket>(socket).await?;
-        info!("Meta received! {:?}", meta.name);
+        info!("Meta received! \n{}", meta);
 
         self.notify_incoming_file_event(&meta).await;
         let rec_cp = Arc::clone(&self.receiver);
@@ -171,13 +173,13 @@ impl TransferPayload {
                 util::notify_progress(&self.sender_queue, 0, meta.size, &direction).await;
 
                 let (counter, path) = match self
-                    .read_file_payload(socket, &meta.name, meta.size, &direction)
+                    .read_file_payload(socket, &meta, meta.size, &direction)
                     .await
                 {
                     Ok((counter, path)) => (counter, path),
                     Err(err) => {
-                        error!("Reading file payload failed: {:?}", err);
-                        util::notify_error(&self.sender_queue, "Transferring file failed").await;
+                        error!("Reading payload failed: {:?}", err);
+                        util::notify_error(&self.sender_queue, "Reading payload failed").await;
                         return Err(err);
                     }
                 };
@@ -232,7 +234,7 @@ impl TransferOut {
         if accepted {
             let mut writer = futio::BufWriter::new(socket);
             let file = self.file.get_file()?;
-            let job = util::spawn_read_file_job(sender.clone(), file);
+            let job = jobs::spawn_read_file_job(sender.clone(), file);
 
             util::notify_progress(&self.sender_queue, 0, size, &direction).await;
 
