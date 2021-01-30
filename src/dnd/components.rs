@@ -266,37 +266,22 @@ impl PeerItem {
         file_sender: Arc<Mutex<Sender<FileToSend>>>,
     ) -> Self {
         let peer_id = peer.peer_id.clone();
+        // Order of the targets matters!
         let targets = vec![
             TargetEntry::new("text/uri-list", TargetFlags::OTHER_APP, 0),
             TargetEntry::new("UTF8_STRING", TargetFlags::OTHER_APP, 0),
             TargetEntry::new("text/plain", TargetFlags::OTHER_APP, 0),
             TargetEntry::new("text/html", TargetFlags::OTHER_APP, 0),
+
+            // It's not trivial to find out what other types are supported.
             // TargetEntry::new("STRING", TargetFlags::OTHER_APP, 0),
-            TargetEntry::new("image/png", TargetFlags::OTHER_APP, 0),
+            // TargetEntry::new("image/png", TargetFlags::OTHER_APP, 0),
         ];
         self.container
             .drag_dest_set(DestDefaults::ALL, &targets, DragAction::COPY);
 
         self.container.connect_drag_data_received(
-            move |_win, drag_context, _, _, selection_data, _, _| {
-                let data: String = String::from_utf8(selection_data.get_data()).unwrap();
-                info!("AAAAAAAAa Drag context: {:?}", drag_context);
-                info!("AAAAAAAAa Selection URI: {:?}", selection_data.get_uris());
-                info!("AAAAAAAAa Selection TEXT: {:?}", selection_data.get_text());
-                info!("AAAAAAAAa Selection DATA: {:?}", data);
-                info!(
-                    "AAAAAAAAa Can text: {:?}",
-                    selection_data.targets_include_text()
-                );
-                info!(
-                    "AAAAAAAAa Can URI: {:?}",
-                    selection_data.targets_include_uri()
-                );
-                info!(
-                    "AAAAAAAAa Can Image: {:?}",
-                    selection_data.targets_include_image(false)
-                );
-
+            move |_win, _drag_context, _, _, selection_data, _, _| {
                 let file_to_send = match selection_data.get_uris().pop() {
                     Some(file) => Self::get_file_payload(&peer_id, file.to_string()),
                     None => Self::get_text_payload(&selection_data, &peer_id),
@@ -650,7 +635,14 @@ pub fn get_item_name<I: IsA<gtk::Widget>>(item: &I) -> String {
         .to_string()
 }
 
+#[cfg(not(target_os = "windows"))]
 pub fn get_link(file_name: &str, path: &str) -> gtk::LinkButton {
     let prefixed_path = format!("file://{}", path);
+    gtk::LinkButton::new_with_label(&prefixed_path, Some(file_name))
+}
+
+#[cfg(target_os = "windows")]
+pub fn get_link(file_name: &str, path: &str) -> gtk::LinkButton {
+    let prefixed_path = format!("file:///{}", path);
     gtk::LinkButton::new_with_label(&prefixed_path, Some(file_name))
 }

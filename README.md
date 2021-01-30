@@ -73,7 +73,6 @@ $ ./target/release/dragit
 ### TODOs
 - show username in the device list
 - add Windows CI/CD
-- show easy to understand instruction on startup
 - have list of trusted devices
 - TCP retransmissions - what is wrong?
 - add timeout on the Accept/Deny event
@@ -84,6 +83,7 @@ $ ./target/release/dragit
 - re-enable the Bluetooth
 
 ### Done
+- show easy to understand instruction on startup
 - show details about the host
 - choose directory
 - show version in the title bar
