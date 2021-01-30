@@ -22,12 +22,8 @@ use dragit::p2p::{
 };
 
 #[test]
-fn test_transfer() {
-    let env = env_logger::Env::default().filter_or("LOG_LEVEL", "info");
-    env_logger::Builder::from_env(env)
-        .is_test(true)
-        .try_init()
-        .unwrap();
+fn test_file_transfer() {
+    setup_logger();
 
     let (tx, mut rx) = channel::<Multiaddr>(10);
     let (peer1, sender, _, mut swarm1) = build_swarm();
@@ -137,6 +133,115 @@ fn test_transfer() {
     };
 }
 
+#[test]
+fn test_text_transfer() {
+    let (tx, mut rx) = channel::<Multiaddr>(10);
+    let (peer1, sender, _, mut swarm1) = build_swarm();
+    let (_, _, _, mut swarm2) = build_swarm();
+
+    // Text should be accepted from the beginning
+    sender
+        .try_send(TransferCommand::Accept(
+            "e8ea7a8d1e93e8764a84a0f3df4644de".to_string(),
+        ))
+        .unwrap();
+
+    let addr = "/ip4/127.0.0.1/tcp/3001".parse().unwrap();
+
+    Swarm::listen_on(&mut swarm1, addr).unwrap();
+    let sw1 = async move {
+        while let Some(_) = swarm1.next().now_or_never() {
+            println!("aaaa");
+        }
+
+        for addr in Swarm::listeners(&mut swarm1) {
+            tx.send(addr.clone()).await;
+        }
+
+        loop {
+            println!("Pool1");
+            match Swarm::next_event(&mut swarm1).await {
+                SwarmEvent::ConnectionClosed {
+                    peer_id: _,
+                    endpoint: _,
+                    num_established: _,
+                    cause,
+                } => {
+                    panic!("Conn1 closed! {:?}", cause);
+                }
+                SwarmEvent::Behaviour(event) => {
+                    println!("Event1: {:?}", event);
+                    return event;
+                }
+                event => {
+                    println!("Other1: {:?}", event);
+                }
+            }
+        }
+    };
+    let mut pushed = false;
+    let sw2 = async move {
+        Swarm::dial_addr(&mut swarm2, rx.next().await.unwrap()).unwrap();
+        loop {
+            println!("Pool2");
+            match Swarm::next_event(&mut swarm2).await {
+                SwarmEvent::ConnectionEstablished {
+                    peer_id,
+                    endpoint: _,
+                    num_established: _,
+                } => {
+                    println!("Established!: {:?}", peer_id);
+                    if !pushed {
+                        println!("Pushing file");
+                        let payload = Payload::Text("Hello there".to_string());
+                        let file = FileToSend::new(&peer1, payload).unwrap();
+                        let transfer = TransferOut {
+                            file,
+                            sender_queue: swarm2.sender.clone(),
+                        };
+                        let event = NetworkBehaviourAction::NotifyHandler {
+                            handler: NotifyHandler::Any,
+                            peer_id: peer1.to_owned(),
+                            event: transfer,
+                        };
+                        swarm2.events.push(event);
+                        pushed = true;
+                    }
+                }
+                SwarmEvent::ConnectionClosed {
+                    peer_id: _,
+                    endpoint: _,
+                    num_established: _,
+                    cause,
+                } => {
+                    panic!("Conn2 closed {:?}", cause);
+                }
+                SwarmEvent::Behaviour(event) => {
+                    println!("Event2: {:?}", event);
+                    return event;
+                }
+                other => {
+                    println!("Other2: {:?}", other);
+                }
+            }
+        }
+    };
+
+    let result = future::select(Box::pin(sw1), Box::pin(sw2));
+    let (p1, _) = task::block_on(result).factor_first();
+
+    print!("P1: {:?}", p1);
+
+    assert_eq!(p1.name, "Hello (...)".to_string());
+
+    match p1.payload {
+        Payload::Path(_) => panic!("Got file instead!"),
+        Payload::Text(text) => {
+            assert_eq!(text, "Hello there".to_string());
+        }
+    };
+}
+
 fn build_swarm() -> (
     PeerId,
     Sender<TransferCommand>,
@@ -193,4 +298,12 @@ fn build_swarm() -> (
         peer_receiver,
         Swarm::new(transport, transfer_behaviour, local_peer_id),
     )
+}
+
+fn setup_logger() {
+    let env = env_logger::Env::default().filter_or("LOG_LEVEL", "info");
+    env_logger::Builder::from_env(env)
+        .is_test(true)
+        .try_init()
+        .unwrap();
 }
