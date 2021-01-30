@@ -1,4 +1,5 @@
 use std::fmt;
+use std::fs::remove_file;
 use std::io::ErrorKind;
 use std::sync::mpsc::sync_channel;
 use std::sync::Arc;
@@ -58,6 +59,19 @@ impl TransferPayload {
         } else {
             Ok(())
         }
+    }
+
+    pub fn cleanup(&self) -> Result<(), io::Error> {
+        if let Payload::Text(_) = self.payload {
+            return match &self.target_path {
+                Some(target_path) => Ok(remove_file(target_path)?),
+                None => {
+                    warn!("Cannot remove payload, because it has no path yet.");
+                    Ok(())
+                }
+            };
+        }
+        Ok(())
     }
 
     async fn notify_incoming_file_event(&self, meta: &Metadata) {
@@ -186,8 +200,12 @@ impl TransferPayload {
 
                 self.name = meta.name;
                 self.hash = meta.hash;
-                self.payload = Payload::new(meta.transfer_type, path)?;
+                self.payload = Payload::new(meta.transfer_type, path.clone())?;
                 self.size_bytes = counter;
+
+                // TransferPayload needs to know where is the actual file after successful transfer.
+                self.target_path = Some(path);
+
                 Ok(())
             }
             TransferCommand::Accept(hash) => {

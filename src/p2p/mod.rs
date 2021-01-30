@@ -83,6 +83,9 @@ impl NetworkBehaviourEventProcess<TransferPayload> for MyBehaviour {
         match event.check_file() {
             Ok(_) => {
                 info!("File correct");
+                if let Err(e) = event.cleanup() {
+                    error!("Could not clean up file: {:?}", e);
+                };
                 if let Err(e) = event
                     .sender_queue
                     .try_send(PeerEvent::FileCorrect(event.name, event.payload))
@@ -95,6 +98,9 @@ impl NetworkBehaviourEventProcess<TransferPayload> for MyBehaviour {
                 if let Err(e) = event.sender_queue.try_send(PeerEvent::FileIncorrect) {
                     error!("{:?}", e);
                 }
+                if let Err(e) = event.cleanup() {
+                    error!("Could not clean up file: {:?}", e);
+                };
             }
         }
     }
