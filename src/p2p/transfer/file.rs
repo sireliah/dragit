@@ -5,7 +5,6 @@ use std::io::{self, Read, Write};
 use std::fs::{metadata, File};
 use std::path::Path;
 
-use base64;
 use libp2p::core::PeerId;
 use tempfile::NamedTempFile;
 
@@ -27,15 +26,7 @@ impl Payload {
                 let mut contents = String::new();
                 let _ = file.read_to_string(&mut contents);
 
-                // TODO: implement custom error type to avoid this conversion
-                let unbased = base64::decode(contents).or(Err(io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    "Could not decode the text",
-                )))?;
-
-                // Tested for UTF-8, but might produce different results for older versions of Windows
-                let text = String::from_utf8_lossy(&unbased);
-                Ok(Payload::Text(text.to_string()))
+                Ok(Payload::Text(contents))
             }
         }
     }
@@ -76,10 +67,7 @@ impl FileToSend {
 
     pub fn get_file(&self) -> Result<File, io::Error> {
         match &self.payload {
-            Payload::Text(text) => {
-                let based = base64::encode(text);
-                Ok(Self::create_temp_file(&based)?)
-            }
+            Payload::Text(text) => Ok(Self::create_temp_file(text)?),
             Payload::Path(path) => Ok(File::open(path)?),
         }
     }

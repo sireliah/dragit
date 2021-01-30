@@ -71,16 +71,20 @@ $ ./target/release/dragit
 `Dragit` can use Bluetooth OBEX protocol for file transfer through the D-Bus BlueZ interface, which should work on most of the Linux devices. This future needs some work and is disabled now.
 
 ### TODOs
+#### Features
+- find out how to use text drag&drop API on Windows with Gtk 
 - show username in the device list
-- add Windows CI/CD
 - have list of trusted devices
-- TCP retransmissions - what is wrong?
-- add timeout on the Accept/Deny event
-- fix the outbound memory issue (consumes too much memory on file reading)
 - add files queue
+- re-enable the Bluetooth
+
+#### Maintenance
+- TCP retransmissions - what is wrong?
+- fix the outbound memory issue (consumes too much memory on file reading)
+- add Windows CI/CD
+- add timeout on the Accept/Deny event
 - inject_dial_upgrade_error - but why not inbound?
 - adjust network timeouts
-- re-enable the Bluetooth
 
 ### Done
 - show easy to understand instruction on startup
