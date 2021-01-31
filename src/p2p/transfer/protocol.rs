@@ -1,12 +1,9 @@
-use std::sync::Arc;
-
-use std::error::Error;
 use std::fmt;
+use std::fs::remove_file;
 use std::io::ErrorKind;
 use std::sync::mpsc::sync_channel;
+use std::sync::Arc;
 
-use std::fs::metadata;
-use std::path::Path;
 use std::task::{Context, Poll};
 use std::time::Instant;
 use std::{io, iter, pin::Pin};
@@ -18,43 +15,15 @@ use async_std::task;
 use futures::future;
 use futures::io as futio;
 use futures::prelude::*;
-use libp2p::core::{InboundUpgrade, OutboundUpgrade, PeerId, UpgradeInfo};
+use libp2p::core::{InboundUpgrade, OutboundUpgrade, UpgradeInfo};
 
 use crate::p2p::commands::TransferCommand;
 use crate::p2p::peer::{Direction, PeerEvent};
+use crate::p2p::transfer::file::{get_hash_from_payload, FileToSend, Payload};
+use crate::p2p::transfer::jobs;
+use crate::p2p::transfer::metadata::{Answer, Metadata};
 use crate::p2p::util::{self, CHUNK_SIZE};
 use crate::user_data;
-
-#[derive(Clone, Debug)]
-pub struct FileToSend {
-    pub name: String,
-    pub path: String,
-    pub peer: PeerId,
-}
-
-impl FileToSend {
-    pub fn new(path: &str, peer: &PeerId) -> Result<Self, Box<dyn Error>> {
-        info!("Dragged path: {}", path);
-        metadata(path)?;
-        let name = Self::extract_name(path)?;
-        Ok(FileToSend {
-            name,
-            path: path.to_string(),
-            peer: peer.to_owned(),
-        })
-    }
-
-    fn extract_name(path: &str) -> Result<String, Box<dyn Error>> {
-        let path = Path::new(path).canonicalize()?;
-        let name = path
-            .file_name()
-            .expect("There is no file name")
-            .to_str()
-            .expect("Expected a name")
-            .to_string();
-        Ok(name)
-    }
-}
 
 #[derive(Clone, Debug)]
 pub enum ProtocolEvent {
@@ -65,8 +34,7 @@ pub enum ProtocolEvent {
 // Outgoing transfer to remote peer
 #[derive(Clone, Debug)]
 pub struct TransferOut {
-    pub name: String,
-    pub path: String,
+    pub file: FileToSend,
     pub sender_queue: Sender<PeerEvent>,
 }
 
@@ -74,7 +42,7 @@ pub struct TransferOut {
 #[derive(Clone, Debug)]
 pub struct TransferPayload {
     pub name: String,
-    pub path: String,
+    pub payload: Payload,
     pub hash: String,
     pub size_bytes: usize,
     pub sender_queue: Sender<PeerEvent>,
@@ -84,7 +52,7 @@ pub struct TransferPayload {
 
 impl TransferPayload {
     pub fn check_file(&self) -> Result<(), io::Error> {
-        let hash_from_disk = util::hash_contents(&self.path)?;
+        let hash_from_disk = get_hash_from_payload(&self.payload)?;
 
         if hash_from_disk != self.hash {
             Err(io::Error::new(ErrorKind::InvalidData, "File corrupted!"))
@@ -93,11 +61,25 @@ impl TransferPayload {
         }
     }
 
-    async fn notify_incoming_file_event(&self, meta: &util::Metadata) {
+    pub fn cleanup(&self) -> Result<(), io::Error> {
+        if let Payload::Text(_) = self.payload {
+            return match &self.target_path {
+                Some(target_path) => Ok(remove_file(target_path)?),
+                None => {
+                    warn!("Cannot remove payload, because it has no path yet.");
+                    Ok(())
+                }
+            };
+        }
+        Ok(())
+    }
+
+    async fn notify_incoming_file_event(&self, meta: &Metadata) {
         let name = meta.name.to_string();
         let hash = meta.hash.to_string();
         let size = meta.size;
-        let event = PeerEvent::FileIncoming(name, hash, size);
+        let transfer_type = meta.transfer_type;
+        let event = PeerEvent::FileIncoming(name, hash, size, transfer_type);
         self.sender_queue.to_owned().send(event).await;
     }
 
@@ -125,7 +107,7 @@ impl TransferPayload {
     async fn read_file_payload(
         &mut self,
         socket: impl AsyncRead + AsyncWrite + Send + Unpin,
-        name: &str,
+        meta: &Metadata,
         size: usize,
         direction: &Direction,
     ) -> Result<(usize, String), io::Error> {
@@ -133,8 +115,10 @@ impl TransferPayload {
 
         let mut payloads: Vec<u8> = vec![];
         let (sender, receiver) = sync_channel::<Vec<u8>>(CHUNK_SIZE * 128);
-        let path = user_data::get_target_path(&name, self.target_path.as_ref())?;
-        let job = util::spawn_write_file_job(receiver, path.clone());
+        let path =
+            user_data::get_target_path(&meta.get_safe_file_name(), self.target_path.as_ref())?;
+
+        let job = jobs::spawn_write_file_job(receiver, path.clone());
 
         let mut counter: usize = 0;
         let mut current_size: usize = 0;
@@ -148,7 +132,7 @@ impl TransferPayload {
                         current_size += n;
 
                         if payloads.len() >= (CHUNK_SIZE * 8) {
-                            util::send_buffer(&sender, payloads.clone())?;
+                            jobs::send_buffer(&sender, payloads.clone())?;
                             payloads.clear();
 
                             if util::time_to_notify(current_size, size) {
@@ -163,8 +147,8 @@ impl TransferPayload {
                             }
                         }
                     } else {
-                        util::send_buffer(&sender, payloads.clone())?;
-                        util::send_buffer(&sender, vec![])?;
+                        jobs::send_buffer(&sender, payloads.clone())?;
+                        jobs::send_buffer(&sender, vec![])?;
                         util::notify_progress(&self.sender_queue, counter, size, &direction).await;
                         break;
                     }
@@ -190,32 +174,43 @@ impl TransferPayload {
         TSocket: AsyncRead + AsyncWrite + Send + Unpin,
     {
         let direction = Direction::Incoming;
-        let (meta, mut socket): (util::Metadata, TSocket) =
-            util::Metadata::read_metadata(socket).await?;
+        let (meta, mut socket): (Metadata, TSocket) = Metadata::read::<TSocket>(socket).await?;
+        info!("Meta received! \n{}", meta);
 
         self.notify_incoming_file_event(&meta).await;
         let rec_cp = Arc::clone(&self.receiver);
 
         match self.block_for_answer(rec_cp).await {
             TransferCommand::Accept(hash) if hash == meta.hash => {
-                socket.write(b"Y").await?;
-                socket.flush().await?;
+                Answer::write(&mut socket, true).await?;
 
                 util::notify_progress(&self.sender_queue, 0, meta.size, &direction).await;
 
-                let (counter, path) = self
-                    .read_file_payload(socket, &meta.name, meta.size, &direction)
-                    .await?;
+                let (counter, path) = match self
+                    .read_file_payload(socket, &meta, meta.size, &direction)
+                    .await
+                {
+                    Ok((counter, path)) => (counter, path),
+                    Err(err) => {
+                        error!("Reading payload failed: {:?}", err);
+                        util::notify_error(&self.sender_queue, "Reading payload failed").await;
+                        return Err(err);
+                    }
+                };
+
                 self.name = meta.name;
                 self.hash = meta.hash;
-                self.path = path;
+                self.payload = Payload::new(meta.transfer_type, path.clone())?;
                 self.size_bytes = counter;
+
+                // TransferPayload needs to know where is the actual file after successful transfer.
+                self.target_path = Some(path);
+
                 Ok(())
             }
             TransferCommand::Accept(hash) => {
                 warn!("Accepted hash does not match: {} {}", hash, meta.hash);
-                socket.write(b"N").await?;
-                socket.flush().await?;
+                Answer::write(&mut socket, false).await?;
                 Err(io::Error::new(
                     ErrorKind::PermissionDenied,
                     "Hash does not match",
@@ -223,8 +218,7 @@ impl TransferPayload {
             }
             TransferCommand::Deny(hash) => {
                 warn!("Denied hash: {}", hash);
-                socket.write(b"N").await?;
-                socket.flush().await?;
+                Answer::write(&mut socket, false).await?;
                 Err(io::Error::new(ErrorKind::PermissionDenied, "Rejected"))
             }
         }
@@ -236,7 +230,7 @@ impl UpgradeInfo for TransferPayload {
     type InfoIter = iter::Once<Self::Info>;
 
     fn protocol_info(&self) -> Self::InfoIter {
-        std::iter::once("/transfer/1.0")
+        std::iter::once("/transfer/1.1")
     }
 }
 
@@ -247,19 +241,18 @@ impl TransferOut {
     {
         let direction = Direction::Outgoing;
         let (sender, receiver) = sync_channel::<Vec<u8>>(CHUNK_SIZE * 128);
-        info!("Name: {:?}, Path: {:?}", self.name, &self.path);
+        info!("File to send: {}", self.file);
 
-        let (size, mut socket): (usize, TSocket) =
-            util::Metadata::write_metadata(&self.name, &self.path, socket).await?;
+        let (size, socket): (usize, TSocket) =
+            Metadata::write::<TSocket>(&self.file, socket).await?;
 
-        let mut received = [0u8; 1];
-        socket.read_exact(&mut received).await?;
-        let received = TransferOut::decode_received(received)?;
+        let (accepted, socket) = Answer::read::<TSocket>(socket).await?;
+        info!("File accepted? {:?}", accepted);
 
-        if received == "Y" {
-            info!("Writing data to the socket");
+        if accepted {
             let mut writer = futio::BufWriter::new(socket);
-            let job = util::spawn_read_file_job(sender.clone(), self.path.clone());
+            let file = self.file.get_file()?;
+            let job = jobs::spawn_read_file_job(sender.clone(), file);
 
             util::notify_progress(&self.sender_queue, 0, size, &direction).await;
 
@@ -309,19 +302,6 @@ impl TransferOut {
             Ok(())
         }
     }
-
-    fn decode_received(received: [u8; 1]) -> Result<String, io::Error> {
-        match String::from_utf8(received.to_vec()) {
-            Ok(v) => Ok(v),
-            Err(e) => {
-                error!("Answer decoding error: {}", e);
-                return Err(io::Error::new(
-                    ErrorKind::InvalidData,
-                    "Couldn't decode the answer",
-                ));
-            }
-        }
-    }
 }
 
 impl UpgradeInfo for TransferOut {
@@ -329,7 +309,7 @@ impl UpgradeInfo for TransferOut {
     type InfoIter = iter::Once<Self::Info>;
 
     fn protocol_info(&self) -> Self::InfoIter {
-        std::iter::once("/transfer/1.0")
+        std::iter::once("/transfer/1.1")
     }
 }
 
@@ -376,7 +356,7 @@ where
 
 impl fmt::Display for TransferOut {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "TransferOut name: {}, path: {}", self.name, self.path)
+        write!(f, "[TransferOut] {}", self.file)
     }
 }
 
@@ -384,8 +364,8 @@ impl fmt::Display for TransferPayload {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "TransferPayload name: {}, path: {}, hash: {}, size: {} bytes",
-            self.name, self.path, self.hash, self.size_bytes
+            "TransferPayload name: {}, payload: {}, hash: {}, size: {} bytes",
+            self.name, self.payload, self.hash, self.size_bytes
         )
     }
 }

@@ -32,8 +32,8 @@ pub mod util;
 
 pub use commands::TransferCommand;
 pub use discovery::{DiscoveryBehaviour, DiscoveryEvent};
-pub use peer::{CurrentPeers, OperatingSystem, Peer, PeerEvent};
-pub use transfer::{FileToSend, TransferBehaviour, TransferOut, TransferPayload};
+pub use peer::{CurrentPeers, OperatingSystem, Peer, PeerEvent, TransferType};
+pub use transfer::{FileToSend, Payload, TransferBehaviour, TransferOut, TransferPayload};
 
 #[derive(NetworkBehaviour)]
 pub struct MyBehaviour {
@@ -83,18 +83,24 @@ impl NetworkBehaviourEventProcess<TransferPayload> for MyBehaviour {
         match event.check_file() {
             Ok(_) => {
                 info!("File correct");
+                if let Err(e) = event.cleanup() {
+                    error!("Could not clean up file: {:?}", e);
+                };
                 if let Err(e) = event
                     .sender_queue
-                    .try_send(PeerEvent::FileCorrect(event.name, event.path))
+                    .try_send(PeerEvent::FileCorrect(event.name, event.payload))
                 {
                     error!("{:?}", e);
                 }
             }
             Err(e) => {
-                warn!("Not correct: {:?}", e);
+                warn!("File not correct: {:?}", e);
                 if let Err(e) = event.sender_queue.try_send(PeerEvent::FileIncorrect) {
                     error!("{:?}", e);
                 }
+                if let Err(e) = event.cleanup() {
+                    error!("Could not clean up file: {:?}", e);
+                };
             }
         }
     }

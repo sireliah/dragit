@@ -1,36 +1,29 @@
 use std::error::Error;
+use std::io;
 use std::sync::{Arc, Mutex};
 
 use async_std::sync::Sender;
 use bytesize::ByteSize;
 
+use std::string::ToString;
+
 use gdk::DragAction;
+use gio::prelude::*;
 use glib::object::IsA;
 use gtk::prelude::*;
 use gtk::{DestDefaults, Label, TargetEntry, TargetFlags};
 
-use libp2p::{multiaddr::Protocol, Multiaddr};
-use percent_encoding::percent_decode_str;
+use libp2p::{multiaddr::Protocol, Multiaddr, PeerId};
 
-use crate::p2p::{FileToSend, OperatingSystem, Peer};
+use crate::p2p::{FileToSend, OperatingSystem, Payload, Peer, TransferType};
 use crate::user_data::UserConfig;
 
 pub const STYLE: &str = "
-#downloads border {
-    margin-left: 10px;
-    margin-right: 10px;
-    padding: 20px;
-    border-style: dashed;
-    border-radius: 15px;
-}
-#item-frame border {
-    border-style: none;
-}
 #notification {
     padding: 10px;
     border-radius: 10px;
     color: rgb(0, 0, 0);
-    background-color: rgba(100, 100, 100, 1.0);
+    background-color: rgba(130, 130, 130, 1.0);
 }
 #button-close {
     padding: 0;
@@ -50,19 +43,134 @@ progressbar {
     border: 0.5px;
     border-radius: 15px;
     border-style: solid;
-    border-color: rgb(180, 180, 180);
+    border-color: @borders;
+}
+#recent-files box {
+    padding: 10px;
+    margin: 10px;
+    border: none;
+    border-radius: 15px;
+    border-style: solid;
+    background-color: @borders;
 }
 ";
 
 pub struct MainLayout {
     pub layout: gtk::Box,
     pub item_layout: gtk::ListBox,
+    recent_layout: gtk::Grid,
+    pub bar: gtk::HeaderBar,
 }
 
 impl MainLayout {
     pub fn new() -> Result<MainLayout, Box<dyn Error>> {
         let layout = gtk::Box::new(gtk::Orientation::Vertical, 10);
+        let inner_layout = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        let recent_layout = gtk::Grid::new();
+        let recent_scroll = gtk::ScrolledWindow::new(gtk::NONE_ADJUSTMENT, gtk::NONE_ADJUSTMENT);
 
+        recent_layout.set_widget_name("recent-files");
+        recent_layout.set_hexpand(false);
+        recent_scroll.set_policy(gtk::PolicyType::Automatic, gtk::PolicyType::Automatic);
+        recent_scroll.set_hexpand(false);
+        recent_scroll.add(&recent_layout);
+
+        let bar = gtk::HeaderBar::new();
+        bar.set_show_close_button(true);
+
+        let stack = gtk::Stack::new();
+        stack.set_transition_type(gtk::StackTransitionType::SlideLeftRight);
+        stack.add_titled(&inner_layout, "devices", "Devices");
+        stack.add_titled(&recent_scroll, "recent-files", "Recent Files");
+
+        let switcher = gtk::StackSwitcher::new();
+        switcher.set_stack(Some(&stack));
+
+        let header_layout = gtk::Box::new(gtk::Orientation::Vertical, 0);
+
+        inner_layout.set_halign(gtk::Align::Center);
+        header_layout.set_margin_top(10);
+
+        let scroll = gtk::ScrolledWindow::new(gtk::NONE_ADJUSTMENT, gtk::NONE_ADJUSTMENT);
+        scroll.set_policy(gtk::PolicyType::Automatic, gtk::PolicyType::Automatic);
+        scroll.set_min_content_width(550);
+
+        let item_layout = Self::setup_item_layout();
+        let scroll_box = gtk::Box::new(gtk::Orientation::Vertical, 0);
+
+        scroll_box.pack_start(&header_layout, false, false, 0);
+        scroll_box.pack_start(&item_layout, false, false, 0);
+        scroll.add(&scroll_box);
+
+        inner_layout.pack_start(&scroll, true, true, 10);
+
+        let menu_button = Self::setup_menu_button()?;
+
+        bar.pack_start(&menu_button);
+        bar.pack_start(&switcher);
+
+        layout.pack_start(&stack, true, true, 0);
+
+        Ok(MainLayout {
+            layout,
+            item_layout,
+            recent_layout,
+            bar,
+        })
+    }
+}
+
+impl MainLayout {
+    pub fn add_recent_file(&self, file_name: &str, payload: Payload) {
+        let recent_item = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+        recent_item.set_halign(gtk::Align::Start);
+        match payload {
+            Payload::Path(path) => {
+                let link = get_link(file_name, &path);
+                let image =
+                    gtk::Image::new_from_icon_name(Some("text-x-preview"), gtk::IconSize::Dialog);
+                recent_item.pack_start(&image, false, false, 0);
+                recent_item.pack_start(&link, false, false, 0);
+            }
+            Payload::Text(text) => {
+                let label = gtk::Label::new(Some(&text));
+                label.set_selectable(true);
+                recent_item.pack_start(&label, false, false, 0);
+            }
+        }
+
+        self.recent_layout.attach_next_to(
+            &recent_item,
+            None::<&gtk::Box>,
+            gtk::PositionType::Top,
+            1,
+            1,
+        );
+    }
+
+    fn setup_menu_button() -> Result<gtk::MenuButton, Box<dyn Error>> {
+        let menu_image =
+            gtk::Image::new_from_icon_name(Some("open-menu-symbolic"), gtk::IconSize::Menu);
+        let menu_button = gtk::MenuButton::new();
+        let vbox = gtk::Box::new(gtk::Orientation::Vertical, 10);
+        let popover = gtk::Popover::new(None::<&gtk::Widget>);
+        let label = gtk::Label::new(Some("Downloads directory"));
+        let file_chooser = Self::setup_file_chooser()?;
+        file_chooser.set_margin_start(10);
+        file_chooser.set_margin_end(10);
+
+        vbox.pack_start(&label, true, true, 10);
+        vbox.pack_start(&file_chooser, true, true, 10);
+        vbox.show_all();
+
+        popover.add(&vbox);
+        popover.set_position(gtk::PositionType::Bottom);
+        menu_button.add(&menu_image);
+        menu_button.set_popover(Some(&popover));
+        Ok(menu_button)
+    }
+
+    fn setup_item_layout() -> gtk::ListBox {
         let item_layout = gtk::ListBox::new();
         item_layout.set_selection_mode(gtk::SelectionMode::None);
         item_layout.set_widget_name("items-list");
@@ -77,15 +185,10 @@ impl MainLayout {
                 }
             }
         })));
+        item_layout
+    }
 
-        let header_layout = gtk::Box::new(gtk::Orientation::Vertical, 0);
-
-        layout.set_halign(gtk::Align::Center);
-        header_layout.set_margin_top(10);
-
-        let frame = gtk::Frame::new(Some("Downloads directory"));
-        frame.set_widget_name("downloads");
-
+    fn setup_file_chooser() -> Result<gtk::FileChooserButton, Box<dyn Error>> {
         let file_chooser =
             gtk::FileChooserButton::new("Choose file", gtk::FileChooserAction::SelectFolder);
 
@@ -106,28 +209,7 @@ impl MainLayout {
                 }
             };
         });
-        frame.add(&file_chooser);
-        header_layout.pack_start(&frame, true, true, 10);
-
-        let scroll = gtk::ScrolledWindow::new(gtk::NONE_ADJUSTMENT, gtk::NONE_ADJUSTMENT);
-        scroll.set_policy(gtk::PolicyType::Automatic, gtk::PolicyType::Automatic);
-        scroll.set_min_content_width(550);
-
-        let item_frame = gtk::Frame::new(Some("Devices"));
-        item_frame.set_widget_name("item-frame");
-        item_frame.add(&item_layout);
-        let scroll_box = gtk::Box::new(gtk::Orientation::Vertical, 0);
-
-        scroll_box.pack_start(&header_layout, false, false, 0);
-        scroll_box.pack_start(&item_frame, false, false, 0);
-        scroll.add(&scroll_box);
-
-        layout.pack_start(&scroll, true, true, 10);
-
-        Ok(MainLayout {
-            layout,
-            item_layout,
-        })
+        Ok(file_chooser)
     }
 }
 
@@ -159,15 +241,14 @@ impl PeerItem {
         let image = gtk::Image::new_from_icon_name(Some("insert-object"), gtk::IconSize::Dialog);
 
         let container = gtk::ListBoxRow::new();
+        container.set_widget_name(name);
         container.set_vexpand(true);
 
-        let inner_container = gtk::Box::new(gtk::Orientation::Vertical, 10);
-
-        container.set_widget_name(name);
+        let inner_container = gtk::Box::new(gtk::Orientation::Vertical, 0);
         inner_container.set_widget_name("drop-zone");
 
-        inner_container.pack_start(&image, true, true, 10);
-        inner_container.pack_start(&label, true, true, 10);
+        inner_container.pack_start(&image, true, true, 0);
+        inner_container.pack_start(&label, true, true, 0);
         container.add(&inner_container);
 
         PeerItem { container, label }
@@ -185,45 +266,74 @@ impl PeerItem {
         file_sender: Arc<Mutex<Sender<FileToSend>>>,
     ) -> Self {
         let peer_id = peer.peer_id.clone();
+        // Order of the targets matters!
         let targets = vec![
-            TargetEntry::new("STRING", TargetFlags::OTHER_APP, 0),
-            TargetEntry::new("text/html", TargetFlags::OTHER_APP, 0),
-            TargetEntry::new("image/png", TargetFlags::OTHER_APP, 0),
-            // TODO: use different content type here
             TargetEntry::new("text/uri-list", TargetFlags::OTHER_APP, 0),
+            TargetEntry::new("UTF8_STRING", TargetFlags::OTHER_APP, 0),
+            TargetEntry::new("text/plain", TargetFlags::OTHER_APP, 0),
+            TargetEntry::new("text/html", TargetFlags::OTHER_APP, 0),
+            // It's not trivial to find out what other types are supported.
+            // TargetEntry::new("STRING", TargetFlags::OTHER_APP, 0),
+            // TargetEntry::new("image/png", TargetFlags::OTHER_APP, 0),
         ];
         self.container
             .drag_dest_set(DestDefaults::ALL, &targets, DragAction::COPY);
 
-        self.container
-            .connect_drag_data_received(move |_win, _, _, _, s, _, _| {
-                let path: String = match s.get_text() {
-                    Some(value) => PeerItem::clean_filename(&value).expect("Decoding path failed"),
-                    None => {
-                        // Extracting the file path from the URI works best for Windows
-                        let uri = s.get_uris().pop().unwrap().to_string();
-                        PeerItem::clean_filename(&uri).expect("Decoding path from URI failed")
-                    }
+        self.container.connect_drag_data_received(
+            move |_win, _drag_context, _, _, selection_data, _, _| {
+                let file_to_send = match selection_data.get_uris().pop() {
+                    Some(file) => Self::get_file_payload(&peer_id, file.to_string()),
+                    None => Self::get_text_payload(&selection_data, &peer_id),
                 };
-                let file = match FileToSend::new(&path, &peer_id) {
-                    Ok(v) => v,
+
+                match file_to_send {
+                    Ok(file) => {
+                        let sender = file_sender.lock().unwrap();
+                        sender.try_send(file).expect("Sending failed");
+                    }
                     Err(e) => {
-                        error!("Failed creating FileToSend {:?}", e);
-                        return ();
+                        error!("Could not extract dragged content: {:?}", e);
                     }
-                };
-                let sender = file_sender.lock().unwrap();
-                sender.try_send(file).expect("Sending failed");
-            });
+                }
+            },
+        );
 
         self
     }
 
-    fn clean_filename(path: &str) -> Result<String, Box<dyn Error>> {
-        let value = percent_decode_str(path).decode_utf8()?;
+    fn get_file_payload(peer_id: &PeerId, file: String) -> Result<FileToSend, Box<dyn Error>> {
+        let file = gio::File::new_for_uri(&file);
+        if file.is_native() {
+            match file.get_path() {
+                Some(p) => {
+                    let path = clean_file_proto(&p.display().to_string());
+                    let payload = Payload::Path(path);
+                    Ok(FileToSend::new(peer_id, payload)?)
+                }
+                None => {
+                    let uri: String = file.get_uri().into();
+                    let path = clean_file_proto(&uri);
+                    let payload = Payload::Path(path);
+                    Ok(FileToSend::new(peer_id, payload)?)
+                }
+            }
+        } else {
+            let uri: String = file.get_uri().into();
+            let path = clean_file_proto(&uri);
+            let payload = Payload::Path(path);
+            Ok(FileToSend::new(peer_id, payload)?)
+        }
+    }
 
-        let path = clean_file_proto(&value);
-        Ok(path.trim().to_string())
+    fn get_text_payload(
+        selection_data: &gtk::SelectionData,
+        peer_id: &PeerId,
+    ) -> Result<FileToSend, Box<dyn Error>> {
+        let text = selection_data
+            .get_text()
+            .ok_or(io::Error::new(io::ErrorKind::InvalidData, "No text found"))?;
+        let payload = Payload::Text(text.to_string());
+        Ok(FileToSend::new(peer_id, payload)?)
     }
 }
 
@@ -316,16 +426,17 @@ pub struct AppNotification {
     revealer: gtk::Revealer,
     pub overlay: gtk::Overlay,
     label: Label,
+    layout: gtk::Grid,
+    link_pos: i32,
 }
 
 impl AppNotification {
     pub fn new(main_overlay: &gtk::Overlay, notification_type: NotificationType) -> Self {
-        let layout = gtk::Box::new(gtk::Orientation::Horizontal, 5);
+        let layout = gtk::Grid::new();
         let overlay = gtk::Overlay::new();
         let revealer = gtk::Revealer::new();
         let label = Label::new(Some("File correct"));
-
-        layout.set_widget_name("notification");
+        label.set_halign(gtk::Align::Start);
 
         let button_close = gtk::Button::new_from_icon_name(
             Some("window-close-symbolic"),
@@ -333,36 +444,34 @@ impl AppNotification {
         );
         button_close.set_widget_name("button-close");
         button_close.set_relief(gtk::ReliefStyle::None);
+        button_close.set_size_request(40, 40);
 
         let revealer_weak = revealer.downgrade();
         let main_overlay_weak = main_overlay.downgrade();
         let overlay_weak = overlay.downgrade();
 
         button_close.connect_clicked(move |_| {
-            if let (Some(r), Some(mo), Some(o)) = (
+            if let (Some(rev), Some(over), Some(o)) = (
                 revealer_weak.upgrade(),
                 main_overlay_weak.upgrade(),
                 overlay_weak.upgrade(),
             ) {
-                r.set_reveal_child(false);
-                mo.reorder_overlay(&o, 0);
+                rev.set_reveal_child(false);
+                over.reorder_overlay(&o, 0);
             }
         });
 
         revealer.set_halign(gtk::Align::Center);
         revealer.set_valign(gtk::Align::Start);
-
-        label.set_halign(gtk::Align::Start);
-        label.set_valign(gtk::Align::Center);
-        label.set_size_request(400, 50);
-
         revealer.set_transition_type(gtk::RevealerTransitionType::SlideDown);
 
         let icon = AppNotification::set_icon(notification_type);
+        icon.set_size_request(50, 40);
 
-        layout.pack_start(&icon, true, false, 0);
-        layout.pack_start(&label, true, false, 0);
-        layout.pack_start(&button_close, true, false, 0);
+        layout.set_widget_name("notification");
+        layout.attach(&icon, 0, 0, 1, 1);
+        layout.attach(&label, 1, 0, 1, 1);
+        layout.attach(&button_close, 4, 0, 1, 1);
 
         revealer.add(&layout);
         overlay.add_overlay(&revealer);
@@ -374,6 +483,8 @@ impl AppNotification {
             revealer,
             overlay,
             label,
+            layout,
+            link_pos: 2,
         }
     }
 
@@ -393,8 +504,30 @@ impl AppNotification {
         self.revealer.set_reveal_child(true);
     }
 
-    pub fn show(&self, overlay: &gtk::Overlay, text: String) {
-        self.label.set_text(&text);
+    pub fn show_text(&self, overlay: &gtk::Overlay, text: &str) {
+        self.label.set_text(text);
+        self.reveal(overlay);
+    }
+
+    fn remove_link(&self) {
+        if let Some(child) = self.layout.get_child_at(self.link_pos, 0) {
+            self.layout.remove(&child);
+        };
+    }
+
+    pub fn show_payload(&self, overlay: &gtk::Overlay, file_name: &str, payload: &Payload) {
+        match payload {
+            Payload::Path(path) => {
+                self.label.set_text("Received");
+                self.remove_link();
+                let link = get_link(file_name, &path);
+                self.layout.attach(&link, self.link_pos, 0, 1, 1);
+            }
+            Payload::Text(_) => {
+                self.remove_link();
+                self.label.set_text("Received text");
+            }
+        };
 
         self.reveal(overlay);
     }
@@ -403,17 +536,26 @@ impl AppNotification {
 pub struct AcceptFileDialog(gtk::MessageDialog);
 
 impl AcceptFileDialog {
-    pub fn new(window: &gtk::ApplicationWindow, name: String, size: usize) -> AcceptFileDialog {
+    pub fn new(
+        window: &gtk::ApplicationWindow,
+        name: String,
+        size: usize,
+        transfer_type: TransferType,
+    ) -> AcceptFileDialog {
         let readable_size = ByteSize(size as u64);
+        let message = match transfer_type {
+            TransferType::File => format!(
+                "Incoming file {} ({}).\n\nWould you like to accept?",
+                name, readable_size
+            ),
+            TransferType::Text => format!("Incoming text {}.\n\nWould you like to accept?", name),
+        };
         let dialog = gtk::MessageDialog::new(
             Some(window),
             gtk::DialogFlags::MODAL,
             gtk::MessageType::Question,
             gtk::ButtonsType::YesNo,
-            &format!(
-                "Incoming file {} ({}).\n\nWould you like to accept the file?",
-                name, readable_size
-            ),
+            &message,
         );
         AcceptFileDialog(dialog)
     }
@@ -453,7 +595,7 @@ impl EmptyListItem {
         let text = concat!(
             "Please run <b>Dragit</b> on another device\n",
             "and wait until applications discover each other.\n\n",
-            "Once device appears here, drop a file on it.\n",
+            "Once device appears here, drop a file or text on it.\n",
         );
         let description = gtk::Label::new(None);
         description.set_markup(&text);
@@ -490,4 +632,15 @@ pub fn get_item_name<I: IsA<gtk::Widget>>(item: &I) -> String {
     item.get_widget_name()
         .unwrap_or(glib::GString::from(""))
         .to_string()
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn get_link(file_name: &str, path: &str) -> gtk::LinkButton {
+    let prefixed_path = format!("file://{}", path);
+    gtk::LinkButton::new_with_label(&prefixed_path, Some(file_name))
+}
+
+#[cfg(target_os = "windows")]
+pub fn get_link(file_name: &str, path: &str) -> gtk::LinkButton {
+    gtk::LinkButton::new_with_label(&path, Some(file_name))
 }

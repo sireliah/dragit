@@ -1,6 +1,9 @@
-use libp2p::{Multiaddr, PeerId};
+use std::fmt;
 
+use libp2p::{Multiaddr, PeerId};
 use prost::Enumeration;
+
+use crate::p2p::Payload;
 
 #[derive(Debug, Clone)]
 pub enum Direction {
@@ -8,15 +11,20 @@ pub enum Direction {
     Outgoing,
 }
 
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, Enumeration)]
+pub enum TransferType {
+    File = 0,
+    Text = 1,
+}
+
 #[derive(Debug, Clone)]
 pub enum PeerEvent {
     PeersUpdated(CurrentPeers),
     TransferProgress((usize, usize, Direction)),
     TransferCompleted,
-    TransferError,
-    FileCorrect(String, String),
+    FileCorrect(String, Payload),
     FileIncorrect,
-    FileIncoming(String, String, usize),
+    FileIncoming(String, String, usize, TransferType),
     Error(String),
 }
 
@@ -44,4 +52,13 @@ pub enum OperatingSystem {
     Macos = 2,
     Other = 3,
     Unknown = 4,
+}
+
+impl fmt::Display for TransferType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::File => write!(f, "TransferType: File"),
+            Self::Text => write!(f, "TransferType: Text"),
+        }
+    }
 }

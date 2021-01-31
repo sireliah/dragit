@@ -1,0 +1,20 @@
+syntax = "proto3";
+package dragit.p2p.transfer.metadata;
+
+enum TransferType {
+    FILE = 0;
+    TEXT = 1;
+    IMAGE = 2;
+    OTHER = 3;
+}
+
+message Metadata {
+    string name = 1;
+    string hash = 2;
+    uint64 size = 3;
+    TransferType transfer_type = 4;
+}
+
+message Answer {
+    bool accepted = 1;
+}

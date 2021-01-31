@@ -11,9 +11,10 @@ use libp2p::swarm::{
     PollParameters, SubstreamProtocol,
 };
 
-use super::protocol::{FileToSend, ProtocolEvent, TransferOut, TransferPayload};
+use super::protocol::{ProtocolEvent, TransferOut, TransferPayload};
 use crate::p2p::commands::TransferCommand;
 use crate::p2p::peer::PeerEvent;
+use crate::p2p::transfer::file::{FileToSend, Payload};
 
 const TIMEOUT: u64 = 600;
 
@@ -53,8 +54,8 @@ impl NetworkBehaviour for TransferBehaviour {
         let timeout = Duration::from_secs(TIMEOUT);
         let tp = TransferPayload {
             name: "default".to_string(),
-            path: "".to_string(),
             hash: "".to_string(),
+            payload: Payload::Path(".".to_string()),
             size_bytes: 0,
             sender_queue: self.sender.clone(),
             receiver: Arc::clone(&self.receiver),
@@ -107,17 +108,17 @@ impl NetworkBehaviour for TransferBehaviour {
         _: &mut Context,
         _: &mut impl PollParameters,
     ) -> Poll<NetworkBehaviourAction<TransferOut, TransferPayload>> {
-        if let Some(file_to_send) = self.payloads.pop() {
+        if let Some(file) = self.payloads.pop() {
+            let peer_id = file.peer.clone();
             let transfer = TransferOut {
-                name: file_to_send.name,
-                path: file_to_send.path,
+                file,
                 sender_queue: self.sender.clone(),
             };
 
             let event = NetworkBehaviourAction::NotifyHandler {
                 // TODO: Notify particular handler, not Any
                 handler: NotifyHandler::Any,
-                peer_id: file_to_send.peer.to_owned(),
+                peer_id,
                 event: transfer,
             };
             self.events.push(event);
