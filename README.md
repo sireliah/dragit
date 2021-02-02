@@ -1,11 +1,17 @@
 [![Actions Status](https://github.com/sireliah/dragit/workflows/Build%20and%20Test/badge.svg)](https://github.com/sireliah/dragit/actions)
+
 # Dragit
+
+![logo](./static/logo.png)
+
 Experimental application for intuitive file sharing between devices.
+- useful when you want to send file from one computer to another
+- requires no configuration
+- single purpose - does only one thing and nothing more
 
-The network part is using `libp2p` and custom protocol for file transfer.
-The frontend is ran on `gtk-rs`.
+The application uses mDNS for automatic device discovery with help of `libp2p` library. The GUI is implemented in `gtk-rs`.
 
-**Important note**: This is software in early development phase and you should use it at your own risk.
+**Important note**: This is software in development phase and you should use it at your own risk.
 
 - [How to use](#how-to-use)
 - [Development](#development)
