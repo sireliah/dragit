@@ -1,0 +1,18 @@
+app-id: com.sireliah.Dragit
+runtime: org.freedesktop.Platform
+runtime-version: '20.08'
+sdk: org.freedesktop.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.rust-stable
+finish-args:
+  - --share=network
+command: dragit
+modules:
+  - name: dragit
+    buildsystem: simple
+    build-commands:
+      - cat /etc/resolv.conf
+      - export PATH=/usr/lib/sdk/rust-stable/bin/:$PATH && cargo build
+    sources:
+      - type: git
+        url: https://github.com/sireliah/dragit.git
