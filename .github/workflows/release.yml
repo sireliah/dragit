@@ -16,6 +16,12 @@ jobs:
       id: vars
       run: echo ::set-output name=tag::${GITHUB_REF#refs/*/}
 
+    - name: Create vendored crates
+      id: vendor
+      run: |
+        output=$(./scripts/cargo_vendor.sh ${{ steps.vars.outputs.tag }} | tail -1 | tr -d '\n')
+        echo ::set-output name=filename::$output
+
     - name: Install deps
       run: sudo apt update && sudo apt install libdbus-1-dev libgtk-3-dev libglib2.0-dev libcairo-gobject2 libpango1.0-dev libatk1.0-dev libgdk-pixbuf2.0-0
 
@@ -30,7 +36,7 @@ jobs:
       id: checksum
       run: echo ::set-output name=sha::$(sha256sum ./build/${{ steps.package.outputs.filename }} | sed 's/\.\/build\///g' | tr -d '\n')
 
-    - name: Create Release
+    - name: Create release
       id: create_release
       uses: actions/create-release@v1
       env:
@@ -46,7 +52,7 @@ jobs:
         draft: true
         prerelease: false
 
-    - name: Upload Release Asset
+    - name: Upload release asset
       id: upload-release-asset
       uses: actions/upload-release-asset@v1
       env:
@@ -55,4 +61,15 @@ jobs:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
         asset_path: ./build/${{ steps.package.outputs.filename }}
         asset_name: ${{ steps.package.outputs.filename }}
+        asset_content_type: application/gzip
+
+    - name: Upload vendored crates for Flatpak
+      id: upload-vendored-asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./vendored/${{ steps.vendor.outputs.filename }}
+        asset_name: ${{ steps.vendor.outputs.filename }}
         asset_content_type: application/gzip
