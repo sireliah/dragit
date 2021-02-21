@@ -23,7 +23,6 @@ sed -i 's/.*autovcpkg.*//g' Cargo.toml
 cargo vendor --verbose --respect-source-config > .cargo/config
 
 rm -rf .git/
-rm -rf static/
 cd ..
 
 tar -zcvf $PACKAGE dragit
