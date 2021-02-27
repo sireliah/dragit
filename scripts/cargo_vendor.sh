@@ -25,7 +25,7 @@ cargo vendor --verbose --respect-source-config > .cargo/config
 rm -rf .git/
 cd ..
 
-tar -zcvf $PACKAGE dragit
+tar -zcvf --exclude='./target' --exclude='.flatpak-builder/' $PACKAGE dragit
 
 echo $PACKAGE
 

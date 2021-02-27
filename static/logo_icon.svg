@@ -1,0 +1,650 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   xmlns:osb="http://www.openswatchbook.org/uri/2009/osb"
+   xmlns:dc="http://purl.org/dc/elements/1.1/"
+   xmlns:cc="http://creativecommons.org/ns#"
+   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+   xmlns:svg="http://www.w3.org/2000/svg"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   width="100"
+   height="100"
+   viewBox="0 0 26.458333 26.458333"
+   version="1.1"
+   id="svg8"
+   inkscape:version="1.0 (4035a4fb49, 2020-05-01)"
+   sodipodi:docname="logo_icon.svg"
+   inkscape:export-filename="/home/sireliah/Aktywatory/dragit/logo.png"
+   inkscape:export-xdpi="38.220001"
+   inkscape:export-ydpi="38.220001">
+  <defs
+     id="defs2">
+    <linearGradient
+       id="linearGradient3507"
+       osb:paint="solid">
+      <stop
+         style="stop-color:#000000;stop-opacity:1;"
+         offset="0"
+         id="stop3505" />
+    </linearGradient>
+    <linearGradient
+       id="linearGradient3501"
+       osb:paint="solid">
+      <stop
+         style="stop-color:#000000;stop-opacity:1;"
+         offset="0"
+         id="stop3499" />
+    </linearGradient>
+    <linearGradient
+       id="linearGradient3495"
+       osb:paint="solid">
+      <stop
+         style="stop-color:#000000;stop-opacity:1;"
+         offset="0"
+         id="stop3493" />
+    </linearGradient>
+    <linearGradient
+       id="linearGradient3489"
+       osb:paint="solid">
+      <stop
+         style="stop-color:#000000;stop-opacity:1;"
+         offset="0"
+         id="stop3487" />
+    </linearGradient>
+    <linearGradient
+       id="linearGradient3483"
+       osb:paint="solid">
+      <stop
+         style="stop-color:#000000;stop-opacity:1;"
+         offset="0"
+         id="stop3481" />
+    </linearGradient>
+    <linearGradient
+       id="linearGradient3477"
+       osb:paint="solid">
+      <stop
+         style="stop-color:#000000;stop-opacity:1;"
+         offset="0"
+         id="stop3475" />
+    </linearGradient>
+    <linearGradient
+       id="linearGradient3471"
+       osb:paint="solid">
+      <stop
+         style="stop-color:#000000;stop-opacity:1;"
+         offset="0"
+         id="stop3469" />
+    </linearGradient>
+    <linearGradient
+       id="linearGradient3465"
+       osb:paint="solid">
+      <stop
+         style="stop-color:#000000;stop-opacity:1;"
+         offset="0"
+         id="stop3463" />
+    </linearGradient>
+    <linearGradient
+       id="linearGradient3152"
+       osb:paint="solid">
+      <stop
+         style="stop-color:#000000;stop-opacity:1;"
+         offset="0"
+         id="stop3150" />
+    </linearGradient>
+  </defs>
+  <sodipodi:namedview
+     id="base"
+     pagecolor="#ffffff"
+     bordercolor="#666666"
+     borderopacity="1.0"
+     inkscape:pageopacity="0.0"
+     inkscape:pageshadow="2"
+     inkscape:zoom="2.901652"
+     inkscape:cx="85.913179"
+     inkscape:cy="97.574452"
+     inkscape:document-units="mm"
+     inkscape:current-layer="layer1"
+     inkscape:document-rotation="0"
+     showgrid="false"
+     inkscape:snap-nodes="false"
+     inkscape:window-width="1920"
+     inkscape:window-height="1010"
+     inkscape:window-x="0"
+     inkscape:window-y="33"
+     inkscape:window-maximized="1"
+     units="px"
+     width="296mm" />
+  <metadata
+     id="metadata5">
+    <rdf:RDF>
+      <cc:Work
+         rdf:about="">
+        <dc:format>image/svg+xml</dc:format>
+        <dc:type
+           rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
+        <dc:title></dc:title>
+      </cc:Work>
+    </rdf:RDF>
+  </metadata>
+  <g
+     inkscape:label="Layer 1"
+     inkscape:groupmode="layer"
+     id="layer1">
+    <path
+       style="fill:#d45500;fill-opacity:1;stroke:none;stroke-width:0.103221;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:fill markers stroke"
+       d="m 12.483003,26.430967 c -0.109636,-0.240624 -0.242389,-0.873943 -0.266229,-1.270086 l -0.025,-0.415341 -0.139651,-0.02153 c -0.772356,-0.119336 -1.104271,-0.181332 -1.483421,-0.277087 -0.244197,-0.0617 -0.447052,-0.106107 -0.450784,-0.09875 -0.0038,0.0077 -0.05384,0.114006 -0.111344,0.236992 -0.2246309,0.480397 -0.789251,1.238248 -0.9228734,1.238702 -0.027782,8.7e-5 -0.3794864,-0.13527 -0.7815723,-0.300813 L 7.5710601,25.222065 v -0.263442 c 0,-0.31468 0.096257,-0.804907 0.2424292,-1.234675 L 7.9199718,23.410881 7.6892792,23.282805 C 7.4594751,23.155212 6.5298283,22.531009 6.3063801,22.354264 l -0.1174698,-0.0929 -0.3606116,0.291138 c -0.3639235,0.293812 -0.7630915,0.547249 -1.0392334,0.659826 l -0.1501569,0.06122 -0.5880019,-0.588001 -0.5880019,-0.588 0.061213,-0.150161 C 3.6363668,21.672044 3.8898087,21.272473 4.1809211,20.911895 4.3498196,20.702694 4.4559405,20.532786 4.4373814,20.501296 4.4199667,20.471746 4.3408597,20.366596 4.2615878,20.267615 4.0788775,20.039497 3.6214753,19.348499 3.4547042,19.048661 L 3.3272207,18.819462 3.0224993,18.922556 C 2.5985995,19.065976 2.0893908,19.1654 1.7787556,19.1654 H 1.5162704 L 1.1983575,18.400809 0.88044265,17.636218 1.0877919,17.442931 c 0.3019688,-0.2815 0.9654642,-0.704691 1.2573776,-0.802001 0.041667,-0.0139 0.021693,-0.160126 -0.079266,-0.580343 C 2.191669,15.751614 2.1024411,15.300718 2.0676142,15.058598 2.0327906,14.816468 1.9921082,14.606186 1.977211,14.591286 1.9623157,14.576414 1.7799587,14.5487 1.5719814,14.529773 1.1031666,14.486994 0.73641517,14.412735 0.42910733,14.298227 L 0.19291542,14.210257 V 13.361933 12.51361 l 0.23619191,-0.08797 c 0.30730784,-0.114518 0.67405927,-0.188816 1.14287407,-0.231546 0.2079773,-0.01893 0.3903331,-0.04664 0.4052296,-0.06151 0.014895,-0.01487 0.05558,-0.225192 0.090403,-0.467312 0.034827,-0.24212 0.1240549,-0.693016 0.198289,-1.001999 C 2.3668622,10.243049 2.3868364,10.096819 2.34517,10.082933 2.0532561,9.9856233 1.3897607,9.5624223 1.0877919,9.2809322 L 0.88044265,9.0876455 1.1983575,8.3230544 1.5162704,7.5584632 h 0.2624883 c 0.3138067,0 0.8043643,0.096373 1.2337185,0.2424292 L 3.3255474,7.9073759 3.4538686,7.6766794 C 3.6213796,7.375538 4.0785219,6.6848103 4.261591,6.4562383 4.3408631,6.3572677 4.4199695,6.2521072 4.4373846,6.2225677 4.4559436,6.1910871 4.3498233,6.0211694 4.1809243,5.8119686 3.8898119,5.4513907 3.63637,5.0518195 3.5241211,4.7764709 L 3.4629078,4.6263106 4.0509097,4.0383099 4.6389116,3.4503092 4.7890685,3.5115321 C 5.0652104,3.6241089 5.4643784,3.877537 5.8283016,4.171349 L 6.1889132,4.4624862 6.306383,4.3695896 C 6.5292045,4.1933468 7.4591786,3.5688151 7.687794,3.4418983 L 7.9169947,3.3146531 7.8139007,3.0099291 C 7.6704855,2.5860329 7.571063,2.0768205 7.571063,1.7661866 V 1.5037006 L 8.3356532,1.1857857 9.1002424,0.86787073 9.29353,1.0752175 c 0.2814932,0.3019718 0.7046932,0.9654679 0.801997,1.2573776 0.0139,0.04162 0.160125,0.021727 0.580342,-0.079281 0.308976,-0.074259 0.759874,-0.1634671 1.001995,-0.1982888 0.242123,-0.03486 0.452411,-0.075515 0.467308,-0.090386 0.0149,-0.014871 0.04259,-0.1972459 0.06155,-0.40523 0.04273,-0.4688092 0.117036,-0.83556717 0.231549,-1.14286956 l 0.08801,-0.23619105 h 0.848319 0.84832 l 0.08802,0.23619105 c 0.114513,0.30730239 0.188816,0.67406036 0.231548,1.14286956 0.01896,0.2079841 0.04665,0.3903395 0.06155,0.40523 0.0149,0.014871 0.225187,0.055622 0.467309,0.090386 0.24212,0.03486 0.691238,0.1236239 0.998038,0.1973232 0.306799,0.07368 0.562297,0.1285971 0.567773,0.1219726 0.0055,-0.00676 0.05159,-0.1074394 0.102478,-0.2240237 0.13201,-0.3024547 0.472167,-0.8150855 0.708517,-1.0677508 l 0.202318,-0.21629837 0.763838,0.31854257 0.763838,0.3185523 v 0.2626598 c 0,0.3139558 -0.09637,0.8044536 -0.242429,1.2338831 l -0.106481,0.313077 0.230691,0.1280756 c 0.229805,0.1275832 1.159451,0.7517865 1.3829,0.9285315 l 0.117469,0.092897 0.360612,-0.2911372 c 0.363924,-0.293812 0.763092,-0.5472401 1.039233,-0.6598169 l 0.150157,-0.061223 0.588002,0.5880007 0.588002,0.5880007 -0.06121,0.1501603 c -0.11225,0.2753486 -0.365692,0.6749198 -0.656803,1.0354977 -0.168899,0.2092008 -0.27502,0.3790992 -0.256461,0.4105991 0.01741,0.029549 0.09652,0.1347 0.175794,0.2336706 0.182688,0.2280988 0.640108,0.9191066 0.806833,1.2188671 l 0.127432,0.2291031 0.296273,-0.102109 C 24.12542,7.6617215 24.656351,7.558444 24.970624,7.558444 h 0.262658 l 0.318547,0.7638379 0.318548,0.7638379 -0.208151,0.19404 c -0.302732,0.2822145 -0.965891,0.7053185 -1.258182,0.8027532 -0.04167,0.01391 -0.0217,0.160117 0.07926,0.580334 0.07424,0.308982 0.163463,0.759878 0.198289,1.001999 0.03482,0.24212 0.0755,0.452412 0.09041,0.467312 0.0149,0.01487 0.197251,0.04259 0.40523,0.06151 0.468815,0.04278 0.835565,0.117028 1.142874,0.231546 l 0.236191,0.08797 v 0.848323 0.848324 l -0.236191,0.08797 c -0.307309,0.114509 -0.674059,0.188816 -1.142874,0.231547 -0.207979,0.01893 -0.390333,0.04664 -0.40523,0.06151 -0.0149,0.01487 -0.05558,0.225183 -0.09041,0.467313 -0.03483,0.24212 -0.123623,0.691239 -0.197328,0.998039 -0.0737,0.306791 -0.128588,0.560258 -0.121965,0.563251 0.509277,0.230079 1.088624,0.597503 1.345273,0.853181 l 0.163526,0.162907 -0.318911,0.764707 -0.318911,0.764717 h -0.262659 c -0.313962,0 -0.80446,-0.09637 -1.233888,-0.242429 l -0.31307,-0.106484 -0.128321,0.230687 c -0.167511,0.301141 -0.624653,0.991869 -0.807722,1.220441 -0.07927,0.09898 -0.158379,0.204131 -0.175794,0.23368 -0.01856,0.03148 0.08756,0.201399 0.256461,0.410599 0.291111,0.360578 0.544553,0.76015 0.656803,1.035498 l 0.06121,0.15016 -0.588002,0.588001 -0.588002,0.588001 -0.150157,-0.06122 C 21.683995,23.09973 21.284827,22.846292 20.920903,22.55248 l -0.360612,-0.291137 -0.117469,0.0929 c -0.222784,0.176223 -1.152779,0.800774 -1.381319,0.927652 l -0.229107,0.127188 0.108304,0.311435 c 0.138639,0.398654 0.237441,0.915881 0.237441,1.242989 v 0.256634 l -0.764589,0.317915 -0.764589,0.317906 -0.193289,-0.207347 c -0.282221,-0.302754 -0.704721,-0.965545 -0.802529,-1.258971 -0.01471,-0.04413 -0.12244,-0.03119 -0.467869,0.05601 -0.383275,0.0968 -0.714989,0.158832 -1.488196,0.278304 l -0.139651,0.02153 -0.025,0.41534 c -0.02384,0.396144 -0.156595,1.029463 -0.26623,1.270086 l -0.05126,0.112509 h -0.84034 -0.840341 z M 12.159912,19.735671 V 17.111816 L 11.859806,16.988578 C 10.950532,16.615157 10.119147,15.784765 9.7488731,14.880153 L 9.6245741,14.576482 H 6.9964985 4.3684224 l 0.031315,0.236191 c 0.09164,0.691143 0.4926031,1.928918 0.859468,2.653154 0.9793521,1.933389 2.6894838,3.500415 4.7187539,4.323892 0.6469527,0.262525 1.7225327,0.555439 2.0807277,0.566641 l 0.101225,0.0029 z m 3.496607,2.418431 c 2.484557,-0.631678 4.667188,-2.38582 5.833487,-4.688275 0.366865,-0.724236 0.767828,-1.962011 0.859467,-2.653154 l 0.03132,-0.236191 h -2.628074 -2.628076 l -0.1243,0.303671 c -0.370274,0.904612 -1.201658,1.735004 -2.110932,2.108425 l -0.300106,0.123238 v 2.628075 2.628076 l 0.23619,-0.03129 c 0.129907,-0.01719 0.503868,-0.09937 0.831029,-0.182548 z m -1.537656,-7.239185 c 0.34044,-0.166567 0.642355,-0.46879 0.810569,-0.811396 0.120841,-0.246118 0.132249,-0.310103 0.132249,-0.741734 0,-0.431245 -0.01149,-0.495887 -0.132047,-0.742314 -0.154321,-0.315472 -0.51182,-0.684258 -0.780953,-0.805622 l -0.189222,-0.08536 V 11.330422 10.932357 H 13.442088 12.92472 l -5.31e-4,0.371152 -5.31e-4,0.371161 -0.276642,0.128752 c -0.344591,0.160387 -0.655687,0.466656 -0.824512,0.811715 -0.164452,0.336128 -0.206129,0.871539 -0.09705,1.246765 0.144381,0.49665 0.618721,0.986018 1.107759,1.142841 0.132467,0.04249 0.34652,0.06103 0.611271,0.05302 0.343104,-0.01043 0.449538,-0.03293 0.674255,-0.142889 z M 9.7478195,11.846983 C 10.12123,10.937707 10.951623,10.106321 11.856237,9.7360483 l 0.303675,-0.1243 V 6.9836728 4.3555971 l -0.236191,0.031288 C 11.149122,4.4895923 9.8950606,4.9131119 9.1006788,5.3402818 7.4720122,6.2160688 6.0818127,7.6337558 5.259206,9.2577081 4.892341,9.9819533 4.4913779,11.219719 4.399738,11.910871 l -0.031315,0.236191 h 2.6280759 2.6280756 z m 12.6016535,0.06393 C 22.257831,11.219757 21.856871,9.9819923 21.490006,9.2577467 20.667398,7.6337944 19.277199,6.2161074 17.648533,5.3403204 16.854152,4.9131505 15.600091,4.4896309 14.825491,4.3869232 L 14.5893,4.3556358 v 2.6280756 2.6280759 l 0.303675,0.1243 c 0.904614,0.3702727 1.735008,1.2016587 2.108418,2.1109347 l 0.123245,0.300108 h 2.628074 2.628076 z"
+       id="path3386"
+       inkscape:export-filename="/home/sireliah/Aktywatory/dragit/logo_ah.png"
+       inkscape:export-xdpi="38.220001"
+       inkscape:export-ydpi="38.220001" />
+    <circle
+       r="9.2487154"
+       style="fill:#ffffff;fill-opacity:1;stroke:none;stroke-width:0.103269;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:fill markers stroke"
+       id="path3388"
+       cx="-12.326346"
+       cy="14.376282"
+       inkscape:export-filename="/home/sireliah/Aktywatory/dragit/logo_ah.png"
+       inkscape:export-xdpi="38.220001"
+       inkscape:export-ydpi="38.220001"
+       transform="rotate(-85.056261)" />
+    <ellipse
+       style="fill:#000000;stroke-width:0.181415;stroke-miterlimit:4;stroke-dasharray:none"
+       id="path934"
+       cx="5.1604075"
+       cy="12.483101"
+       rx="0.23513818"
+       ry="0.29246739"
+       inkscape:export-filename="/home/sireliah/Aktywatory/dragit/logo_ah.png"
+       inkscape:export-xdpi="38.220001"
+       inkscape:export-ydpi="38.220001" />
+    <ellipse
+       style="fill:#ffffff;stroke-width:0.188002;stroke-miterlimit:4;stroke-dasharray:none"
+       id="path936"
+       cx="9.210412"
+       cy="10.582276"
+       rx="0.15748787"
+       ry="0.19623458"
+       transform="matrix(0.96256578,0.27104818,-0.34133077,0.93994325,0,0)"
+       inkscape:transform-center-x="0.010099012"
+       inkscape:transform-center-y="-0.0053190514"
+       inkscape:export-filename="/home/sireliah/Aktywatory/dragit/logo_ah.png"
+       inkscape:export-xdpi="38.220001"
+       inkscape:export-ydpi="38.220001" />
+    <path
+       style="fill:none;stroke:#000000;stroke-width:0.122531;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+       d="m 3.3370593,14.57036 1.8467701,-2.021293 1.9719771,2.099608"
+       id="path1007"
+       sodipodi:nodetypes="ccc"
+       inkscape:export-filename="/home/sireliah/Aktywatory/dragit/logo_ah.png"
+       inkscape:export-xdpi="38.220001"
+       inkscape:export-ydpi="38.220001" />
+    <path
+       id="rect835"
+       style="fill:#000000;stroke-width:0.026831"
+       d="m 16.528004,13.40388 h 1.433312 l 1.489931,0.803555 0.503536,-0.803555 h 3.8212 v 2.038597 l -0.274265,0.641991 -0.610366,0.178174 h -6.363348 z"
+       sodipodi:nodetypes="cccccccccc"
+       inkscape:export-filename="/home/sireliah/Aktywatory/dragit/logo_ah.png"
+       inkscape:export-xdpi="38.220001"
+       inkscape:export-ydpi="38.220001" />
+    <path
+       id="rect837"
+       style="fill:#000000;stroke-width:0.0319996"
+       d="m 14.255789,13.210381 0.661525,-0.206855 h 1.606633 v 3.849299 h -2.062095 l -0.361919,-0.09512 -0.07796,-0.467535 v -2.45473 z"
+       sodipodi:nodetypes="ccccccccc"
+       inkscape:export-filename="/home/sireliah/Aktywatory/dragit/logo_ah.png"
+       inkscape:export-xdpi="38.220001"
+       inkscape:export-ydpi="38.220001" />
+    <path
+       id="rect839"
+       style="fill:#000000;stroke-width:0.0319996;paint-order:stroke fill markers"
+       d="m 11.497446,17.308424 0.140165,-0.114469 1.17018,-0.564072 h 7.034245 l 0.979805,0.405935 0.09683,0.05707 0.04253,0.148895 0.01646,0.933099 -0.02248,0.128616 -0.05344,0.08952 -0.487396,0.391209 -8.282387,0.0029 -0.586905,-0.296738 -0.06787,-0.05099 -0.02786,-0.107073 0.002,-0.874725 z"
+       sodipodi:nodetypes="ccccccccccccccccc"
+       inkscape:export-filename="/home/sireliah/Aktywatory/dragit/logo_ah.png"
+       inkscape:export-xdpi="38.220001"
+       inkscape:export-ydpi="38.220001" />
+    <path
+       style="fill:none;stroke:#000000;stroke-width:0.241887;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+       d="M 7.7195469,7.4189735 6.473818,7.1762932 5.1541992,5.9079843"
+       id="path860"
+       inkscape:export-filename="/home/sireliah/Aktywatory/dragit/logo_ah.png"
+       inkscape:export-xdpi="38.220001"
+       inkscape:export-ydpi="38.220001" />
+    <path
+       style="fill:none;stroke:#000000;stroke-width:0.241887;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+       d="m 12.327209,10.426061 5.537471,3.250338"
+       id="path862"
+       inkscape:export-filename="/home/sireliah/Aktywatory/dragit/logo_ah.png"
+       inkscape:export-xdpi="38.220001"
+       inkscape:export-ydpi="38.220001" />
+    <path
+       style="fill:none;stroke:#000000;stroke-width:0.241887;stroke-linecap:butt;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+       d="m 22.178313,13.48993 1.271324,-1.338184 v 1.252134"
+       id="path864"
+       inkscape:export-filename="/home/sireliah/Aktywatory/dragit/logo_ah.png"
+       inkscape:export-xdpi="38.220001"
+       inkscape:export-ydpi="38.220001" />
+    <path
+       style="fill:none;stroke:#000000;stroke-width:0.0319996px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+       d="M 23.488819,12.245009 9.0727712,6.5046856"
+       id="path866"
+       inkscape:export-filename="/home/sireliah/Aktywatory/dragit/logo_ah.png"
+       inkscape:export-xdpi="38.220001"
+       inkscape:export-ydpi="38.220001" />
+    <path
+       style="fill:none;stroke:#000000;stroke-width:0.0319996px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+       d="M 9.0215024,6.3497452 23.408084,12.095187"
+       id="path870"
+       inkscape:export-filename="/home/sireliah/Aktywatory/dragit/logo_ah.png"
+       inkscape:export-xdpi="38.220001"
+       inkscape:export-ydpi="38.220001" />
+    <path
+       style="fill:none;stroke:#000000;stroke-width:0.36283;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+       d="M 14.024652,16.85579 13.249116,16.149003 10.264528,11.000224 8.5466066,7.5119473"
+       id="path874"
+       inkscape:export-filename="/home/sireliah/Aktywatory/dragit/logo_ah.png"
+       inkscape:export-xdpi="38.220001"
+       inkscape:export-ydpi="38.220001" />
+    <path
+       style="fill:none;stroke:#000000;stroke-width:0.241887;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+       d="M 7.7195469,7.4189735 9.8012795,7.7251846"
+       id="path876"
+       inkscape:export-filename="/home/sireliah/Aktywatory/dragit/logo_ah.png"
+       inkscape:export-xdpi="38.220001"
+       inkscape:export-ydpi="38.220001" />
+    <path
+       style="fill:none;stroke:#000000;stroke-width:0.36283;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+       d="M 13.97633,15.024858 12.327209,10.426061 8.5988074,6.2416781 5.1541992,5.9079843"
+       id="path878"
+       inkscape:export-filename="/home/sireliah/Aktywatory/dragit/logo_ah.png"
+       inkscape:export-xdpi="38.220001"
+       inkscape:export-ydpi="38.220001" />
+    <path
+       style="fill:none;stroke:#000000;stroke-width:0.218383;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+       d="m 13.169361,15.803036 0.586456,-1.093061 -1.355686,-0.164018 0.815557,-1.280901 -1.442606,0.113832 0.891291,-1.565558 -1.649036,0.08604 1.191942,-1.527956 -2.08085,0.04519 L 11.087954,9.1639424 9.5189965,9.0594482 9.9682384,7.8681894"
+       id="path880"
+       inkscape:export-filename="/home/sireliah/Aktywatory/dragit/logo_ah.png"
+       inkscape:export-xdpi="38.220001"
+       inkscape:export-ydpi="38.220001" />
+    <path
+       style="fill:none;stroke:#000000;stroke-width:0.174709;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+       d="M 6.0244882,6.6557922 6.573735,6.11789 6.9555941,7.1396946 7.5380412,6.2188016 8.0638707,7.2314228"
+       id="path882"
+       inkscape:export-filename="/home/sireliah/Aktywatory/dragit/logo_ah.png"
+       inkscape:export-xdpi="38.220001"
+       inkscape:export-ydpi="38.220001" />
+    <path
+       style="fill:none;stroke:#000000;stroke-width:0.201956;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+       d="M 7.9120273,7.3401079 8.5627998,6.341006 8.8838609,7.5694138"
+       id="path884"
+       inkscape:export-filename="/home/sireliah/Aktywatory/dragit/logo_ah.png"
+       inkscape:export-xdpi="38.220001"
+       inkscape:export-ydpi="38.220001" />
+    <path
+       style="fill:none;stroke:#000000;stroke-width:0.0319996px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+       d="M 14.066817,16.688644 8.5452441,6.3766582"
+       id="path886"
+       inkscape:export-filename="/home/sireliah/Aktywatory/dragit/logo_ah.png"
+       inkscape:export-xdpi="38.220001"
+       inkscape:export-ydpi="38.220001" />
+    <path
+       style="fill:none;stroke:#000000;stroke-width:0.181415;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+       d="M 14.150509,16.429615 8.7312073,6.370758"
+       id="path888"
+       inkscape:export-filename="/home/sireliah/Aktywatory/dragit/logo_ah.png"
+       inkscape:export-xdpi="38.220001"
+       inkscape:export-ydpi="38.220001" />
+    <path
+       style="fill:none;stroke:#000000;stroke-width:0.0319996px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+       d="M 5.176971,5.9342599 8.9742844,6.7262661"
+       id="path890"
+       inkscape:export-filename="/home/sireliah/Aktywatory/dragit/logo_ah.png"
+       inkscape:export-xdpi="38.220001"
+       inkscape:export-ydpi="38.220001" />
+    <path
+       style="fill:none;stroke:#000000;stroke-width:0.181415;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+       d="M 5.3445276,6.0133186 9.5544874,7.5470491"
+       id="path892"
+       inkscape:export-filename="/home/sireliah/Aktywatory/dragit/logo_ah.png"
+       inkscape:export-xdpi="38.220001"
+       inkscape:export-ydpi="38.220001" />
+    <rect
+       style="fill:#000000;stroke-width:0.181415;stroke-miterlimit:4;stroke-dasharray:none"
+       id="rect896"
+       width="1.9140099"
+       height="0.9900806"
+       x="16.673397"
+       y="15.878546"
+       inkscape:export-filename="/home/sireliah/Aktywatory/dragit/logo_ah.png"
+       inkscape:export-xdpi="38.220001"
+       inkscape:export-ydpi="38.220001" />
+    <path
+       id="rect898"
+       style="fill:#ffffff;stroke-width:0.115802;stroke-miterlimit:4;stroke-dasharray:none"
+       d="m 14.326161,13.238375 0.124021,-0.05292 h 0.30533 v 2.371219 h -0.341168 l -0.331106,-0.05021 9.29e-4,-0.15833 -0.0039,-1.499343 0.162747,-0.463788 z"
+       sodipodi:nodetypes="cccccccccc"
+       inkscape:export-filename="/home/sireliah/Aktywatory/dragit/logo_ah.png"
+       inkscape:export-xdpi="38.220001"
+       inkscape:export-ydpi="38.220001" />
+    <circle
+       r="0.28081986"
+       style="fill:#000000;stroke-width:0.181415;stroke-miterlimit:4;stroke-dasharray:none"
+       id="path905"
+       cx="8.8948975"
+       cy="6.5585985"
+       inkscape:export-filename="/home/sireliah/Aktywatory/dragit/logo_ah.png"
+       inkscape:export-xdpi="38.220001"
+       inkscape:export-ydpi="38.220001" />
+    <circle
+       r="0.42925438"
+       style="fill:#000000;stroke-width:0.181415;stroke-miterlimit:4;stroke-dasharray:none"
+       id="path907"
+       cx="5.2196608"
+       cy="5.9878674"
+       inkscape:export-filename="/home/sireliah/Aktywatory/dragit/logo_ah.png"
+       inkscape:export-xdpi="38.220001"
+       inkscape:export-ydpi="38.220001" />
+    <circle
+       r="0.27483082"
+       style="fill:#000000;stroke-width:0.181415;stroke-miterlimit:4;stroke-dasharray:none"
+       id="path911"
+       cx="23.350086"
+       cy="12.272885"
+       inkscape:export-filename="/home/sireliah/Aktywatory/dragit/logo_ah.png"
+       inkscape:export-xdpi="38.220001"
+       inkscape:export-ydpi="38.220001" />
+    <path
+       style="fill:none;stroke:#000000;stroke-width:0.0319996px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+       d="M 4.884438,5.9558714 V 11.234078"
+       id="path917"
+       inkscape:export-filename="/home/sireliah/Aktywatory/dragit/logo_ah.png"
+       inkscape:export-xdpi="38.220001"
+       inkscape:export-ydpi="38.220001" />
+    <path
+       style="fill:none;stroke:#000000;stroke-width:0.0319996px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+       d="M 5.4452218,5.9682415 V 11.271005"
+       id="path919"
+       inkscape:export-filename="/home/sireliah/Aktywatory/dragit/logo_ah.png"
+       inkscape:export-xdpi="38.220001"
+       inkscape:export-ydpi="38.220001" />
+    <path
+       id="rect921"
+       style="fill:#000000;stroke-width:0.181415;stroke-miterlimit:4;stroke-dasharray:none"
+       d="m 5.1570513,10.787614 c 0.2050846,0 0.4026439,0.167687 0.3701889,0.370186 l -0.1256766,0.784156 c -0.032455,0.202499 -0.039428,0.370186 -0.2445123,0.370186 -0.2050848,0 -0.2592179,-0.184857 -0.2825403,-0.388611 L 4.786863,11.1578 C 4.76354,10.954046 4.9519671,10.787614 5.1570513,10.787614 Z"
+       sodipodi:nodetypes="sssssss"
+       inkscape:export-filename="/home/sireliah/Aktywatory/dragit/logo_ah.png"
+       inkscape:export-xdpi="38.220001"
+       inkscape:export-ydpi="38.220001" />
+    <rect
+       style="fill:#ffcc00;stroke:none;stroke-width:0.0186631;stroke-miterlimit:4;stroke-dasharray:none"
+       id="rect956"
+       width="4.1106491"
+       height="2.8072309"
+       x="3.1157026"
+       y="14.540193"
+       ry="0.023572233"
+       inkscape:export-filename="/home/sireliah/Aktywatory/dragit/logo_ah.png"
+       inkscape:export-xdpi="38.220001"
+       inkscape:export-ydpi="38.220001" />
+    <rect
+       style="fill:#ffdd55;fill-opacity:1;stroke:none;stroke-width:0.0186631;stroke-linejoin:bevel;stroke-miterlimit:4;stroke-dasharray:none"
+       id="rect958"
+       width="0.85117406"
+       height="0.70427078"
+       x="3.0421202"
+       y="14.455068"
+       ry="0.020355975"
+       inkscape:export-filename="/home/sireliah/Aktywatory/dragit/logo_ah.png"
+       inkscape:export-xdpi="38.220001"
+       inkscape:export-ydpi="38.220001" />
+    <rect
+       ry="0.020355975"
+       y="16.708603"
+       x="3.0368176"
+       height="0.70427078"
+       width="0.85117406"
+       id="rect958-3"
+       style="fill:#ffdd55;fill-opacity:1;stroke:none;stroke-width:0.0186631;stroke-linejoin:bevel;stroke-miterlimit:4;stroke-dasharray:none"
+       inkscape:export-filename="/home/sireliah/Aktywatory/dragit/logo_ah.png"
+       inkscape:export-xdpi="38.220001"
+       inkscape:export-ydpi="38.220001" />
+    <rect
+       style="fill:#ffdd55;fill-opacity:1;stroke:none;stroke-width:0.0186631;stroke-linejoin:bevel;stroke-miterlimit:4;stroke-dasharray:none"
+       id="rect958-3-6"
+       width="0.85117406"
+       height="0.70427078"
+       x="6.4416671"
+       y="16.735714"
+       ry="0.020355975"
+       inkscape:export-filename="/home/sireliah/Aktywatory/dragit/logo_ah.png"
+       inkscape:export-xdpi="38.220001"
+       inkscape:export-ydpi="38.220001" />
+    <rect
+       ry="0.020355975"
+       y="14.461154"
+       x="6.4333291"
+       height="0.70427078"
+       width="0.85117406"
+       id="rect958-3-6-7"
+       style="fill:#ffdd55;fill-opacity:1;stroke:none;stroke-width:0.0186631;stroke-linejoin:bevel;stroke-miterlimit:4;stroke-dasharray:none"
+       inkscape:export-filename="/home/sireliah/Aktywatory/dragit/logo_ah.png"
+       inkscape:export-xdpi="38.220001"
+       inkscape:export-ydpi="38.220001" />
+    <rect
+       style="fill:#000000;stroke-width:0.120944;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none"
+       id="rect1011"
+       width="1.0711441"
+       height="0.49007744"
+       x="23.182989"
+       y="13.543315"
+       ry="0.028206367"
+       inkscape:export-filename="/home/sireliah/Aktywatory/dragit/logo_ah.png"
+       inkscape:export-xdpi="38.220001"
+       inkscape:export-ydpi="38.220001" />
+    <rect
+       ry="0.028206367"
+       y="14.089329"
+       x="23.190182"
+       height="0.49007744"
+       width="1.0711441"
+       id="rect1011-5"
+       style="fill:#000000;stroke-width:0.120944;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none"
+       inkscape:export-filename="/home/sireliah/Aktywatory/dragit/logo_ah.png"
+       inkscape:export-xdpi="38.220001"
+       inkscape:export-ydpi="38.220001" />
+    <rect
+       style="fill:#000000;stroke-width:0.120944;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none"
+       id="rect1011-5-3"
+       width="1.0711441"
+       height="0.49007744"
+       x="23.193167"
+       y="14.638229"
+       ry="0.028206367"
+       inkscape:export-filename="/home/sireliah/Aktywatory/dragit/logo_ah.png"
+       inkscape:export-xdpi="38.220001"
+       inkscape:export-ydpi="38.220001" />
+    <rect
+       style="fill:#ffffff;stroke-width:0.120944;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none"
+       id="rect1047"
+       width="0.072057873"
+       height="1.0856088"
+       x="22.1523"
+       y="13.692528"
+       ry="0.028206367"
+       inkscape:export-filename="/home/sireliah/Aktywatory/dragit/logo_ah.png"
+       inkscape:export-xdpi="38.220001"
+       inkscape:export-ydpi="38.220001" />
+    <rect
+       ry="0.028206367"
+       y="13.692528"
+       x="22.25209"
+       height="1.0856088"
+       width="0.072057873"
+       id="rect1047-5"
+       style="fill:#ffffff;stroke-width:0.120944;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none"
+       inkscape:export-filename="/home/sireliah/Aktywatory/dragit/logo_ah.png"
+       inkscape:export-xdpi="38.220001"
+       inkscape:export-ydpi="38.220001" />
+    <rect
+       ry="0.028206367"
+       y="13.694177"
+       x="22.350613"
+       height="1.0856088"
+       width="0.072057873"
+       id="rect1047-2"
+       style="fill:#ffffff;stroke-width:0.120944;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none"
+       inkscape:export-filename="/home/sireliah/Aktywatory/dragit/logo_ah.png"
+       inkscape:export-xdpi="38.220001"
+       inkscape:export-ydpi="38.220001" />
+    <rect
+       style="fill:#ffffff;stroke-width:0.120944;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none"
+       id="rect1047-5-9"
+       width="0.072057873"
+       height="1.0856088"
+       x="22.450401"
+       y="13.694177"
+       ry="0.028206367"
+       inkscape:export-filename="/home/sireliah/Aktywatory/dragit/logo_ah.png"
+       inkscape:export-xdpi="38.220001"
+       inkscape:export-ydpi="38.220001" />
+    <rect
+       ry="0.028206367"
+       y="13.692343"
+       x="22.546001"
+       height="1.0856088"
+       width="0.072057873"
+       id="rect1047-1"
+       style="fill:#ffffff;stroke-width:0.120944;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none"
+       inkscape:export-filename="/home/sireliah/Aktywatory/dragit/logo_ah.png"
+       inkscape:export-xdpi="38.220001"
+       inkscape:export-ydpi="38.220001" />
+    <rect
+       style="fill:#ffffff;stroke-width:0.120944;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none"
+       id="rect1047-5-2"
+       width="0.072057873"
+       height="1.0856088"
+       x="22.645792"
+       y="13.692343"
+       ry="0.028206367"
+       inkscape:export-filename="/home/sireliah/Aktywatory/dragit/logo_ah.png"
+       inkscape:export-xdpi="38.220001"
+       inkscape:export-ydpi="38.220001" />
+    <ellipse
+       style="fill:#000000;stroke-width:0.216573;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none"
+       id="path1116"
+       cx="11.707691"
+       cy="7.3265576"
+       rx="0.049719062"
+       ry="0.12019514"
+       transform="matrix(0.82223828,0.5691434,-0.58536064,0.81077304,0,0)"
+       inkscape:transform-center-x="0.01755447"
+       inkscape:transform-center-y="-0.01091332"
+       inkscape:export-filename="/home/sireliah/Aktywatory/dragit/logo_ah.png"
+       inkscape:export-xdpi="38.220001"
+       inkscape:export-ydpi="38.220001" />
+    <circle
+       r="0.53049129"
+       style="fill:#ffffff;stroke-width:0.120944;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none"
+       id="path1120"
+       cx="12.320065"
+       cy="17.848475"
+       inkscape:export-filename="/home/sireliah/Aktywatory/dragit/logo_ah.png"
+       inkscape:export-xdpi="38.220001"
+       inkscape:export-ydpi="38.220001" />
+    <circle
+       r="0.52187109"
+       cy="17.842609"
+       cx="12.427728"
+       id="path1120-0"
+       style="fill:#000000;stroke-width:0.118978;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none"
+       inkscape:export-filename="/home/sireliah/Aktywatory/dragit/logo_ah.png"
+       inkscape:export-xdpi="38.220001"
+       inkscape:export-ydpi="38.220001" />
+    <circle
+       r="0.53049129"
+       cy="17.856195"
+       cx="20.021437"
+       id="path1120-9"
+       style="fill:#ffffff;stroke-width:0.120944;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none"
+       inkscape:export-filename="/home/sireliah/Aktywatory/dragit/logo_ah.png"
+       inkscape:export-xdpi="38.220001"
+       inkscape:export-ydpi="38.220001" />
+    <circle
+       r="0.52187109"
+       style="fill:#000000;stroke-width:0.118978;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none"
+       id="path1120-0-3"
+       cx="19.907663"
+       cy="17.841387"
+       inkscape:export-filename="/home/sireliah/Aktywatory/dragit/logo_ah.png"
+       inkscape:export-xdpi="38.220001"
+       inkscape:export-ydpi="38.220001" />
+    <circle
+       r="0.35454324"
+       style="fill:#000000;stroke-width:0.120944;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;paint-order:stroke fill markers"
+       id="path1174"
+       cx="12.320904"
+       cy="10.315601"
+       inkscape:export-filename="/home/sireliah/Aktywatory/dragit/logo_ah.png"
+       inkscape:export-xdpi="38.220001"
+       inkscape:export-ydpi="38.220001" />
+    <circle
+       r="0.35570639"
+       style="fill:#000000;stroke-width:0.120944;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;paint-order:stroke fill markers"
+       id="path1176"
+       cx="8.8984823"
+       cy="6.3900394"
+       inkscape:export-filename="/home/sireliah/Aktywatory/dragit/logo_ah.png"
+       inkscape:export-xdpi="38.220001"
+       inkscape:export-ydpi="38.220001" />
+    <path
+       style="fill:none;stroke:#000000;stroke-width:0.36283;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+       d="m 13.920759,14.869599 0.270319,1.104784"
+       id="path1178"
+       inkscape:export-filename="/home/sireliah/Aktywatory/dragit/logo_ah.png"
+       inkscape:export-xdpi="38.220001"
+       inkscape:export-ydpi="38.220001" />
+    <path
+       id="rect1180"
+       style="fill:#000000;stroke-width:0.36283;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;paint-order:stroke fill markers"
+       d="m 14.387542,12.902566 1.245232,0.0068 c 0.01811,1.06e-4 0.03266,0.01458 0.03266,0.03264 v 0.325206 c 0,0.01806 -0.01465,0.03428 -0.03266,0.03264 l -1.193873,-0.109496 c -0.01801,-0.0019 -0.261016,0.03805 -0.256725,0.02047 l 0.03869,-0.158523 c 0.0043,-0.01757 0.148578,-0.150286 0.166673,-0.150179 z"
+       sodipodi:nodetypes="sssssssss"
+       inkscape:export-filename="/home/sireliah/Aktywatory/dragit/logo_ah.png"
+       inkscape:export-xdpi="38.220001"
+       inkscape:export-ydpi="38.220001" />
+    <rect
+       style="fill:#ffffff;stroke-width:0.447994;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;paint-order:stroke fill markers"
+       id="rect1185"
+       width="7.3464971"
+       height="0.097963899"
+       x="12.553694"
+       y="17.176521"
+       ry="0.041645955"
+       inkscape:export-filename="/home/sireliah/Aktywatory/dragit/logo_ah.png"
+       inkscape:export-xdpi="38.220001"
+       inkscape:export-ydpi="38.220001" />
+    <rect
+       style="fill:#000000;stroke:none;stroke-width:0.177749;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:stroke fill markers"
+       id="rect3268"
+       width="14.272429"
+       height="1.0111431"
+       x="8.2440662"
+       y="18.678988"
+       ry="0.011726388"
+       inkscape:export-filename="/home/sireliah/Aktywatory/dragit/logo_ah.png"
+       inkscape:export-xdpi="38.220001"
+       inkscape:export-ydpi="38.220001" />
+    <text
+       inkscape:export-ydpi="38.220001"
+       inkscape:export-xdpi="38.220001"
+       xml:space="preserve"
+       style="font-style:normal;font-weight:normal;font-size:10.5833px;line-height:1.25;font-family:sans-serif;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.264583"
+       x="48.260094"
+       y="168.37952"
+       id="text913"><tspan
+         sodipodi:role="line"
+         id="tspan911"
+         x="48.260094"
+         y="168.37952"
+         style="stroke-width:0.264583" /></text>
+  </g>
+</svg>
