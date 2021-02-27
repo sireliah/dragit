@@ -1,7 +1,7 @@
 [Desktop Entry]
 Name=Dragit
 Comment=Intuitive file sharing app for local network
-Exec=com.sireliah.Dragit
+Exec=dragit
 Type=Application
 Icon=com.sireliah.Dragit
 Terminal=false

@@ -6,13 +6,26 @@ sdk-extensions:
   - org.freedesktop.Sdk.Extension.rust-stable
 finish-args:
   - --share=network
+  - --share=ipc
+  - --socket=x11
+  - --socket=wayland
+  - --device=dri
+  - --socket=session-bus
+build-options:
+  append-path: "/usr/lib/sdk/rust-stable/bin"
 command: dragit
 modules:
   - name: dragit
     buildsystem: simple
     build-commands:
-      - cat /etc/resolv.conf
-      - export PATH=/usr/lib/sdk/rust-stable/bin/:$PATH && cargo build
+      - install -Dm644 static/logo_icon.svg /app/share/icons/hicolor/scalable/apps/com.sireliah.Dragit.svg
+      - install -Dm644 dragit.desktop /app/share/applications/com.sireliah.Dragit.desktop
+      - cargo build --release --offline
+      - install -Dm755 target/release/dragit /app/bin/dragit
     sources:
-      - type: git
-        url: https://github.com/sireliah/dragit.git
+      # - type: archive
+      #   url: https://github.com/sireliah/dragit/releases/download/v0.4.1/vendored_packages_v0.4.1.tar.gz
+      #   sha256: ee8ca6db05e1b2aef818a5cb9a48b9f0e94d5aa0f6ca13dff9d7890573e31aff
+      - type: archive
+        path: /home/sireliah/Aktywatory/dragit/vendored_packages_0.4.1.tar.gz
+        sha256: 95838c55983d6ab8c799b612d4dcfd1400c6c5f85009c96477b791834de61d49
