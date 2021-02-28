@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>com.sireliah.Dragit</id>
+  
+  <name>Dragit</name>
+  <summary>Intuitive file sharing app for local network</summary>
+  
+  <metadata_license>MIT</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  
+  <description>
+    <p>
+      Dragit is an application for intuitive file sharing between devices. Useful when you want to send file from one computer to another with minimal effort. No need to sign-up, create configuration or look up the IP address of the target device. The application automatically detects devices in the local network with help of mDNS protocol and allows you to send file immediately.
+    </p>
+    <p>
+      The file transfer is encrypted and there are no external servers involved - Dragit was designed with privacy in mind.
+    </p>
+  </description>
+  
+  <launchable type="desktop-id">dragit.desktop</launchable>
+  <screenshots>
+    <screenshot type="default">
+      <image>https://raw.githubusercontent.com/sireliah/dragit/master/static/dragit_screen.png</image>
+    </screenshot>
+  </screenshots>
+</component>
