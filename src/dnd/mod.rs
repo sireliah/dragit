@@ -1,6 +1,5 @@
 use std::env::args;
 use std::error::Error;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -146,9 +145,7 @@ pub fn start_window() {
 
     let peer_receiver_arc = Arc::new(Mutex::new(peer_receiver));
 
-    let now = SystemTime::now();
-    let timestamp = now.duration_since(UNIX_EPOCH).expect("Time failed");
-    let name = format!("com.drag_and_drop_{}", timestamp.as_secs());
+    let name = "com.sireliah.Dragit";
 
     let application = gtk::Application::new(Some(&name), gio::ApplicationFlags::empty())
         .expect("Initialization failed...");
