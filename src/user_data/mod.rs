@@ -3,7 +3,7 @@ use std::io::{Error, ErrorKind, Read, Write};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use directories::{BaseDirs, UserDirs};
+use directories_next::{BaseDirs, UserDirs};
 use serde::{Deserialize, Serialize};
 use toml;
 

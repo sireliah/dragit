@@ -1,0 +1,32 @@
+app-id: com.sireliah.Dragit
+runtime: org.freedesktop.Platform
+runtime-version: '20.08'
+sdk: org.freedesktop.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.rust-stable
+finish-args:
+  - --share=network
+  - --share=ipc
+  - --socket=x11
+  - --socket=wayland
+  - --device=dri
+build-options:
+  append-path: "/usr/lib/sdk/rust-stable/bin"
+command: dragit
+modules:
+  - name: dragit
+    buildsystem: simple
+    cleanup:
+      - "/include"
+      - "/bin/foo-*"
+      - "*.a"
+    build-commands:
+      - install -Dm644 static/logo_icon_transparent.svg /app/share/icons/hicolor/scalable/apps/com.sireliah.Dragit.svg
+      - install -Dm644 dragit.desktop /app/share/applications/com.sireliah.Dragit.desktop
+      - install -Dm644 com.sireliah.Dragit.metainfo.xml /app/share/metainfo/com.sireliah.Dragit.metainfo.xml
+      - cargo build --release --offline
+      - install -Dm755 target/release/dragit /app/bin/dragit
+    sources:
+      - type: archive
+        url: https://github.com/sireliah/dragit/releases/download/v0.4.1/vendored_packages_v0.4.1.tar.gz
+        sha256: 71097576b03cbd2fa693ad4ac87414d52a360980560b345d69948c026e295f17
