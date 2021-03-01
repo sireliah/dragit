@@ -29,4 +29,4 @@ modules:
     sources:
       - type: archive
         url: https://github.com/sireliah/dragit/releases/download/v0.4.1/vendored_packages_v0.4.1.tar.gz
-        sha256: ee8ca6db05e1b2aef818a5cb9a48b9f0e94d5aa0f6ca13dff9d7890573e31aff
+        sha256: 71097576b03cbd2fa693ad4ac87414d52a360980560b345d69948c026e295f17
