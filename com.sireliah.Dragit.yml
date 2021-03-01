@@ -10,16 +10,18 @@ finish-args:
   - --socket=x11
   - --socket=wayland
   - --device=dri
-  - --socket=session-bus
 build-options:
   append-path: "/usr/lib/sdk/rust-stable/bin"
 command: dragit
 modules:
   - name: dragit
     buildsystem: simple
+    cleanup:
+      - /include
     build-commands:
-      - install -Dm644 static/logo_icon.svg /app/share/icons/hicolor/scalable/apps/com.sireliah.Dragit.svg
+      - install -Dm644 static/logo_icon_transparent.svg /app/share/icons/hicolor/scalable/apps/com.sireliah.Dragit.svg
       - install -Dm644 dragit.desktop /app/share/applications/com.sireliah.Dragit.desktop
+      - install -Dm644 com.sireliah.Dragit.metainfo.xml /app/share/metainfo/com.sireliah.Dragit.metainfo.xml
       - cargo build --release --offline
       - install -Dm755 target/release/dragit /app/bin/dragit
     sources:
