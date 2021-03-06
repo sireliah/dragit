@@ -18,7 +18,6 @@ modules:
     buildsystem: simple
     cleanup:
       - "/include"
-      - "/bin/foo-*"
       - "*.a"
     build-commands:
       - install -Dm644 static/logo_icon_transparent.svg /app/share/icons/hicolor/scalable/apps/com.sireliah.Dragit.svg
