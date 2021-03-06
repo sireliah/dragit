@@ -19,7 +19,7 @@
             <description>First release in Flatpak</description>
         </release>
     </releases>
-  <launchable type="desktop-id">dragit.desktop</launchable>
+  <launchable type="desktop-id">com.sireliah.Dragit.desktop</launchable>
   <screenshots>
     <screenshot type="default">
       <image>https://raw.githubusercontent.com/sireliah/dragit/master/static/dragit_screen.png</image>
