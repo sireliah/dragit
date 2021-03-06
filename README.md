@@ -1,4 +1,5 @@
 [![Actions Status](https://github.com/sireliah/dragit/workflows/Build%20and%20Test/badge.svg)](https://github.com/sireliah/dragit/actions)
+[![dependency status](https://deps.rs/repo/github/sireliah/dragit/status.svg)](https://deps.rs/repo/github/sireliah/dragit)
 
 # Dragit
 
