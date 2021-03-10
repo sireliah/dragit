@@ -1,19 +1,30 @@
-[![Actions Status](https://github.com/sireliah/dragit/workflows/Build%20and%20Test/badge.svg)](https://github.com/sireliah/dragit/actions)
-[![dependency status](https://deps.rs/repo/github/sireliah/dragit/status.svg)](https://deps.rs/repo/github/sireliah/dragit)
+<p align="center"><img width="200" src="https://raw.githubusercontent.com/sireliah/dragit/master/static/logo_icon_t.svg" alt="Dragit - intuitive file sharing application"></p>
 
-# Dragit
+<h1 align="center">Dragit</h1>
+<p align="center">Application for intuitive file sharing between devices.</p>
 
-![logo](./static/logo.png)
+<p align="center">
+<a href="https://github.com/sireliah/dragit/actions"><img src="https://github.com/sireliah/dragit/workflows/Build%20and%20Test/badge.svg" alt="Build Status"></a>
+<a href="https://deps.rs/repo/github/sireliah/dragit"><img src="https://deps.rs/repo/github/sireliah/dragit/status.svg" alt="Dependency Status"></a>
+<a href="https://github.com/sireliah/dragit/blob/master/LICENSE"><img src="https://img.shields.io/github/license/sireliah/dragit" alt="License"></a>
+</p>
 
-Experimental application for intuitive file sharing between devices.
+Dragit helps you share files between computers in the same network.
+
 - useful when you want to send file from one computer to another
 - requires no configuration
 - single purpose - does only one thing and nothing more
+- works on Linux and Windows machines
 
 The application uses mDNS for automatic device discovery with help of `libp2p` library. The GUI is implemented in `gtk-rs`.
 
 **Important note**: This is software in development phase and you should use it at your own risk.
 
+## Contents
+- [Preview](#preview)
+- [How to install](#how-to-install)
+    - [Using Flatpak](#using-flatpak)
+    - [Download recent release](#download-recent-release)
 - [How to use](#how-to-use)
 - [Development](#development)
     - [How to build on Linux](#how-to-build-on-linux)
@@ -24,16 +35,28 @@ The application uses mDNS for automatic device discovery with help of `libp2p` l
     - [TODO](#todos)
     - [Done](#done)
 
+## Preview
+<img src="https://raw.githubusercontent.com/sireliah/dragit/master/static/dragit_screen.png" alt="Dragit screenshot" width=500px>
+
+## How to install
+### Using Flatpak
+If you don't know how to use Flatpak yet, please follow [the setup guide](https://www.flatpak.org/setup/).
+
+Then install Dragit as follows:
+```bash
+flatpak install com.sireliah.Dragit
+```
+
+### Download recent release
+Alternatively you can download the latest [release](https://github.com/sireliah/dragit/releases/) for your OS and unpack it. Currently you can use `dragit` on 64-bit Linux and Windows (Please check [Windows requirements](#windows-requirements) for details).
 
 ## How to use
-
-![demo](./static/dragit.gif)
-
-Please download the latest [release](https://github.com/sireliah/dragit/releases/) for your OS and unpack it. Currently you can use `dragit` on 64-bit Linux and Windows (Please check [Windows requirements](#windows-requirements) for details).
-
 1. Start the application on two machines:
 
-For Linux:
+For Linux with Flatpak: run Dragit from installed applications.
+
+For Linux executable:
+
 ```
 ./dragit
 ```
@@ -50,6 +73,8 @@ You can run two `dragit` instances on the same machine for testing. No problem w
 4. In the other window you will be asked whether you would like to accept the file. Probably you'd like to answer "Yes".
 5. File will be transfered and saved in the `Downloads directory` (which is customizable).
 6. Done!
+
+![demo](./static/dragit.gif)
 
 ## Development
 ### How to build on Linux
