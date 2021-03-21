@@ -18,7 +18,7 @@ use libp2p::{
 };
 
 use dragit::p2p::{
-    FileToSend, Payload, PeerEvent, TransferBehaviour, TransferCommand, TransferOut,
+    hash_contents, FileToSend, Payload, PeerEvent, TransferBehaviour, TransferCommand, TransferOut,
 };
 
 #[test]
@@ -29,12 +29,10 @@ fn test_file_transfer() {
     let (peer1, sender, _, mut swarm1) = build_swarm();
     let (_, _, _, mut swarm2) = build_swarm();
 
-    // File should be accepted from the beginning
-    sender
-        .try_send(TransferCommand::Accept(
-            "81dc9bdb52d04dc20036dbd8313ed055".to_string(),
-        ))
-        .unwrap();
+    // File hash should be accepted from the beginning
+    let file = fs::File::open("tests/file.txt").unwrap();
+    let file_hash = hash_contents(file).unwrap();
+    sender.try_send(TransferCommand::Accept(file_hash)).unwrap();
 
     let addr = "/ip4/127.0.0.1/tcp/3000".parse().unwrap();
 
@@ -139,7 +137,7 @@ fn test_text_transfer() {
     let (peer1, sender, _, mut swarm1) = build_swarm();
     let (_, _, _, mut swarm2) = build_swarm();
 
-    // Text should be accepted from the beginning
+    // Text hash should be accepted from the beginning
     sender
         .try_send(TransferCommand::Accept(
             "e8ea7a8d1e93e8764a84a0f3df4644de".to_string(),

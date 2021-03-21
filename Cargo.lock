@@ -308,15 +308,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cdb031dd78e28731d87d56cc8ffef4a8f36ca26c38fe2de700543e627f8a464a"
 
 [[package]]
-name = "autovcpkg"
-version = "0.1.2019-10"
-source = "git+https://github.com/fungos/autovcpkg.git#7110a03b7c864e16920c5b5c6af13e8c9af6168b"
-dependencies = [
- "cmake",
- "vcpkg",
-]
-
-[[package]]
 name = "base64"
 version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -569,15 +560,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "cmake"
-version = "0.1.44"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0e56268c17a6248366d66d4a47a3381369d068cce8409bb1716ed77ea32163bb"
-dependencies = [
- "cc",
-]
-
-[[package]]
 name = "concurrent-queue"
 version = "1.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -757,7 +739,6 @@ name = "dragit"
 version = "0.4.0"
 dependencies = [
  "async-std",
- "autovcpkg",
  "bytesize",
  "directories-next",
  "env_logger",
