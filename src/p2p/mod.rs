@@ -33,6 +33,7 @@ pub mod util;
 pub use commands::TransferCommand;
 pub use discovery::{DiscoveryBehaviour, DiscoveryEvent};
 pub use peer::{CurrentPeers, OperatingSystem, Peer, PeerEvent, TransferType};
+pub use transfer::metadata::hash_contents;
 pub use transfer::{FileToSend, Payload, TransferBehaviour, TransferOut, TransferPayload};
 
 #[derive(NetworkBehaviour)]

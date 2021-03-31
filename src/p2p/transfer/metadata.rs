@@ -179,13 +179,28 @@ pub fn hash_contents(mut file: fs::File) -> Result<String, Error> {
 #[cfg(test)]
 mod tests {
     use crate::p2p::transfer::metadata::hash_contents;
-    use std::fs::File;
+    use std::io::{Seek, SeekFrom, Write};
 
     #[test]
+    #[cfg(not(target_os = "windows"))]
     fn test_hash_local_file() {
-        let file = File::open("src/file.txt").unwrap();
+        let mut file = tempfile::tempfile().unwrap();
+        write!(file, "I'll fly to device!").unwrap();
+        file.seek(SeekFrom::Start(0)).unwrap();
         let result = hash_contents(file).unwrap();
 
-        assert_eq!(result, "696c56be6d4c4a48d3de0d17e237f82a");
+        assert_eq!(result, "a909b834a8f95194ee2ce975e38cec31");
+    }
+
+    #[test]
+    #[cfg(target_os = "windows")]
+    fn test_hash_local_file() {
+        // Windows file has carriage endings, so the hash is different
+        let mut file = tempfile::tempfile().unwrap();
+        write!(file, "I'll fly to device!").unwrap();
+        file.seek(SeekFrom::Start(0)).unwrap();
+        let result = hash_contents(file).unwrap();
+
+        assert_eq!(result, "a909b834a8f95194ee2ce975e38cec31");
     }
 }
