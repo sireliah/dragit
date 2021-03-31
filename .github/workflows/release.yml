@@ -9,6 +9,8 @@ jobs:
   build:
     name: Create Release
     runs-on: ubuntu-latest
+    outputs:
+      upload_url: ${{ steps.upload.outputs.upload_url }}
     steps:
     - uses: actions/checkout@v2
 
@@ -73,3 +75,7 @@ jobs:
         asset_path: ./vendored/${{ steps.vendor.outputs.filename }}
         asset_name: ${{ steps.vendor.outputs.filename }}
         asset_content_type: application/gzip
+
+    - name: Set release outputs
+      id: upload
+      run: echo "::set-output name=upload_url::${{ steps.create_release.outputs.upload_url }}"
