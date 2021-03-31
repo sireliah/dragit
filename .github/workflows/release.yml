@@ -11,10 +11,11 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       upload_url: ${{ steps.upload.outputs.upload_url }}
+      tag: ${{ steps.vars.outputs.tag }}
     steps:
     - uses: actions/checkout@v2
 
-    - name: Set output
+    - name: Set tag output
       id: vars
       run: echo ::set-output name=tag::${GITHUB_REF#refs/*/}
 

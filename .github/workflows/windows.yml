@@ -12,6 +12,7 @@ jobs:
   gvsbuild:
     name: Build GTK libs
     runs-on: windows-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     env:
       gvsbuildref: 69cdac34c36d74eeae37006bb0fcedc64ee518dd
       gvsbuildupdate: 1
@@ -94,42 +95,12 @@ jobs:
           command: build
           args: --release --target-dir C:\build
 
-      # - name: Clean release
-      #   run: |
-      #     Remove-Item -Recurse -Confirm:$false C:\build\release\deps
-      #     Remove-Item -Recurse -Confirm:$false C:\build\release\build
-      #     Remove-Item -Recurse -Confirm:$false C:\build\release\incremental
-      #     Remove-Item -Recurse -Confirm:$false C:\build\release\examples
-      #     Remove-Item -Recurse -Confirm:$false C:\build\release\.fingerprint
-      #     Remove-Item -Confirm:$false C:\build\release\.cargo-lock
-      #     Remove-Item -Confirm:$false C:\build\release\dragit.pdb
-
-      - name: Show gvsbuild libs
-        run: ls -Recurse C:\gtk-build\gtk\x64\release\share\
-
-      # - name: Run copy script
-      #   if: github.event.action == 'script'
-      #   run: pwsh -command ".\$GITHUB_WORKSPACE\scripts\package.ps1"
-
-      # - name: Copy libs
-        # run: cp C:\gtk-build\gtk\x64\release\bin\* C:\build\release\
-
-      # vcpkg works, but gvsbuild is preferred
-      # - name: Install gtk from vcpkg
-      #   run: |
-      #     C:\vcpkg\vcpkg.exe install gtk:x64-windows
-      #     ls -Recurse C:\vcpkg\
-
-
       - uses: msys2/setup-msys2@v2
         with:
           update: true
           install: >-
             mingw-w64-x86_64-adwaita-icon-theme
             mingw-w64-x86_64-hicolor-icon-theme
-
-      - name: Debug icons
-        run: ls -Recurse D:\a\_temp\msys\msys64\mingw64\share\icons
 
       - name: Copy dependencies
         run: |
@@ -140,15 +111,21 @@ jobs:
 
           cp C:\build\release\dragit.exe $env:PACKAGE_DIR\bin\
 
+          # Those dlls and binaries are provided by gvsbuild
           foreach($line in Get-Content .\scripts\windows_deps.txt) {
               cp C:\gtk-build\gtk\x64\release\bin\$line $env:PACKAGE_DIR\bin\
           }
 
           cp -r C:\gtk-build\gtk\x64\release\share\glib-2.0 $env:PACKAGE_DIR\share\
+
+          # Icons are installed from msys2.
+          # TODO: Figure out the env var for the temp path
           cp -r D:\a\_temp\msys\msys64\mingw64\share\icons $env:PACKAGE_DIR\share\
 
           # https://github.com/gtk-rs/gtk/issues/422
           cp -r C:\gtk-build\gtk\x64\release\lib\gdk-pixbuf-2.0 $env:PACKAGE_DIR\lib\
+
+          cp static\README.md $env:PACKAGE_DIR\
         env:
           PACKAGE_DIR: C:\build\dragit
 
@@ -165,5 +142,5 @@ jobs:
         with:
           upload_url: ${{ github.event.workflow_run.build.outputs.upload_url }}
           asset_path: C:\build\dragit_package.zip
-          asset_name: dragit_package.zip
+          asset_name: dragit_${{ github.event.workflow_run.build.outputs.tag }}_windows_x64.zip
           asset_content_type: application/zip
