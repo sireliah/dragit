@@ -1,5 +1,7 @@
 on:
   push:
+    branches:
+      - windows-icon
     tags:
       - 'v*'
 
@@ -136,6 +138,8 @@ jobs:
     name: Create Windows x64 release
     runs-on: windows-latest
     needs: [build-linux, gvsbuild]
+    env:
+      RC_BIN: C:/Program Files (x86)/Windows Kits/10/bin/10.0.18362.0/x64/rc.exe
     steps:
       - name: Create GTK binaries dir
         run: mkdir C:\gtk-build\gtk\x64\release
@@ -158,6 +162,10 @@ jobs:
 
       - uses: actions/checkout@v2
 
+      - name: Compile icon resource
+        run: |
+          "%RC_BIN% .\src\dragit.rc"
+
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
@@ -168,6 +176,13 @@ jobs:
         with:
           command: build
           args: --release --target-dir C:\build
+
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+
+      - name: Link the icon resource
+        run: cargo rustc --bin dragit --target-dir C:\build --release -- -C link-args="src/dragit.rc"
 
       - uses: msys2/setup-msys2@v2
         with:
