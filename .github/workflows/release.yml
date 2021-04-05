@@ -177,13 +177,6 @@ jobs:
           command: build
           args: --release --target-dir C:\build
 
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-
-      - name: Link the icon resource
-        run: cargo rustc --bin dragit --target-dir C:\build --release -- -C link-args="src/dragit.rc"
-
       - uses: msys2/setup-msys2@v2
         with:
           update: true
