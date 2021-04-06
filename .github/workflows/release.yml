@@ -90,6 +90,8 @@ jobs:
     runs-on: windows-latest
     needs: build-linux
     env:
+      # TODO: Use new release
+      # gvsbuildref: 3d3067d1090df7bfdf4b29680b951024e37b20ae
       gvsbuildref: 69cdac34c36d74eeae37006bb0fcedc64ee518dd
       gvsbuildupdate: 1
 
@@ -138,8 +140,6 @@ jobs:
     name: Create Windows x64 release
     runs-on: windows-latest
     needs: [build-linux, gvsbuild]
-    env:
-      RC_BIN: C:/Program Files (x86)/Windows Kits/10/bin/10.0.18362.0/x64/rc.exe
     steps:
       - name: Create GTK binaries dir
         run: mkdir C:\gtk-build\gtk\x64\release
@@ -164,12 +164,26 @@ jobs:
 
       - name: Compile icon resource
         run: |
-          "%RC_BIN% .\src\dragit.rc"
+          # TODO: how to call the rc without copying it?
+          cp $env:RC_BIN\rc.exe src\
+          cp $env:RC_BIN\rcdll.dll src\
+          cd src
+          .\rc.exe dragit.rc
+          ls
+        env:
+          RC_BIN: C:/Program Files (x86)/Windows Kits/10/bin/10.0.18362.0/x64/
 
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
           default: true
+
+      - name: Create linker config for the icon
+        run: |
+          $repoPath = $env:GITHUB_WORKSPACE -replace "\\", "/"
+          mkdir .cargo
+          Set-Content -Path .\.cargo\config -Value "[build]`nrustflags = [`"-Clink-args=${repoPath}/src/dragit.res`"]"
+          Get-Content .\.cargo\config
 
       - name: Build release
         uses: actions-rs/cargo@v1
