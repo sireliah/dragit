@@ -89,7 +89,6 @@ jobs:
     needs: build-linux
     env:
       gvsbuildref: 3d3067d1090df7bfdf4b29680b951024e37b20ae
-      # gvsbuildref: 69cdac34c36d74eeae37006bb0fcedc64ee518dd
       gvsbuildupdate: 1
 
     outputs:
