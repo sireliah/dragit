@@ -1,7 +1,5 @@
 on:
   push:
-    branches:
-      - windows-icon
     tags:
       - 'v*'
 
@@ -90,9 +88,8 @@ jobs:
     runs-on: windows-latest
     needs: build-linux
     env:
-      # TODO: Use new release
-      # gvsbuildref: 3d3067d1090df7bfdf4b29680b951024e37b20ae
-      gvsbuildref: 69cdac34c36d74eeae37006bb0fcedc64ee518dd
+      gvsbuildref: 3d3067d1090df7bfdf4b29680b951024e37b20ae
+      # gvsbuildref: 69cdac34c36d74eeae37006bb0fcedc64ee518dd
       gvsbuildupdate: 1
 
     outputs:
@@ -215,8 +212,7 @@ jobs:
           cp -r C:\gtk-build\gtk\x64\release\share\glib-2.0 $env:PACKAGE_DIR\share\
 
           # Icons are installed from msys2.
-          # TODO: Figure out the env var for the temp path
-          cp -r D:\a\_temp\msys\msys64\mingw64\share\icons $env:PACKAGE_DIR\share\
+          cp -r $env:RUNNER_TEMP\msys\msys64\mingw64\share\icons $env:PACKAGE_DIR\share\
 
           # https://github.com/gtk-rs/gtk/issues/422
           cp -r C:\gtk-build\gtk\x64\release\lib\gdk-pixbuf-2.0 $env:PACKAGE_DIR\lib\
