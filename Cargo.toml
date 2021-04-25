@@ -13,7 +13,7 @@ futures = "0.3.5"
 gdk = "^0"
 gio = "^0"
 glib = "^0"
-gtk = { version = "0.8.1", features = [ "v3_18" ] }
+gtk = { version = "^0", features = [ "v3_18" ] }
 hex = "0.4.2"
 hostname = "0.3.0"
 libp2p = { version = "0.24.0", features = [ "dns", "websocket", "mplex", "mdns-async-std", "tcp-async-std", "noise" ], default-features = false }

@@ -117,10 +117,7 @@ pub fn build_window(
 
     window.show_all();
 
-    window.connect_delete_event(move |win, _| {
-        win.destroy();
-        Inhibit(false)
-    });
+    window.connect_delete_event(move |_win, _| Inhibit(false));
     Ok(())
 }
 

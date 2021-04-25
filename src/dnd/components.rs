@@ -128,7 +128,7 @@ impl MainLayout {
             Payload::Path(path) => {
                 let link = get_link(file_name, &path);
                 let image =
-                    gtk::Image::new_from_icon_name(Some("text-x-preview"), gtk::IconSize::Dialog);
+                    gtk::Image::from_icon_name(Some("text-x-preview"), gtk::IconSize::Dialog);
                 recent_item.pack_start(&image, false, false, 0);
                 recent_item.pack_start(&link, false, false, 0);
             }
@@ -150,7 +150,7 @@ impl MainLayout {
 
     fn setup_menu_button() -> Result<gtk::MenuButton, Box<dyn Error>> {
         let menu_image =
-            gtk::Image::new_from_icon_name(Some("open-menu-symbolic"), gtk::IconSize::Menu);
+            gtk::Image::from_icon_name(Some("open-menu-symbolic"), gtk::IconSize::Menu);
         let menu_button = gtk::MenuButton::new();
         let vbox = gtk::Box::new(gtk::Orientation::Vertical, 10);
         let popover = gtk::Popover::new(None::<&gtk::Widget>);
@@ -238,7 +238,7 @@ impl PeerItem {
         label.set_halign(gtk::Align::Center);
         label.set_size_request(500, 100);
 
-        let image = gtk::Image::new_from_icon_name(Some("insert-object"), gtk::IconSize::Dialog);
+        let image = gtk::Image::from_icon_name(Some("insert-object"), gtk::IconSize::Dialog);
 
         let container = gtk::ListBoxRow::new();
         container.set_widget_name(name);
@@ -438,10 +438,8 @@ impl AppNotification {
         let label = Label::new(Some("File correct"));
         label.set_halign(gtk::Align::Start);
 
-        let button_close = gtk::Button::new_from_icon_name(
-            Some("window-close-symbolic"),
-            gtk::IconSize::SmallToolbar,
-        );
+        let button_close =
+            gtk::Button::from_icon_name(Some("window-close-symbolic"), gtk::IconSize::SmallToolbar);
         button_close.set_widget_name("button-close");
         button_close.set_relief(gtk::ReliefStyle::None);
         button_close.set_size_request(40, 40);
@@ -491,10 +489,10 @@ impl AppNotification {
     fn set_icon(notification_type: NotificationType) -> gtk::Image {
         match notification_type {
             NotificationType::Alert => {
-                gtk::Image::new_from_icon_name(Some("dialog-information"), gtk::IconSize::Button)
+                gtk::Image::from_icon_name(Some("dialog-information"), gtk::IconSize::Button)
             }
             NotificationType::Error => {
-                gtk::Image::new_from_icon_name(Some("dialog-warning"), gtk::IconSize::Button)
+                gtk::Image::from_icon_name(Some("dialog-warning"), gtk::IconSize::Button)
             }
         }
     }
@@ -562,7 +560,6 @@ impl AcceptFileDialog {
 
     pub fn run(&self) -> gtk::ResponseType {
         let resp = self.0.run();
-        self.0.destroy();
         resp
     }
 }
@@ -585,7 +582,7 @@ impl EmptyListItem {
         label.set_size_request(500, 100);
 
         let image =
-            gtk::Image::new_from_icon_name(Some("network-transmit-receive"), gtk::IconSize::Dialog);
+            gtk::Image::from_icon_name(Some("network-transmit-receive"), gtk::IconSize::Dialog);
 
         revealer.set_halign(gtk::Align::Center);
         revealer.set_valign(gtk::Align::Start);
@@ -629,15 +626,13 @@ impl EmptyListItem {
 }
 
 pub fn get_item_name<I: IsA<gtk::Widget>>(item: &I) -> String {
-    item.get_widget_name()
-        .unwrap_or(glib::GString::from(""))
-        .to_string()
+    item.get_widget_name().to_string()
 }
 
 #[cfg(not(target_os = "windows"))]
 pub fn get_link(file_name: &str, path: &str) -> gtk::LinkButton {
     let prefixed_path = format!("file://{}", path);
-    gtk::LinkButton::new_with_label(&prefixed_path, Some(file_name))
+    gtk::LinkButton::with_label(&prefixed_path, Some(file_name))
 }
 
 #[cfg(target_os = "windows")]
