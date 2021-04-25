@@ -560,6 +560,7 @@ impl AcceptFileDialog {
 
     pub fn run(&self) -> gtk::ResponseType {
         let resp = self.0.run();
+        self.0.close();
         resp
     }
 }

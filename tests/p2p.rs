@@ -8,13 +8,11 @@ use async_std::task;
 
 use futures::{future, prelude::*};
 use libp2p::{
-    core::muxing,
-    core::transport::timeout::TransportTimeout,
     core::transport::Transport,
     core::upgrade,
-    dns, identity, mplex, noise,
+    identity, mplex, noise,
     swarm::{NetworkBehaviourAction, NotifyHandler, SwarmEvent},
-    tcp, websocket, Multiaddr, PeerId, Swarm,
+    tcp, Multiaddr, PeerId, Swarm,
 };
 
 use dragit::p2p::{
@@ -81,18 +79,19 @@ fn test_file_transfer() {
                     println!("Established!: {:?}", peer_id);
                     if !pushed {
                         println!("Pushing file");
+                        let behaviour = swarm2.behaviour_mut();
                         let payload = Payload::Path("tests/file.txt".to_string());
                         let file = FileToSend::new(&peer1, payload).unwrap();
                         let transfer = TransferOut {
                             file,
-                            sender_queue: swarm2.sender.clone(),
+                            sender_queue: behaviour.sender.clone(),
                         };
                         let event = NetworkBehaviourAction::NotifyHandler {
                             handler: NotifyHandler::Any,
                             peer_id: peer1.to_owned(),
                             event: transfer,
                         };
-                        swarm2.events.push(event);
+                        behaviour.events.push(event);
                         pushed = true;
                     }
                 }
@@ -191,18 +190,19 @@ fn test_text_transfer() {
                     println!("Established!: {:?}", peer_id);
                     if !pushed {
                         println!("Pushing file");
+                        let behaviour = swarm2.behaviour_mut();
                         let payload = Payload::Text("Hello there".to_string());
                         let file = FileToSend::new(&peer1, payload).unwrap();
                         let transfer = TransferOut {
                             file,
-                            sender_queue: swarm2.sender.clone(),
+                            sender_queue: behaviour.sender.clone(),
                         };
                         let event = NetworkBehaviourAction::NotifyHandler {
                             handler: NotifyHandler::Any,
                             peer_id: peer1.to_owned(),
                             event: transfer,
                         };
-                        swarm2.events.push(event);
+                        behaviour.events.push(event);
                         pushed = true;
                     }
                 }
@@ -262,17 +262,12 @@ fn build_swarm() -> (
     );
 
     let timeout = Duration::from_secs(60);
-    let transport = {
-        let tcp = tcp::TcpConfig::new().nodelay(true);
-        let transport = dns::DnsConfig::new(tcp).unwrap();
-        let trans_clone = transport.clone();
-        transport.or_transport(websocket::WsConfig::new(trans_clone))
-    };
+    let transport = tcp::TcpConfig::new().nodelay(true);
     let mut mplex_config = mplex::MplexConfig::new();
 
     let mp = mplex_config
-        .max_buffer_len(40960)
-        .split_send_size(1024 * 512);
+        .set_max_buffer_size(40960)
+        .set_split_send_size(1024 * 512);
 
     let noise_keys = noise::Keypair::<noise::X25519Spec>::new()
         .into_authentic(&local_keys)
@@ -280,15 +275,12 @@ fn build_swarm() -> (
 
     let noise = noise::NoiseConfig::xx(noise_keys).into_authenticated();
 
-    let transport = TransportTimeout::with_outgoing_timeout(
-        transport
-            .upgrade(upgrade::Version::V1)
-            .authenticate(noise)
-            .multiplex(mp.clone())
-            .map(|(peer, muxer), _| (peer, muxing::StreamMuxerBox::new(muxer)))
-            .timeout(timeout),
-        timeout,
-    );
+    let transport = transport
+        .upgrade(upgrade::Version::V1)
+        .authenticate(noise)
+        .multiplex(mp.clone())
+        .timeout(timeout)
+        .boxed();
     let peer_id = local_peer_id.clone();
     (
         peer_id,
