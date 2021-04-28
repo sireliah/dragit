@@ -638,5 +638,5 @@ pub fn get_link(file_name: &str, path: &str) -> gtk::LinkButton {
 
 #[cfg(target_os = "windows")]
 pub fn get_link(file_name: &str, path: &str) -> gtk::LinkButton {
-    gtk::LinkButton::new_with_label(&path, Some(file_name))
+    gtk::LinkButton::with_label(&path, Some(file_name))
 }
