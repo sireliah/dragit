@@ -15,6 +15,12 @@
     </p>
   </description>
   <releases>
+        <release version="0.5.3" date="2021-04-28">
+            <description>
+              <p>Updated all major dependencies to the newest versions.</p>
+              <p>This includes libp2p, gtk and several others.</p>
+            </description>
+        </release>
         <release version="0.5.0" date="2021-03-06">
             <description>First release in Flatpak</description>
         </release>
