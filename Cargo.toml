@@ -1,6 +1,6 @@
 [package]
 name = "dragit"
-version = "0.4.0"
+version = "0.5.3"
 authors = ["sireliah"]
 edition = "2018"
 build = "build.rs"
@@ -13,16 +13,15 @@ futures = "0.3.5"
 gdk = "^0"
 gio = "^0"
 glib = "^0"
-gtk = { version = "0.8.1", features = [ "v3_18" ] }
+gtk = { version = "^0", features = [ "v3_18" ] }
 hex = "0.4.2"
 hostname = "0.3.0"
-libp2p = { version = "0.24.0", features = [ "dns", "websocket", "mplex", "mdns-async-std", "tcp-async-std", "noise" ], default-features = false }
-libp2p-secio = "0.23.0"
+libp2p = { version = "^0.37.1", features = [ "dns-async-std", "websocket", "mplex", "mdns", "tcp-async-io", "noise" ], default-features = false }
 log = "0.4.8"
-env_logger = "0.7"
+env_logger = "^0.8"
 md-5 = "0.8.0"
 pnet = "0.27.2"
-prost = "0.6.1"
+prost = "0.7.0"
 serde = { version = "1.0", features = ["derive"] }
 tempfile = "3.2.0"
 toml = "0.5.7"

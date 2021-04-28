@@ -5,8 +5,8 @@ use gtk::prelude::*;
 
 use async_std::sync::{Receiver, Sender};
 
-use glib::Continue;
-use gtk::{timeout_add, ApplicationWindow};
+use glib::{timeout_add_local, Continue};
+use gtk::ApplicationWindow;
 
 use crate::dnd::components::{get_item_name, EmptyListItem, PeerItem};
 use crate::p2p::{CurrentPeers, FileToSend, PeerEvent};
@@ -26,7 +26,7 @@ pub fn pool_peers(
     let layout_weak = layout.downgrade();
     let weak_window = window.downgrade();
 
-    timeout_add(200, move || {
+    timeout_add_local(200, move || {
         if let Some(layout_in) = layout_weak.upgrade() {
             let children: Vec<String> = layout_in
                 .get_children()
@@ -79,6 +79,5 @@ fn remove_items(layout: &gtk::ListBox) {
         name != "notification" && name != "empty-item"
     }) {
         layout.remove(child);
-        child.destroy();
     }
 }

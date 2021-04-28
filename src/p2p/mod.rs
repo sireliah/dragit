@@ -10,18 +10,16 @@ use async_std::sync::Mutex;
 use async_std::sync::{Receiver, Sender};
 use async_std::task;
 
-use futures::{executor, future, pin_mut, stream::StreamExt};
+use futures::{executor, future, stream::StreamExt};
 use libp2p::{
-    core::muxing,
-    core::transport::timeout::TransportTimeout,
     core::transport::Transport,
     core::upgrade,
-    dns, identity,
-    mdns::{Mdns, MdnsEvent},
+    identity,
+    mdns::{Mdns, MdnsConfig, MdnsEvent},
     mplex, noise,
     swarm::NetworkBehaviourEventProcess,
     tcp::TcpConfig,
-    websocket, NetworkBehaviour, PeerId, Swarm,
+    NetworkBehaviour, PeerId, Swarm,
 };
 
 pub mod commands;
@@ -115,7 +113,7 @@ impl NetworkBehaviourEventProcess<TransferOut> for MyBehaviour {
 
 async fn execute_swarm(
     sender: Sender<PeerEvent>,
-    receiver: Receiver<FileToSend>,
+    mut receiver: Receiver<FileToSend>,
     command_receiver: Receiver<TransferCommand>,
 ) -> Result<(), Box<dyn Error>> {
     let local_keys = identity::Keypair::generate_ed25519();
@@ -128,39 +126,31 @@ async fn execute_swarm(
     let mut swarm = {
         let transfer_behaviour = TransferBehaviour::new(sender.clone(), command_receiver_c, None);
         let discovery = DiscoveryBehaviour::new(sender);
-        let mdns = Mdns::new()?;
+        let mdns = Mdns::new(MdnsConfig::default()).await?;
         let behaviour = MyBehaviour {
             mdns,
             discovery,
             transfer_behaviour,
         };
         let timeout = Duration::from_secs(60);
-        let transport = {
-            let tcp = TcpConfig::new().nodelay(true);
-            let transport = dns::DnsConfig::new(tcp)?;
-            let trans_clone = transport.clone();
-            transport.or_transport(websocket::WsConfig::new(trans_clone))
-        };
+        let transport = TcpConfig::new().nodelay(true);
         let mut mplex_config = mplex::MplexConfig::new();
 
         // TODO: test different Mplex frame sizes
         let mp = mplex_config
-            .max_buffer_len(40960)
-            .split_send_size(1024 * 512);
+            .set_max_buffer_size(40960)
+            .set_split_send_size(1024 * 512);
 
         let noise_keys = noise::Keypair::<noise::X25519Spec>::new().into_authentic(&local_keys)?;
 
         let noise = noise::NoiseConfig::xx(noise_keys).into_authenticated();
 
-        let transport = TransportTimeout::with_outgoing_timeout(
-            transport
-                .upgrade(upgrade::Version::V1)
-                .authenticate(noise)
-                .multiplex(mp.clone())
-                .map(|(peer, muxer), _| (peer, muxing::StreamMuxerBox::new(muxer)))
-                .timeout(timeout),
-            timeout,
-        );
+        let transport = transport
+            .upgrade(upgrade::Version::V1)
+            .authenticate(noise)
+            .multiplex(mp.clone())
+            .timeout(timeout)
+            .boxed();
         Swarm::new(transport, behaviour, local_peer_id)
     };
 
@@ -168,12 +158,12 @@ async fn execute_swarm(
 
     let mut listening = false;
 
-    pin_mut!(receiver);
     task::block_on(future::poll_fn(move |context: &mut Context| {
         loop {
             match Receiver::poll_next_unpin(&mut receiver, context) {
                 Poll::Ready(Some(event)) => {
-                    match swarm.transfer_behaviour.push_file(event) {
+                    let behaviour = swarm.behaviour_mut();
+                    match behaviour.transfer_behaviour.push_file(event) {
                         Ok(_) => (),
                         Err(e) => error!("{:?}", e),
                     };

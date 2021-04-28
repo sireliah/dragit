@@ -165,10 +165,13 @@ impl NetworkBehaviour for DiscoveryBehaviour {
     type OutEvent = DiscoveryEvent;
 
     fn new_handler(&mut self) -> Self::ProtocolsHandler {
-        let substream_proto = SubstreamProtocol::new(Discovery {
-            hostname: self.hostname.clone(),
-            os: self.os,
-        });
+        let substream_proto = SubstreamProtocol::new(
+            Discovery {
+                hostname: self.hostname.clone(),
+                os: self.os,
+            },
+            (),
+        );
         let outbound_substream_timeout = Duration::from_secs(2);
         Self::ProtocolsHandler::new(substream_proto, outbound_substream_timeout)
     }

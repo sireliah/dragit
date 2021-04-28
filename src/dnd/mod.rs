@@ -117,10 +117,7 @@ pub fn build_window(
 
     window.show_all();
 
-    window.connect_delete_event(move |win, _| {
-        win.destroy();
-        Inhibit(false)
-    });
+    window.connect_delete_event(move |_win, _| Inhibit(false));
     Ok(())
 }
 
@@ -174,33 +171,3 @@ pub fn start_window() {
 
     application.run(&args().collect::<Vec<_>>());
 }
-
-// use crate::transfer::Protocol;
-
-// fn transfer_file(protocol: impl Protocol, path: &str) -> Result<(), Box<dyn Error>> {
-//     protocol.transfer_file(path)
-// }
-
-// TODO: reintegrate Bluetooth
-// fn spawn_send_job(file_path: &str) -> thread::Result<()> {
-//     let trimmed_path = file_path.replace("file://", "").trim().to_string();
-//     let path_arc = Arc::new(trimmed_path);
-//     let path_clone = Arc::clone(&path_arc);
-
-//     thread::spawn(move || {
-//         info!("Spawning thread");
-//         match transfer_file(BluetoothProtocol, &path_clone) {
-//             Ok(_) => (),
-//             Err(err) => error!("{}", err),
-//         }
-//     })
-//     .join()
-// }
-
-// fn push_p2p_job(file_path: String, sender: Arc<Mutex<Sender<FileToSend>>>) -> Result<(), Box<dyn Error>> {
-//     let file = FileToSend::new(&file_path)?;
-//     let mut sender = sender.lock().unwrap();
-//     sender.send(file);
-
-//     Ok(())
-// }

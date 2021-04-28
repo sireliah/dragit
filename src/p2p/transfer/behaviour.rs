@@ -64,8 +64,10 @@ impl NetworkBehaviour for TransferBehaviour {
         let handler_config = OneShotHandlerConfig {
             keep_alive_timeout: Duration::from_secs(5),
             outbound_substream_timeout: timeout,
+            // Default from the library
+            max_dial_negotiated: 8,
         };
-        let proto = SubstreamProtocol::new(tp).with_timeout(timeout);
+        let proto = SubstreamProtocol::new(tp, ()).with_timeout(timeout);
         Self::ProtocolsHandler::new(proto, handler_config)
     }
 
