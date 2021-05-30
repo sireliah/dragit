@@ -18,32 +18,24 @@ use crate::p2p::discovery::handler::KeepAliveHandler;
 use crate::p2p::discovery::protocol::{Discovery, DiscoveryEvent};
 use crate::p2p::peer::{CurrentPeers, OperatingSystem, Peer, PeerEvent};
 
+// #[derive(Debug)]
+// pub enum InnerMessage {
+//     Received(Discovery),
+//     Sent(Discovery),
+// }
+
 #[derive(Debug)]
-pub enum InnerMessage {
-    Received(Discovery),
-    Sent,
-}
+pub struct InnerMessage(Discovery);
 
 impl fmt::Display for InnerMessage {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            InnerMessage::Sent => write!(f, "InnerMessage sent"),
-            InnerMessage::Received(discovery) => {
-                write!(f, "InnerMessage received: {:?}", discovery)
-            }
-        }
+        write!(f, "Received host data from peer: {:?}", self.0)
     }
 }
 
 impl From<Discovery> for InnerMessage {
     fn from(discovery: Discovery) -> InnerMessage {
-        InnerMessage::Received(discovery)
-    }
-}
-
-impl From<()> for InnerMessage {
-    fn from(_: ()) -> InnerMessage {
-        InnerMessage::Sent
+        InnerMessage(discovery)
     }
 }
 
@@ -180,7 +172,9 @@ impl NetworkBehaviour for DiscoveryBehaviour {
         Vec::new()
     }
 
-    fn inject_connected(&mut self, _peer_id: &PeerId) {}
+    fn inject_connected(&mut self, peer_id: &PeerId) {
+        info!("Connected: {:?}", peer_id);
+    }
 
     fn inject_connection_established(
         &mut self,
@@ -206,6 +200,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                 );
                 // Once connection is established, the listener initiates
                 // the connection upgrade handshake.
+
                 let event = NetworkBehaviourAction::NotifyHandler {
                     peer_id: peer_id.to_owned(),
                     handler: NotifyHandler::One(*c),
@@ -250,17 +245,12 @@ impl NetworkBehaviour for DiscoveryBehaviour {
     }
 
     fn inject_event(&mut self, peer: PeerId, _connection: ConnectionId, event: InnerMessage) {
-        match event {
-            InnerMessage::Received(ev) => {
-                let message = DiscoveryEvent {
-                    peer,
-                    result: Ok((ev.hostname, ev.os)),
-                };
-                self.events
-                    .push_back(NetworkBehaviourAction::GenerateEvent(message));
-            }
-            InnerMessage::Sent => return,
+        let message = DiscoveryEvent {
+            peer,
+            result: Ok((event.0.hostname, event.0.os)),
         };
+        self.events
+            .push_back(NetworkBehaviourAction::GenerateEvent(message));
     }
 
     fn poll(
