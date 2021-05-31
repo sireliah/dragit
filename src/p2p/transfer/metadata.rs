@@ -9,8 +9,8 @@ use hex;
 use md5::{Digest, Md5};
 use prost::Message;
 
-use crate::p2p::transfer::FileToSend;
 use crate::p2p::TransferType;
+use crate::p2p::{peer::PayloadAccepted, transfer::FileToSend};
 
 pub const ANSWER_SIZE: usize = 2;
 pub const PACKET_SIZE: usize = 1024;
@@ -133,8 +133,14 @@ impl Answer {
         let mut received = [0u8; ANSWER_SIZE];
         socket.read_exact(&mut received).await?;
         let proto = ProtoAnswer::decode(&received[..])?;
-        Ok((proto.accepted, socket))
+        let accepted = PayloadAccepted::from_i32(proto.accepted);
+
+        match accepted {
+            Some(value) => Ok((value.into(), socket)),
+            None => Ok((false, socket)),
+        }
     }
+
     pub async fn write<TSocket>(
         mut socket: TSocket,
         accepted: bool,
@@ -142,12 +148,22 @@ impl Answer {
     where
         TSocket: AsyncRead + AsyncWrite + Send + Unpin,
     {
-        let proto = ProtoAnswer { accepted };
+        // It would make more sense to send plain boolean instead
+        // of enum, unfortunately protobuf 3 sends 0 bytes on "false" value,
+        // which made it impossible to send any data through the socket.
+        //
+        // Instead, enum with default value was used.
+        // Check metadata.proto for more information and
+        // https://github.com/protocolbuffers/protobuf/issues/359
+        let payload_accepted = PayloadAccepted::from(accepted);
+        let proto = ProtoAnswer {
+            accepted: payload_accepted as i32,
+        };
         let len = proto.encoded_len();
         let mut buf = Vec::with_capacity(len);
         proto.encode(&mut buf)?;
 
-        socket.write(&buf).await?;
+        socket.write(&buf[..len]).await?;
         socket.flush().await?;
         Ok(((), socket))
     }

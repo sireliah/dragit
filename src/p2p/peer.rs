@@ -17,9 +17,35 @@ pub enum TransferType {
     Text = 1,
 }
 
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, Enumeration)]
+pub enum PayloadAccepted {
+    Yes = 1,
+    No = 2,
+}
+
+/// Mappings for protobuf conversion
+impl From<bool> for PayloadAccepted {
+    fn from(accepted: bool) -> PayloadAccepted {
+        match accepted {
+            true => PayloadAccepted::Yes,
+            false => PayloadAccepted::No,
+        }
+    }
+}
+
+impl Into<bool> for PayloadAccepted {
+    fn into(self) -> bool {
+        match self {
+            PayloadAccepted::Yes => true,
+            PayloadAccepted::No => false,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum PeerEvent {
     PeersUpdated(CurrentPeers),
+    WaitingForAnswer,
     TransferProgress((usize, usize, Direction)),
     TransferCompleted,
     FileCorrect(String, Payload),

@@ -243,9 +243,12 @@ impl TransferOut {
         let (sender, receiver) = sync_channel::<Vec<u8>>(CHUNK_SIZE * 128);
         info!("File to send: {}", self.file);
 
+        util::notify_waiting(&self.sender_queue).await;
+
         let (size, socket): (usize, TSocket) =
             Metadata::write::<TSocket>(&self.file, socket).await?;
 
+        // Check if remote is willing to accept our file
         let (accepted, socket) = Answer::read::<TSocket>(socket).await?;
         info!("File accepted? {:?}", accepted);
 

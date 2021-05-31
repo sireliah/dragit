@@ -15,6 +15,16 @@ message Metadata {
     TransferType transfer_type = 4;
 }
 
+enum PayloadAccepted {
+    // Protobuf 3 uses default values for both booleans and enums,
+    // and that means that first value in enum is de facto 0 bytes.
+    // The DEFAULT enum option here forces protobuf to send constant amount of bytes.
+    // https://developers.google.com/protocol-buffers/docs/proto3#default
+    DEFAULT = 0;
+    YES = 1;
+    NO = 2;
+}
+
 message Answer {
-    bool accepted = 1;
+    PayloadAccepted accepted = 1;
 }
