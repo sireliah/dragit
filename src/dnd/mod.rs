@@ -59,12 +59,17 @@ pub fn build_window(
     let window_weak = window.downgrade();
     gtk_receiver.attach(None, move |values| match values {
         PeerEvent::TransferProgress((v, t, direction)) => {
+            alert_notif.hide(&overlay);
             let size = v as f64;
             let total = t as f64;
             match direction {
                 Direction::Incoming => progress.show_incoming(&overlay, size, total),
                 Direction::Outgoing => progress.show_outgoing(&overlay, size, total),
             }
+            Continue(true)
+        }
+        PeerEvent::WaitingForAnswer => {
+            alert_notif.show_text(&overlay, "Waiting for answer from the other device...");
             Continue(true)
         }
         PeerEvent::TransferCompleted => {
@@ -143,6 +148,8 @@ pub fn start_window() {
     let peer_receiver_arc = Arc::new(Mutex::new(peer_receiver));
 
     let name = "com.sireliah.Dragit";
+
+    info!("Starting {}", name);
 
     let application = gtk::Application::new(Some(&name), gio::ApplicationFlags::empty())
         .expect("Initialization failed...");

@@ -502,6 +502,12 @@ impl AppNotification {
         self.revealer.set_reveal_child(true);
     }
 
+    pub fn hide(&self, main_overlay: &gtk::Overlay) {
+        main_overlay.reorder_overlay(&self.overlay, 0);
+
+        self.revealer.set_reveal_child(false)
+    }
+
     pub fn show_text(&self, overlay: &gtk::Overlay, text: &str) {
         self.label.set_text(text);
         self.reveal(overlay);
