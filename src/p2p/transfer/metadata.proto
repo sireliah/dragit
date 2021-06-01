@@ -16,5 +16,12 @@ message Metadata {
 }
 
 message Answer {
+    // Protobuf 3 uses default values for different data types, including bools.
+    // This means that "true" value is encoded using 2 bytes, but "false" is 0 bytes.
+    // Sending 0 bytes over the socket is problematic, that's why extra field "hash"
+    // was added here. Removing the field will likely cause your connection to hang.
+    //
+    // https://developers.google.com/protocol-buffers/docs/proto3#default
     bool accepted = 1;
+    string hash = 2;
 }

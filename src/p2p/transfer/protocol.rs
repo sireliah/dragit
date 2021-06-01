@@ -22,7 +22,7 @@ use crate::p2p::peer::{Direction, PeerEvent};
 use crate::p2p::transfer::file::{get_hash_from_payload, FileToSend, Payload};
 use crate::p2p::transfer::jobs;
 use crate::p2p::transfer::metadata::{Answer, Metadata};
-use crate::p2p::util::{self, CHUNK_SIZE};
+use crate::p2p::util::{self, TSocketAlias, CHUNK_SIZE};
 use crate::user_data;
 
 #[derive(Clone, Debug)]
@@ -106,7 +106,7 @@ impl TransferPayload {
 
     async fn read_file_payload(
         &mut self,
-        socket: impl AsyncRead + AsyncWrite + Send + Unpin,
+        socket: impl TSocketAlias,
         meta: &Metadata,
         size: usize,
         direction: &Direction,
@@ -169,12 +169,9 @@ impl TransferPayload {
         Ok((counter, path))
     }
 
-    async fn read_socket<TSocket>(&mut self, socket: TSocket) -> Result<(), io::Error>
-    where
-        TSocket: AsyncRead + AsyncWrite + Send + Unpin,
-    {
+    async fn read_socket(&mut self, socket: impl TSocketAlias) -> Result<(), io::Error> {
         let direction = Direction::Incoming;
-        let (meta, mut socket): (Metadata, TSocket) = Metadata::read::<TSocket>(socket).await?;
+        let (meta, mut socket) = Metadata::read(socket).await?;
         info!("Meta received! \n{}", meta);
 
         self.notify_incoming_file_event(&meta).await;
@@ -182,7 +179,7 @@ impl TransferPayload {
 
         match self.block_for_answer(rec_cp).await {
             TransferCommand::Accept(hash) if hash == meta.hash => {
-                Answer::write(&mut socket, true).await?;
+                Answer::write(&mut socket, true, hash).await?;
 
                 util::notify_progress(&self.sender_queue, 0, meta.size, &direction).await;
 
@@ -210,7 +207,7 @@ impl TransferPayload {
             }
             TransferCommand::Accept(hash) => {
                 warn!("Accepted hash does not match: {} {}", hash, meta.hash);
-                Answer::write(&mut socket, false).await?;
+                Answer::write(&mut socket, false, hash).await?;
                 Err(io::Error::new(
                     ErrorKind::PermissionDenied,
                     "Hash does not match",
@@ -218,7 +215,7 @@ impl TransferPayload {
             }
             TransferCommand::Deny(hash) => {
                 warn!("Denied hash: {}", hash);
-                Answer::write(&mut socket, false).await?;
+                Answer::write(&mut socket, false, hash).await?;
                 Err(io::Error::new(ErrorKind::PermissionDenied, "Rejected"))
             }
         }
@@ -235,18 +232,17 @@ impl UpgradeInfo for TransferPayload {
 }
 
 impl TransferOut {
-    async fn write_socket<TSocket>(&self, socket: TSocket) -> Result<(), io::Error>
-    where
-        TSocket: AsyncRead + AsyncWrite + Send + Unpin,
-    {
+    async fn write_socket(&self, socket: impl TSocketAlias) -> Result<(), io::Error> {
         let direction = Direction::Outgoing;
         let (sender, receiver) = sync_channel::<Vec<u8>>(CHUNK_SIZE * 128);
         info!("File to send: {}", self.file);
 
-        let (size, socket): (usize, TSocket) =
-            Metadata::write::<TSocket>(&self.file, socket).await?;
+        util::notify_waiting(&self.sender_queue).await;
 
-        let (accepted, socket) = Answer::read::<TSocket>(socket).await?;
+        let (size, socket) = Metadata::write(&self.file, socket).await?;
+
+        // Check if remote is willing to accept our file
+        let (accepted, socket) = Answer::read(socket).await?;
         info!("File accepted? {:?}", accepted);
 
         if accepted {
@@ -299,6 +295,7 @@ impl TransferOut {
             util::notify_completed(&self.sender_queue).await;
             Ok(())
         } else {
+            util::notify_rejected(&self.sender_queue).await;
             Ok(())
         }
     }

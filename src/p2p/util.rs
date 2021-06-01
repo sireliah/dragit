@@ -1,6 +1,7 @@
 use std::io::{Error, ErrorKind};
 
 use async_std::sync::Sender as AsyncSender;
+use futures::prelude::*;
 
 #[cfg(unix)]
 use pnet_datalink;
@@ -9,6 +10,10 @@ use pnet_datalink;
 use ipconfig;
 
 use super::peer::{Direction, PeerEvent};
+
+// Convenience trait implementation, which helps to alias socket type
+pub trait TSocketAlias: AsyncRead + AsyncWrite + Send + Unpin {}
+impl<T: AsyncRead + AsyncWrite + Send + Unpin> TSocketAlias for T {}
 
 pub const CHUNK_SIZE: usize = 4096;
 
@@ -33,6 +38,20 @@ pub async fn notify_completed(sender_queue: &AsyncSender<PeerEvent>) {
     sender_queue
         .to_owned()
         .send(PeerEvent::TransferCompleted)
+        .await;
+}
+
+pub async fn notify_waiting(sender_queue: &AsyncSender<PeerEvent>) {
+    sender_queue
+        .to_owned()
+        .send(PeerEvent::WaitingForAnswer)
+        .await;
+}
+
+pub async fn notify_rejected(sender_queue: &AsyncSender<PeerEvent>) {
+    sender_queue
+        .to_owned()
+        .send(PeerEvent::TransferRejected)
         .await;
 }
 
