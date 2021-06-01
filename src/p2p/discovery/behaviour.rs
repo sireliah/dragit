@@ -18,11 +18,6 @@ use crate::p2p::discovery::handler::KeepAliveHandler;
 use crate::p2p::discovery::protocol::{Discovery, DiscoveryEvent};
 use crate::p2p::peer::{CurrentPeers, OperatingSystem, Peer, PeerEvent};
 
-// #[derive(Debug)]
-// pub enum InnerMessage {
-//     Received(Discovery),
-//     Sent(Discovery),
-// }
 
 #[derive(Debug)]
 pub struct InnerMessage(Discovery);

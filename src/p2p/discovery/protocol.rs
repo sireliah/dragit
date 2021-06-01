@@ -7,14 +7,11 @@ use prost::Message;
 use super::proto::Host;
 
 use crate::p2p::peer::OperatingSystem;
+use crate::p2p::util::TSocketAlias;
 
 type DiscoverySuccess = (String, OperatingSystem);
 type DiscoveryFailure = io::Error;
 pub type DiscoveryResult = Result<DiscoverySuccess, DiscoveryFailure>;
-
-// Convenience trait implementation, which helps to alias socket type
-trait TSocketAlias: AsyncRead + AsyncWrite + Send + Unpin {}
-impl<T: AsyncRead + AsyncWrite + Send + Unpin> TSocketAlias for T {}
 
 #[derive(Debug)]
 pub struct DiscoveryEvent {

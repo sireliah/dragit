@@ -9,8 +9,9 @@ use hex;
 use md5::{Digest, Md5};
 use prost::Message;
 
+use crate::p2p::transfer::FileToSend;
+use crate::p2p::util::TSocketAlias;
 use crate::p2p::TransferType;
-use crate::p2p::{peer::PayloadAccepted, transfer::FileToSend};
 
 pub const ANSWER_SIZE: usize = 2;
 pub const PACKET_SIZE: usize = 1024;
@@ -24,28 +25,8 @@ pub struct Metadata {
 }
 
 impl Metadata {
-    pub async fn read<TSocket>(mut socket: TSocket) -> Result<(Self, TSocket), io::Error>
-    where
-        TSocket: AsyncRead + AsyncWrite + Send + Unpin,
-    {
-        let mut read = 0;
-        let mut data: Vec<u8> = vec![];
-        loop {
-            let mut buff = [0u8; PACKET_SIZE];
-            match socket.read(&mut buff).await {
-                Ok(n) => {
-                    read += n;
-                    data.extend(&buff[..n]);
-                    if read >= PACKET_SIZE {
-                        break;
-                    }
-                }
-                Err(e) => return Err(e),
-            }
-        }
-
-        // Remove all extra null bytes from the buffer
-        data.retain(|x| *x != 0u8);
+    pub async fn read(socket: impl TSocketAlias) -> Result<(Self, impl TSocketAlias), io::Error> {
+        let (data, socket) = read_from_socket(socket).await?;
         let proto = ProtoMetadata::decode(&data[..])?;
 
         let name = proto.name;
@@ -65,13 +46,10 @@ impl Metadata {
         ))
     }
 
-    pub async fn write<TSocket>(
+    pub async fn write(
         file: &FileToSend,
-        mut socket: TSocket,
-    ) -> Result<(usize, TSocket), io::Error>
-    where
-        TSocket: AsyncRead + AsyncWrite + Send + Unpin,
-    {
+        mut socket: impl TSocketAlias,
+    ) -> Result<(usize, impl TSocketAlias), io::Error> {
         let hash = file.calculate_hash().await?;
         let size = file.check_size()?;
 
@@ -125,52 +103,53 @@ impl fmt::Display for Metadata {
 pub struct Answer;
 
 impl Answer {
-    pub async fn read<TSocket>(mut socket: TSocket) -> Result<(bool, TSocket), io::Error>
-    where
-        TSocket: AsyncRead + AsyncWrite + Send + Unpin,
-    {
-        // Answer size is not expected to grow, that's why constant size is used here
-        let mut received = [0u8; ANSWER_SIZE];
-        socket.read_exact(&mut received).await?;
-        let proto = ProtoAnswer::decode(&received[..])?;
-        let accepted = PayloadAccepted::from_i32(proto.accepted);
+    pub async fn read(socket: impl TSocketAlias) -> Result<(bool, impl TSocketAlias), io::Error> {
+        let (data, socket) = read_from_socket(socket).await?;
+        let proto = ProtoAnswer::decode(&data[..])?;
 
-        match accepted {
-            Some(value) => Ok((value.into(), socket)),
-            None => Ok((false, socket)),
-        }
+        Ok((proto.accepted, socket))
     }
 
-    pub async fn write<TSocket>(
-        mut socket: TSocket,
+    pub async fn write(
+        mut socket: impl TSocketAlias,
         accepted: bool,
-    ) -> Result<((), TSocket), io::Error>
-    where
-        TSocket: AsyncRead + AsyncWrite + Send + Unpin,
-    {
-        // It would make more sense to send plain boolean instead
-        // of enum, unfortunately protobuf 3 sends 0 bytes on "false" value,
-        // which made it impossible to send any data through the socket.
-        //
-        // Instead, enum with default value was used.
-        // Check metadata.proto for more information and
-        // https://github.com/protocolbuffers/protobuf/issues/359
-        let payload_accepted = PayloadAccepted::from(accepted);
-        let proto = ProtoAnswer {
-            accepted: payload_accepted as i32,
-        };
+        hash: String,
+    ) -> Result<((), impl TSocketAlias), io::Error> {
+        let proto = ProtoAnswer { accepted, hash };
         let len = proto.encoded_len();
+        let fill = vec![0; PACKET_SIZE - len];
         let mut buf = Vec::with_capacity(len);
         proto.encode(&mut buf)?;
 
         socket.write(&buf[..len]).await?;
+        socket.write(&fill).await?;
         socket.flush().await?;
         Ok(((), socket))
     }
 }
 
-pub fn add_row(value: &str) -> Vec<u8> {
-    format!("{}\n", value).into_bytes()
+async fn read_from_socket(
+    mut socket: impl TSocketAlias,
+) -> Result<(Vec<u8>, impl TSocketAlias), io::Error> {
+    let mut read = 0;
+    let mut data: Vec<u8> = vec![];
+    loop {
+        let mut buff = [0u8; PACKET_SIZE];
+        match socket.read(&mut buff).await {
+            Ok(n) => {
+                read += n;
+                data.extend(&buff[..n]);
+                if read >= PACKET_SIZE {
+                    break;
+                }
+            }
+            Err(e) => return Err(e),
+        }
+    }
+
+    // Remove all extra null bytes from the buffer
+    data.retain(|x| *x != 0u8);
+    Ok((data, socket))
 }
 
 pub fn hash_contents(mut file: fs::File) -> Result<String, Error> {
