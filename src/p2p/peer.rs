@@ -46,6 +46,7 @@ impl Into<bool> for PayloadAccepted {
 pub enum PeerEvent {
     PeersUpdated(CurrentPeers),
     WaitingForAnswer,
+    TransferRejected,
     TransferProgress((usize, usize, Direction)),
     TransferCompleted,
     FileCorrect(String, Payload),

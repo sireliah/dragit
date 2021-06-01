@@ -43,6 +43,13 @@ pub async fn notify_waiting(sender_queue: &AsyncSender<PeerEvent>) {
         .await;
 }
 
+pub async fn notify_rejected(sender_queue: &AsyncSender<PeerEvent>) {
+    sender_queue
+        .to_owned()
+        .send(PeerEvent::TransferRejected)
+        .await;
+}
+
 pub fn time_to_notify(current_size: usize, total_size: usize) -> bool {
     if current_size >= ((total_size / 10) + CHUNK_SIZE * 256) {
         true

@@ -72,6 +72,10 @@ pub fn build_window(
             alert_notif.show_text(&overlay, "Waiting for answer from the other device...");
             Continue(true)
         }
+        PeerEvent::TransferRejected => {
+            alert_notif.show_text(&overlay, "Payload was rejected");
+            Continue(true)
+        }
         PeerEvent::TransferCompleted => {
             progress.hide(&overlay);
             Continue(true)

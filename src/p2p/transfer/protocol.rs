@@ -302,6 +302,7 @@ impl TransferOut {
             util::notify_completed(&self.sender_queue).await;
             Ok(())
         } else {
+            util::notify_rejected(&self.sender_queue).await;
             Ok(())
         }
     }
