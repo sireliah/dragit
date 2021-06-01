@@ -31,7 +31,6 @@ The application uses mDNS for automatic device discovery with help of `libp2p` l
     - [How to build on Windows](#how-to-build-on-windows)
         - [Windows requirements](#windows-requirements)
     - [Performance](#performance)
-    - [Bluetooth support](#bluetooth-support)
     - [TODO](#todos)
     - [Done](#done)
 
@@ -98,9 +97,6 @@ $ cargo build --release
 
 $ ./target/release/dragit
 ```
-
-### Bluetooth support
-`Dragit` can use Bluetooth OBEX protocol for file transfer through the D-Bus BlueZ interface, which should work on most of the Linux devices. This future needs some work and is disabled now.
 
 ### TODOs
 #### Features
