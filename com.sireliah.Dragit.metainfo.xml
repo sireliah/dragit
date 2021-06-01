@@ -15,6 +15,19 @@
     </p>
   </description>
   <releases>
+        <release version="0.6.0" date="2021-06-02">
+            <description>
+              <p>Updated the discovery behaviour to be more resilient to the network/firewall issues</p>
+              <p>
+                Fixed the bug with connection hanging when you rejected the file.
+                Watch out, this change is not backward compatible, so make sure to update Dragit on all of your devices.
+              </p>
+              <p>
+                Added notification when Dragit is waiting for the file to be accepted.
+                This was indeed required, because one might have wondered if the program got the file or not.
+              </p>
+            </description>
+        </release>
         <release version="0.5.3" date="2021-04-28">
             <description>
               <p>Updated all major dependencies to the newest versions.</p>
