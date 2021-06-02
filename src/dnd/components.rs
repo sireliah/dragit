@@ -509,6 +509,7 @@ impl AppNotification {
     }
 
     pub fn show_text(&self, overlay: &gtk::Overlay, text: &str) {
+        self.remove_link();
         self.label.set_text(text);
         self.reveal(overlay);
     }
