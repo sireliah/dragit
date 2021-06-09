@@ -7,6 +7,91 @@ use zvariant::OwnedObjectPath;
 
 use crate::user_data::UserConfig;
 
+pub struct Firewall {
+    connection: Connection,
+}
+
+impl Firewall {
+    pub fn new() -> Result<Firewall, Box<dyn Error>> {
+        let connection = Connection::new_system()?;
+        Ok(Firewall { connection })
+    }
+
+    pub fn check_rules_needed(&self, port: u16) -> Result<(bool, bool), Box<dyn Error>> {
+        let proxy = FirewallD1ZoneProxy::new(&self.connection)?;
+        let mdns_enabled = proxy.query_service("", "mdns")?;
+        let port_enabled = proxy.query_port("", &port.to_string(), "tcp")?;
+
+        let (mdns_needed, port_needed) = (!mdns_enabled, !port_enabled);
+        info!(
+            "Need do update: Mdns: {}, Port: {}",
+            mdns_needed, port_needed
+        );
+        Ok((mdns_needed, port_needed))
+    }
+
+    pub fn handle(&self, mdns_needed: bool, port_needed: bool) -> Result<(), Box<dyn Error>> {
+        if mdns_needed || port_needed {
+            let config = UserConfig::new()?;
+            let port = config.get_port();
+            let port_str = port.to_string();
+
+            // Calls below will prompt user for password
+            let zone_path = self.get_default_zone_object_path()?;
+            let proxy_config =
+                FirewallD1ConfigZoneProxy::new_for_path(&self.connection, &zone_path)?;
+
+            if port_needed {
+                proxy_config.add_port(&port_str, "tcp")?;
+            }
+
+            if mdns_needed {
+                match proxy_config.add_service("mdns") {
+                    Ok(_) => info!("Service added"),
+                    Err(e) => {
+                        let error = e.to_string();
+                        if error.contains("ALREADY_ENABLED") {
+                            warn!("Mdns was already enabled in permanent config");
+                        } else {
+                            error!("Service error: {}", error);
+                            return Err(e.into());
+                        }
+                    }
+                };
+            }
+
+            self.reload_firewall()?;
+        }
+        Ok(())
+    }
+
+    fn reload_firewall(&self) -> Result<(), Box<dyn Error>> {
+        let proxy = FirewallD1Proxy::new(&self.connection)?;
+        info!("Reloaded firewall");
+        Ok(proxy.reload()?)
+    }
+
+    fn get_default_zone_object_path(&self) -> Result<String, Box<dyn Error>> {
+        let proxy = FirewallD1Proxy::new(&self.connection)?;
+        let proxy_config = FirewallD1ConfigProxy::new(&self.connection)?;
+
+        let default_zone = proxy.get_default_zone()?;
+        let zone_names = proxy_config.get_zone_names()?;
+        let zone_paths = proxy_config.list_zones()?;
+
+        let mut hash = HashMap::new();
+        for (path, zone) in zone_paths.iter().zip(zone_names.iter()) {
+            hash.insert(zone, path);
+        }
+        let path = match hash.get(&default_zone) {
+            Some(v) => v.to_string(),
+            None => Err("Could not determine the default firewall zone")?,
+        };
+        info!("Default zone: {}, path: {}", default_zone, path);
+        Ok(path)
+    }
+}
+
 #[dbus_proxy(
     default_service = "org.fedoraproject.FirewallD1",
     default_path = "/org/fedoraproject/FirewallD1",
@@ -59,79 +144,4 @@ trait FirewallD1ConfigZone {
 
     #[dbus_proxy(name = "addService")]
     fn add_service(&self, service: &str) -> zbus::Result<()>;
-}
-
-fn get_default_zone_object_path(connection: &Connection) -> Result<String, Box<dyn Error>> {
-    let proxy = FirewallD1Proxy::new(connection)?;
-    let proxy_config = FirewallD1ConfigProxy::new(connection)?;
-
-    let default_zone = proxy.get_default_zone()?;
-    let zone_names = proxy_config.get_zone_names()?;
-    let zone_paths = proxy_config.list_zones()?;
-
-    let mut hash = HashMap::new();
-    for (path, zone) in zone_paths.iter().zip(zone_names.iter()) {
-        hash.insert(zone, path);
-    }
-    let path = match hash.get(&default_zone) {
-        Some(v) => v.to_string(),
-        None => Err("Could not determine the default firewall zone")?,
-    };
-    info!("Default zone: {}, path: {}", default_zone, path);
-    Ok(path)
-}
-
-fn check_rules_needed(connection: &Connection, port: u16) -> Result<(bool, bool), Box<dyn Error>> {
-    let proxy = FirewallD1ZoneProxy::new(connection)?;
-    let mdns_enabled = proxy.query_service("", "mdns")?;
-    let port_enabled = proxy.query_port("", &port.to_string(), "tcp")?;
-
-    Ok((!mdns_enabled, !port_enabled))
-}
-
-fn reload_firewall(connection: &Connection) -> Result<(), Box<dyn Error>> {
-    let proxy = FirewallD1Proxy::new(&connection)?;
-    info!("Reloaded firewall");
-    Ok(proxy.reload()?)
-}
-
-pub fn handle_firewall() -> Result<(), Box<dyn Error>> {
-    let connection = Connection::new_system()?;
-    let config = UserConfig::new()?;
-    let port = config.get_port();
-    let (mdns_needed, port_needed) = check_rules_needed(&connection, port)?;
-    info!(
-        "Need to change config for: Mdns: {}, Port: {}",
-        mdns_needed, port_needed
-    );
-
-    if mdns_needed || port_needed {
-        let port_str = port.to_string();
-
-        // Calls below will prompt user for password
-        let zone_path = get_default_zone_object_path(&connection)?;
-        let proxy_config = FirewallD1ConfigZoneProxy::new_for_path(&connection, &zone_path)?;
-
-        if port_needed {
-            proxy_config.add_port(&port_str, "tcp")?;
-        }
-
-        if mdns_needed {
-            match proxy_config.add_service("mdns") {
-                Ok(_) => info!("Service added"),
-                Err(e) => {
-                    let error = e.to_string();
-                    if error.contains("ALREADY_ENABLED") {
-                        warn!("Mdns was already enabled in permanent config");
-                    } else {
-                        error!("Service error: {}", error);
-                        return Err(e.into());
-                    }
-                }
-            };
-        }
-
-        reload_firewall(&connection)?;
-    }
-    Ok(())
 }

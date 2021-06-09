@@ -572,6 +572,32 @@ impl AcceptFileDialog {
     }
 }
 
+pub struct FirewallDialog(gtk::MessageDialog);
+
+impl FirewallDialog {
+    pub fn new(window: &gtk::ApplicationWindow) -> FirewallDialog {
+        let dialog = gtk::MessageDialog::new(
+            Some(window),
+            gtk::DialogFlags::MODAL,
+            gtk::MessageType::Question,
+            gtk::ButtonsType::YesNo,
+            concat!(
+                "To work correctly, Dragit requires two open ports on the firewall.\n",
+                "Your current firewall configuration would prevent the application from working.\n",
+                "Would you like to let Dragit configure the firewall for you?\n",
+                "If yes, you'll be prompted for password."
+            ),
+        );
+        FirewallDialog(dialog)
+    }
+
+    pub fn run(&self) -> gtk::ResponseType {
+        let resp = self.0.run();
+        self.0.close();
+        resp
+    }
+}
+
 /// Element shown when there are no devices to display yet
 /// TODO: Probably can be replaced with gtk placeholder
 pub struct EmptyListItem {

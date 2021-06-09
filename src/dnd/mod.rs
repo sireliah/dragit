@@ -14,10 +14,12 @@ use gtk::GtkWindowExt;
 
 use async_std::sync::{channel, Receiver, Sender};
 
-use crate::firewall::handle_firewall;
+use crate::firewall::Firewall;
 use crate::p2p::{peer::Direction, run_server, FileToSend, PeerEvent, TransferCommand};
+use crate::user_data::UserConfig;
 use components::{
-    AcceptFileDialog, AppNotification, MainLayout, NotificationType, ProgressNotification, STYLE,
+    AcceptFileDialog, AppNotification, FirewallDialog, MainLayout, NotificationType,
+    ProgressNotification, STYLE,
 };
 use events::pool_peers;
 
@@ -26,7 +28,7 @@ pub fn build_window(
     file_sender: Arc<Mutex<Sender<FileToSend>>>,
     peer_receiver: Arc<Mutex<Receiver<PeerEvent>>>,
     command_sender: Arc<Mutex<Sender<TransferCommand>>>,
-    f: fn(),
+    f: fn(&gtk::ApplicationWindow),
 ) -> Result<(), Box<dyn Error>> {
     let title = format!("Dragit {}", env!("CARGO_PKG_VERSION"));
 
@@ -129,7 +131,27 @@ pub fn build_window(
     window.show_all();
 
     window.connect_delete_event(move |_win, _| Inhibit(false));
-    f();
+    f(&window);
+    Ok(())
+}
+
+fn handle_firewall(window: &gtk::ApplicationWindow) -> Result<(), Box<dyn Error>> {
+    let config = UserConfig::new()?;
+    let port = config.get_port();
+
+    let firewall = Firewall::new()?;
+    let (mdns_needed, port_needed) = firewall.check_rules_needed(port)?;
+
+    if mdns_needed || port_needed {
+        let dialog = FirewallDialog::new(window);
+        let response = dialog.run();
+        match response {
+            gtk::ResponseType::Yes => firewall.handle(mdns_needed, port_needed)?,
+            gtk::ResponseType::No => info!("Not changing firewall configuration"),
+            _ => warn!("Unexpected answer"),
+        };
+    }
+
     Ok(())
 }
 
@@ -181,9 +203,9 @@ pub fn start_window() {
             file_sender_c,
             peer_receiver_c,
             command_sender_c,
-            || {
+            |window| {
                 if cfg!(target_os = "linux") {
-                    match handle_firewall() {
+                    match handle_firewall(window) {
                         Ok(_) => {}
                         Err(e) => error!("Firewall handling error: {}", e),
                     }
