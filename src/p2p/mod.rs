@@ -28,6 +28,7 @@ pub mod peer;
 pub mod transfer;
 pub mod util;
 
+use crate::user_data::UserConfig;
 pub use commands::TransferCommand;
 pub use discovery::{DiscoveryBehaviour, DiscoveryEvent};
 pub use peer::{CurrentPeers, OperatingSystem, Peer, PeerEvent, TransferType};
@@ -154,7 +155,11 @@ async fn execute_swarm(
         Swarm::new(transport, behaviour, local_peer_id)
     };
 
-    Swarm::listen_on(&mut swarm, "/ip4/0.0.0.0/tcp/0".parse()?)?;
+    let config = UserConfig::new()?;
+    let port = config.get_port();
+
+    let address = format!("/ip4/0.0.0.0/tcp/{}", port);
+    Swarm::listen_on(&mut swarm, address.parse()?)?;
 
     let mut listening = false;
 

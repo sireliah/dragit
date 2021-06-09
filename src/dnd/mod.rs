@@ -14,6 +14,7 @@ use gtk::GtkWindowExt;
 
 use async_std::sync::{channel, Receiver, Sender};
 
+use crate::firewall::handle_firewall;
 use crate::p2p::{peer::Direction, run_server, FileToSend, PeerEvent, TransferCommand};
 use components::{
     AcceptFileDialog, AppNotification, MainLayout, NotificationType, ProgressNotification, STYLE,
@@ -25,6 +26,7 @@ pub fn build_window(
     file_sender: Arc<Mutex<Sender<FileToSend>>>,
     peer_receiver: Arc<Mutex<Receiver<PeerEvent>>>,
     command_sender: Arc<Mutex<Sender<TransferCommand>>>,
+    f: fn(),
 ) -> Result<(), Box<dyn Error>> {
     let title = format!("Dragit {}", env!("CARGO_PKG_VERSION"));
 
@@ -127,6 +129,7 @@ pub fn build_window(
     window.show_all();
 
     window.connect_delete_event(move |_win, _| Inhibit(false));
+    f();
     Ok(())
 }
 
@@ -173,7 +176,20 @@ pub fn start_window() {
         let peer_receiver_c = Arc::clone(&peer_receiver_arc);
         let command_sender_c = Arc::new(Mutex::new(command_sender.clone()));
 
-        match build_window(app, file_sender_c, peer_receiver_c, command_sender_c) {
+        match build_window(
+            app,
+            file_sender_c,
+            peer_receiver_c,
+            command_sender_c,
+            || {
+                if cfg!(target_os = "linux") {
+                    match handle_firewall() {
+                        Ok(_) => {}
+                        Err(e) => error!("Firewall handling error: {}", e),
+                    }
+                }
+            },
+        ) {
             Ok(_) => info!("Window started"),
             Err(e) => error!("Window error: {:?}", e),
         };
