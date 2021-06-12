@@ -3,6 +3,7 @@ use gtk::prelude::*;
 use bytesize::ByteSize;
 
 use crate::p2p::TransferType;
+use crate::user_data::UserConfig;
 
 pub struct AcceptFileDialog(gtk::MessageDialog);
 
@@ -41,18 +42,25 @@ impl AcceptFileDialog {
 pub struct FirewallDialog(gtk::MessageDialog);
 
 impl FirewallDialog {
-    pub fn new(window: &gtk::ApplicationWindow) -> FirewallDialog {
+    pub fn new(window: &gtk::ApplicationWindow, config: &UserConfig) -> FirewallDialog {
+        let port = config.get_port();
+        let message = concat!(
+            "Your current firewall configuration prevents Dragit from working.\n",
+            "\n",
+            "Dragit can configure the firewall for you. Would you like it to do so?\n",
+            "If yes, you'll be prompted for password.\n",
+            "\n",
+            "Following ports will be added:\n",
+            "- tcp 5353\n",
+            "- tcp ",
+        );
+        let text = format!("{}{}", message, port);
         let dialog = gtk::MessageDialog::new(
             Some(window),
             gtk::DialogFlags::MODAL,
             gtk::MessageType::Question,
             gtk::ButtonsType::YesNo,
-            concat!(
-                "To work correctly, Dragit requires two open ports on the firewall.\n",
-                "Your current firewall configuration would prevent the application from working.\n",
-                "Would you like to let Dragit configure the firewall for you?\n",
-                "If yes, you'll be prompted for password."
-            ),
+            &text,
         );
         FirewallDialog(dialog)
     }

@@ -144,7 +144,7 @@ fn handle_firewall(window: &gtk::ApplicationWindow) -> Result<(), Box<dyn Error>
     let (mdns_needed, port_needed) = firewall.check_rules_needed(port)?;
 
     if mdns_needed || port_needed {
-        let dialog = FirewallDialog::new(window);
+        let dialog = FirewallDialog::new(window, &config);
         let response = dialog.run();
         match response {
             gtk::ResponseType::Yes => firewall.handle(mdns_needed, port_needed)?,
