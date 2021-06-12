@@ -1,3 +1,11 @@
+/// This module provides Linux version of Dragit with runtime firewalld check
+/// of services and ports required for the application to work.
+///
+/// Integration is done through D-Bus interfaces of firewalld:
+/// https://firewalld.org/documentation/man-pages/firewalld.dbus.html
+///
+/// In order to avoid asking user for authorization every time Dragit is ran,
+/// we add ports to the permanent configuration.
 use std::collections::HashMap;
 use std::error::Error;
 
@@ -24,7 +32,7 @@ impl Firewall {
 
         let (mdns_needed, port_needed) = (!mdns_enabled, !port_enabled);
         info!(
-            "Need do update: Mdns: {}, Port: {}",
+            "Firewalld check, need do enable: Mdns: {}, Port: {}",
             mdns_needed, port_needed
         );
         Ok((mdns_needed, port_needed))

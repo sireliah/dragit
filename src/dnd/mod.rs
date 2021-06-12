@@ -16,7 +16,9 @@ use gtk::GtkWindowExt;
 
 use async_std::sync::{channel, Receiver, Sender};
 
+#[cfg(target_os = "linux")]
 use crate::firewall::Firewall;
+
 use crate::p2p::{peer::Direction, run_server, FileToSend, PeerEvent, TransferCommand};
 use crate::user_data::UserConfig;
 use components::{MainLayout, STYLE};
@@ -136,7 +138,11 @@ pub fn build_window(
     Ok(())
 }
 
+#[cfg(target_os = "linux")]
 fn handle_firewall(window: &gtk::ApplicationWindow) -> Result<(), Box<dyn Error>> {
+    // Check firewalld configuration if applicable and offer permanently opening ports
+    // in case they are closed in the runtime rules.
+    // If user happens not to use firewalld in their distribution, this function will just return error
     let config = UserConfig::new()?;
     let port = config.get_port();
 
@@ -153,6 +159,11 @@ fn handle_firewall(window: &gtk::ApplicationWindow) -> Result<(), Box<dyn Error>
         };
     }
 
+    Ok(())
+}
+
+#[cfg(not(target_os = "linux"))]
+fn handle_firewall(window: &gtk::ApplicationWindow) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
@@ -204,13 +215,9 @@ pub fn start_window() {
             file_sender_c,
             peer_receiver_c,
             command_sender_c,
-            |window| {
-                if cfg!(target_os = "linux") {
-                    match handle_firewall(window) {
-                        Ok(_) => {}
-                        Err(e) => error!("Firewall handling error: {}", e),
-                    }
-                }
+            |window| match handle_firewall(window) {
+                Ok(_) => {}
+                Err(e) => error!("Firewall handling error: {}", e),
             },
         ) {
             Ok(_) => info!("Window started"),

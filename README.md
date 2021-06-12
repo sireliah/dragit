@@ -15,6 +15,7 @@ Dragit helps you share files between computers in the same network.
 - requires no configuration
 - single purpose - does only one thing and nothing more
 - works on Linux and Windows machines
+- automatically checks the firewalld config on Linux distros and offers opening the ports
 
 The application uses mDNS for automatic device discovery with help of `libp2p` library. The GUI is implemented in `gtk-rs`.
 
@@ -104,7 +105,6 @@ $ ./target/release/dragit
 - show username in the device list
 - have list of trusted devices
 - add files queue
-- re-enable the Bluetooth
 
 #### Maintenance
 - TCP retransmissions - what is wrong?
@@ -115,6 +115,7 @@ $ ./target/release/dragit
 - adjust network timeouts
 
 ### Done
+- handle firewalld rules when needed
 - show easy to understand instruction on startup
 - show details about the host
 - choose directory

@@ -7,6 +7,7 @@ use directories_next::{BaseDirs, UserDirs};
 use serde::{Deserialize, Serialize};
 use toml;
 
+// Unassigned in IANA
 const DEFAULT_LISTEN_PORT: u16 = 36571;
 
 fn get_timestamp() -> u64 {
