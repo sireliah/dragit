@@ -7,7 +7,9 @@ use std::thread;
 use gio::prelude::*;
 use gtk::prelude::*;
 pub mod components;
+mod dialogs;
 mod events;
+mod notifications;
 
 use glib::Continue;
 use gtk::GtkWindowExt;
@@ -17,11 +19,10 @@ use async_std::sync::{channel, Receiver, Sender};
 use crate::firewall::Firewall;
 use crate::p2p::{peer::Direction, run_server, FileToSend, PeerEvent, TransferCommand};
 use crate::user_data::UserConfig;
-use components::{
-    AcceptFileDialog, AppNotification, FirewallDialog, MainLayout, NotificationType,
-    ProgressNotification, STYLE,
-};
+use components::{MainLayout, STYLE};
+use dialogs::{AcceptFileDialog, FirewallDialog};
 use events::pool_peers;
+use notifications::{AppNotification, NotificationType, ProgressNotification};
 
 pub fn build_window(
     application: &gtk::Application,
