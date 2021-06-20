@@ -147,13 +147,13 @@ fn handle_firewall(window: &gtk::ApplicationWindow) -> Result<(), Box<dyn Error>
     let port = config.get_port();
 
     let firewall = Firewall::new()?;
-    let (mdns_needed, port_needed) = firewall.check_rules_needed(port)?;
+    let required_services = firewall.check_rules_needed(port)?;
 
-    if mdns_needed || port_needed {
+    if required_services.0 || required_services.1 {
         let dialog = FirewallDialog::new(window, &config);
         let response = dialog.run();
         match response {
-            gtk::ResponseType::Yes => firewall.handle(mdns_needed, port_needed)?,
+            gtk::ResponseType::Yes => firewall.handle(required_services)?,
             gtk::ResponseType::No => info!("Not changing firewall configuration"),
             _ => warn!("Unexpected answer"),
         };

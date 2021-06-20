@@ -1,3 +1,4 @@
+use std::error::Error;
 /// This module provides Linux version of Dragit with runtime firewalld check
 /// of services and ports required for the application to work.
 ///
@@ -6,14 +7,41 @@
 ///
 /// In order to avoid asking user for authorization every time Dragit is ran,
 /// we add ports to the permanent configuration.
-use std::collections::HashMap;
-use std::error::Error;
+use std::{collections::HashMap, vec};
 
+use serde::{Deserialize, Serialize};
 use zbus::dbus_proxy;
 use zbus::{self, Connection};
-use zvariant::OwnedObjectPath;
+use zvariant::{derive::Type, OwnedObjectPath, Type};
 
 use crate::user_data::UserConfig;
+
+#[derive(Debug, Serialize, Deserialize, Type, PartialEq)]
+pub struct ServiceConfig {
+    version: String,
+    short: String,
+    description: String,
+    ports: Vec<(String, String)>,
+    module_names: Vec<String>,
+    destinations: HashMap<String, String>,
+    protocols: Vec<String>,
+    source_ports: Vec<(String, String)>,
+}
+
+impl ServiceConfig {
+    fn new(port: String) -> ServiceConfig {
+        ServiceConfig {
+            version: "".to_string(),
+            short: "Dragit".to_string(),
+            description: "Dragit is a local network file sharing application".to_string(),
+            ports: vec![(port, "tcp".to_string())],
+            module_names: vec![],
+            destinations: HashMap::new(),
+            protocols: vec![],
+            source_ports: vec![],
+        }
+    }
+}
 
 pub struct Firewall {
     connection: Connection,
@@ -27,43 +55,72 @@ impl Firewall {
 
     pub fn check_rules_needed(&self, port: u16) -> Result<(bool, bool), Box<dyn Error>> {
         let proxy = FirewallD1ZoneProxy::new(&self.connection)?;
-        let mdns_enabled = proxy.query_service("", "mdns")?;
-        let port_enabled = proxy.query_port("", &port.to_string(), "tcp")?;
+        let dragit_port_enabled = proxy.query_port("", &port.to_string(), "tcp")?;
+        let mdns_port_enabled = proxy.query_port("", "5353", "udp")?;
 
-        let (mdns_needed, port_needed) = (!mdns_enabled, !port_enabled);
-        info!(
-            "Firewalld check, need do enable: Mdns: {}, Port: {}",
-            mdns_needed, port_needed
-        );
-        Ok((mdns_needed, port_needed))
+        info!("Running firewalld check");
+
+        // No need to check services if right ports are already opened
+        if dragit_port_enabled && mdns_port_enabled {
+            Ok((false, false))
+        } else {
+            let mdns_service_enabled = proxy.query_service("", "mdns")?;
+            let dragit_service_enabled = match proxy.query_service("", "dragit") {
+                Ok(v) => v,
+                Err(e) => {
+                    catch_dbus_error(e, "INVALID_SERVICE")?;
+                    // This means that service is not present in permanent conf
+                    false
+                }
+            };
+            let (mdns_needed, dragit_needed) = (!mdns_service_enabled, !dragit_service_enabled);
+            info!(
+                "Need do enable services: mdns: {}, dragit: {}",
+                mdns_needed, dragit_needed
+            );
+            Ok((mdns_needed, dragit_needed))
+        }
     }
 
-    pub fn handle(&self, mdns_needed: bool, port_needed: bool) -> Result<(), Box<dyn Error>> {
-        if mdns_needed || port_needed {
+    pub fn handle(&self, (mdns_needed, dragit_needed): (bool, bool)) -> Result<(), Box<dyn Error>> {
+        if mdns_needed || dragit_needed {
             let config = UserConfig::new()?;
             let port = config.get_port();
             let port_str = port.to_string();
 
             // Calls below will prompt user for password
             let zone_path = self.get_default_zone_object_path()?;
-            let proxy_config =
+            let proxy_config_zone =
                 FirewallD1ConfigZoneProxy::new_for_path(&self.connection, &zone_path)?;
 
-            if port_needed {
-                proxy_config.add_port(&port_str, "tcp")?;
+            if dragit_needed {
+                let proxy_config = FirewallD1ConfigProxy::new(&self.connection)?;
+
+                let service = ServiceConfig::new(port_str);
+                info!("ServiceConfig signature: {}", ServiceConfig::signature());
+                match proxy_config.add_service("dragit", service) {
+                    Ok(v) => info!("Service result: {:?}", v),
+                    Err(e) => {
+                        catch_dbus_error(e, "NAME_CONFLICT")?;
+                        info!("Dragit service was already present, no need to create it");
+                    }
+                };
+
+                match proxy_config_zone.add_service_zone("dragit") {
+                    Ok(_) => info!("Service added"),
+                    Err(e) => {
+                        catch_dbus_error(e, "ALREADY_ENABLED")?;
+                        info!("Dragit service was already enabled in permanent config");
+                    }
+                };
             }
 
             if mdns_needed {
-                match proxy_config.add_service("mdns") {
+                match proxy_config_zone.add_service_zone("mdns") {
                     Ok(_) => info!("Service added"),
                     Err(e) => {
-                        let error = e.to_string();
-                        if error.contains("ALREADY_ENABLED") {
-                            warn!("Mdns was already enabled in permanent config");
-                        } else {
-                            error!("Service error: {}", error);
-                            return Err(e.into());
-                        }
+                        catch_dbus_error(e, "ALREADY_ENABLED")?;
+                        info!("Mdns service was already enabled in permanent config");
                     }
                 };
             }
@@ -140,6 +197,10 @@ trait FirewallD1Config {
 
     #[dbus_proxy(name = "getZoneNames")]
     fn get_zone_names(&self) -> zbus::Result<Vec<String>>;
+
+    /// Adds new service to permanent configuration
+    #[dbus_proxy(name = "addService")]
+    fn add_service(&self, service: &str, config: ServiceConfig) -> zbus::Result<OwnedObjectPath>;
 }
 
 #[dbus_proxy(
@@ -150,6 +211,20 @@ trait FirewallD1ConfigZone {
     #[dbus_proxy(name = "addPort")]
     fn add_port(&self, port: &str, protocol: &str) -> zbus::Result<()>;
 
+    /// Enables service in zone permanent configuration
+    /// If service is already there, this call will enable the service in runtime
     #[dbus_proxy(name = "addService")]
-    fn add_service(&self, service: &str) -> zbus::Result<()>;
+    fn add_service_zone(&self, service: &str) -> zbus::Result<()>;
+
+    #[dbus_proxy(name = "getServices")]
+    fn get_services(&self) -> zbus::Result<Vec<String>>;
+}
+
+fn catch_dbus_error(e: zbus::Error, text_to_match: &str) -> Result<(), Box<dyn Error>> {
+    if e.to_string().contains(text_to_match) {
+        Ok(())
+    } else {
+        error!("Service error: {}", e);
+        Err(e.into())
+    }
 }
