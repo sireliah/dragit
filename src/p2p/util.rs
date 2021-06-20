@@ -70,10 +70,10 @@ pub fn check_network_interfaces() -> Result<(), Error> {
         .iter()
         .filter(|e| !e.is_loopback() && e.ips.len() > 0)
         .next();
-    info!("Default network interface: {:?}", default_interface);
+    debug!("Default network interface: {:?}", default_interface);
     match default_interface {
         Some(_) => {
-            info!("Interfaces: {:?}", interfaces);
+            debug!("Interfaces: {:?}", interfaces);
             Ok(())
         }
         None => {

@@ -7,6 +7,9 @@ use directories_next::{BaseDirs, UserDirs};
 use serde::{Deserialize, Serialize};
 use toml;
 
+// Unassigned in IANA
+const DEFAULT_LISTEN_PORT: u16 = 36571;
+
 fn get_timestamp() -> u64 {
     let now = SystemTime::now();
     now.duration_since(UNIX_EPOCH)
@@ -65,6 +68,13 @@ pub fn get_target_path(name: &str, target_path: Option<&String>) -> Result<Strin
 #[derive(Debug, Serialize, Deserialize)]
 struct Config {
     downloads: String,
+
+    #[serde(default = "default_port")]
+    port: u16,
+}
+
+fn default_port() -> u16 {
+    DEFAULT_LISTEN_PORT
 }
 
 pub struct UserConfig {
@@ -97,6 +107,7 @@ impl UserConfig {
                     Some(v) => v.to_string_lossy().to_string(),
                     None => base_dirs.home_dir().to_string_lossy().to_string(),
                 },
+                port: DEFAULT_LISTEN_PORT,
             };
             let toml = Self::serialize_config(config)?;
             let mut file = fs::File::create(&joined_path)?;
@@ -118,12 +129,17 @@ impl UserConfig {
         Path::new(&self.conf.downloads).to_owned()
     }
 
+    pub fn get_port(&self) -> u16 {
+        self.conf.port
+    }
+
     pub fn set_downloads_dir(&self, path: &Path) -> Result<(), Error> {
         // Watch out, this ::create will truncate the file
         let mut file = fs::File::create(&self.conf_path.as_path())?;
 
         let config: Config = Config {
             downloads: path.to_string_lossy().to_string(),
+            port: self.conf.port,
         };
         let toml = Self::serialize_config(config)?;
         file.write_all(&toml.as_bytes())?;

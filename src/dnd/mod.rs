@@ -7,24 +7,31 @@ use std::thread;
 use gio::prelude::*;
 use gtk::prelude::*;
 pub mod components;
+mod dialogs;
 mod events;
+mod notifications;
 
 use glib::Continue;
 use gtk::GtkWindowExt;
 
 use async_std::sync::{channel, Receiver, Sender};
 
+#[cfg(target_os = "linux")]
+use crate::firewall::Firewall;
+
 use crate::p2p::{peer::Direction, run_server, FileToSend, PeerEvent, TransferCommand};
-use components::{
-    AcceptFileDialog, AppNotification, MainLayout, NotificationType, ProgressNotification, STYLE,
-};
+use crate::user_data::UserConfig;
+use components::{MainLayout, STYLE};
+use dialogs::{AcceptFileDialog, FirewallDialog};
 use events::pool_peers;
+use notifications::{AppNotification, NotificationType, ProgressNotification};
 
 pub fn build_window(
     application: &gtk::Application,
     file_sender: Arc<Mutex<Sender<FileToSend>>>,
     peer_receiver: Arc<Mutex<Receiver<PeerEvent>>>,
     command_sender: Arc<Mutex<Sender<TransferCommand>>>,
+    f: fn(&gtk::ApplicationWindow),
 ) -> Result<(), Box<dyn Error>> {
     let title = format!("Dragit {}", env!("CARGO_PKG_VERSION"));
 
@@ -127,6 +134,36 @@ pub fn build_window(
     window.show_all();
 
     window.connect_delete_event(move |_win, _| Inhibit(false));
+    f(&window);
+    Ok(())
+}
+
+#[cfg(target_os = "linux")]
+fn handle_firewall(window: &gtk::ApplicationWindow) -> Result<(), Box<dyn Error>> {
+    // Check firewalld configuration if applicable and offer permanently opening ports
+    // in case they are closed in the runtime rules.
+    // If user happens not to use firewalld in their distribution, this function will just return error
+    let config = UserConfig::new()?;
+    let port = config.get_port();
+
+    let firewall = Firewall::new()?;
+    let required_services = firewall.check_rules_needed(port)?;
+
+    if required_services.0 || required_services.1 {
+        let dialog = FirewallDialog::new(window, &config);
+        let response = dialog.run();
+        match response {
+            gtk::ResponseType::Yes => firewall.handle(required_services)?,
+            gtk::ResponseType::No => info!("Not changing firewall configuration"),
+            _ => warn!("Unexpected answer"),
+        };
+    }
+
+    Ok(())
+}
+
+#[cfg(not(target_os = "linux"))]
+fn handle_firewall(window: &gtk::ApplicationWindow) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
@@ -173,7 +210,16 @@ pub fn start_window() {
         let peer_receiver_c = Arc::clone(&peer_receiver_arc);
         let command_sender_c = Arc::new(Mutex::new(command_sender.clone()));
 
-        match build_window(app, file_sender_c, peer_receiver_c, command_sender_c) {
+        match build_window(
+            app,
+            file_sender_c,
+            peer_receiver_c,
+            command_sender_c,
+            |window| match handle_firewall(window) {
+                Ok(_) => {}
+                Err(e) => error!("Firewall handling error: {}", e),
+            },
+        ) {
             Ok(_) => info!("Window started"),
             Err(e) => error!("Window error: {:?}", e),
         };
