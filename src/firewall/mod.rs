@@ -228,3 +228,44 @@ fn catch_dbus_error(e: zbus::Error, text_to_match: &str) -> Result<(), Box<dyn E
         Err(e.into())
     }
 }
+
+#[cfg(target_os = "linux")]
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use zbus::Message;
+    use zvariant::Fd;
+
+    #[test]
+    fn test_catch_dbus_error_should_ignore_expected_response() {
+        let m =
+            Message::method(Some(":1.72"), None, "/", None, "do", &(Fd::from(1), "foo")).unwrap();
+
+        let message_error = zbus::Error::MethodError(
+            "GDBus.Error:org.fedoraproject.FirewallD1.Exception: ALREADY_ENABLED: mdns".to_string(),
+            None,
+            m,
+        );
+        let result = catch_dbus_error(message_error, "ALREADY_ENABLED");
+
+        assert_eq!(result.unwrap(), ());
+    }
+
+    #[test]
+    fn test_catch_dbus_error_should_return_error_on_unexpected() {
+        let m =
+            Message::method(Some(":1.72"), None, "/", None, "do", &(Fd::from(1), "foo")).unwrap();
+
+        let message_error = zbus::Error::MethodError(
+            "GDBus.Error:org.fedoraproject.FirewallD1.Exception: oh no".to_string(),
+            None,
+            m,
+        );
+        let result = catch_dbus_error(message_error, "ALREADY_ENABLED");
+
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "GDBus.Error:org.fedoraproject.FirewallD1.Exception: oh no: no details"
+        );
+    }
+}
