@@ -50,9 +50,9 @@ impl FirewallDialog {
             "Dragit can configure the firewall for you. Would you like it to do so?\n",
             "If yes, you'll be prompted for password.\n",
             "\n",
-            "Following ports will be added:\n",
-            "- tcp 5353\n",
-            "- tcp ",
+            "Following services will be added:\n",
+            "- mdns: UDP port 5353\n",
+            "- dragit: TCP port ",
         );
         let text = format!("{}{}", message, port);
         let dialog = gtk::MessageDialog::new(
