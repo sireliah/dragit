@@ -9,6 +9,7 @@ use toml;
 
 // Unassigned in IANA
 const DEFAULT_LISTEN_PORT: u16 = 36571;
+const DEFAULT_FIREWALL_CHECKED: bool = false;
 
 fn get_timestamp() -> u64 {
     let now = SystemTime::now();
@@ -71,10 +72,17 @@ struct Config {
 
     #[serde(default = "default_port")]
     port: u16,
+
+    #[serde(default = "default_firewall_checked")]
+    firewall_checked: bool,
 }
 
 fn default_port() -> u16 {
     DEFAULT_LISTEN_PORT
+}
+
+fn default_firewall_checked() -> bool {
+    DEFAULT_FIREWALL_CHECKED
 }
 
 pub struct UserConfig {
@@ -108,6 +116,7 @@ impl UserConfig {
                     None => base_dirs.home_dir().to_string_lossy().to_string(),
                 },
                 port: DEFAULT_LISTEN_PORT,
+                firewall_checked: DEFAULT_FIREWALL_CHECKED,
             };
             let toml = Self::serialize_config(config)?;
             let mut file = fs::File::create(&joined_path)?;
@@ -133,6 +142,10 @@ impl UserConfig {
         self.conf.port
     }
 
+    pub fn get_firewall_checked(&self) -> bool {
+        self.conf.firewall_checked
+    }
+
     pub fn set_downloads_dir(&self, path: &Path) -> Result<(), Error> {
         // Watch out, this ::create will truncate the file
         let mut file = fs::File::create(&self.conf_path.as_path())?;
@@ -140,6 +153,21 @@ impl UserConfig {
         let config: Config = Config {
             downloads: path.to_string_lossy().to_string(),
             port: self.conf.port,
+            firewall_checked: self.conf.firewall_checked,
+        };
+        let toml = Self::serialize_config(config)?;
+        file.write_all(&toml.as_bytes())?;
+        Ok(())
+    }
+
+    pub fn set_firewall_checked(&self, value: bool) -> Result<(), Error> {
+        // Watch out, this ::create will truncate the file
+        let mut file = fs::File::create(&self.conf_path.as_path())?;
+
+        let config: Config = Config {
+            downloads: self.conf.downloads.to_owned(),
+            port: self.conf.port,
+            firewall_checked: value,
         };
         let toml = Self::serialize_config(config)?;
         file.write_all(&toml.as_bytes())?;

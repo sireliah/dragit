@@ -42,7 +42,24 @@ impl AcceptFileDialog {
 pub struct FirewallDialog(gtk::MessageDialog);
 
 impl FirewallDialog {
-    pub fn new(window: &gtk::ApplicationWindow, config: &UserConfig) -> FirewallDialog {
+    pub fn new_for_check(window: &gtk::ApplicationWindow) -> FirewallDialog {
+        let text = concat!(
+            "Dragit can check if your firewall setup allows the application to work correctly.\n",
+            "You might be prompted for password.\n",
+            "\n",
+            "Would you like to check the firewall now?"
+        );
+        let dialog = gtk::MessageDialog::new(
+            Some(window),
+            gtk::DialogFlags::MODAL,
+            gtk::MessageType::Question,
+            gtk::ButtonsType::YesNo,
+            &text,
+        );
+        FirewallDialog(dialog)
+    }
+
+    pub fn new_for_config(window: &gtk::ApplicationWindow, config: &UserConfig) -> FirewallDialog {
         let port = config.get_port();
         let message = concat!(
             "Your current firewall configuration prevents Dragit from working.\n",
@@ -69,5 +86,10 @@ impl FirewallDialog {
         let resp = self.0.run();
         self.0.close();
         resp
+    }
+
+    pub fn close(&self) {
+        self.0.hide();
+        self.0.close();
     }
 }

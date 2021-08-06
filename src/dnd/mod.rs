@@ -146,17 +146,33 @@ fn handle_firewall(window: &gtk::ApplicationWindow) -> Result<(), Box<dyn Error>
     let config = UserConfig::new()?;
     let port = config.get_port();
 
-    let firewall = Firewall::new()?;
-    let required_services = firewall.check_rules_needed(port)?;
+    if !config.get_firewall_checked() {
+        // Please note that on some OS'es like Ubuntu, polkit will require password for querying firewalld D-Bus interface.
+        let check_dialog = FirewallDialog::new_for_check(window);
+        let check_response = check_dialog.run();
+        check_dialog.close();
 
-    if required_services.0 || required_services.1 {
-        let dialog = FirewallDialog::new(window, &config);
-        let response = dialog.run();
-        match response {
-            gtk::ResponseType::Yes => firewall.handle(required_services)?,
+        match check_response {
+            gtk::ResponseType::Yes => {
+                let firewall = Firewall::new()?;
+                let required_services = firewall.check_rules_needed(port)?;
+
+                if required_services.0 || required_services.1 {
+                    let dialog = FirewallDialog::new_for_config(window, &config);
+                    let response = dialog.run();
+                    match response {
+                        gtk::ResponseType::Yes => firewall.handle(required_services)?,
+                        gtk::ResponseType::No => info!("Not checking firewall configuration"),
+                        _ => warn!("Unexpected answer"),
+                    };
+                }
+            }
             gtk::ResponseType::No => info!("Not changing firewall configuration"),
             _ => warn!("Unexpected answer"),
         };
+
+        // Write to config that firewall was checked, not to ask user again.
+        config.set_firewall_checked(true)?;
     }
 
     Ok(())
