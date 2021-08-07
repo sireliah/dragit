@@ -27,6 +27,10 @@ The application uses mDNS for automatic device discovery with help of `libp2p` l
     - [Using Flatpak](#using-flatpak)
     - [Download recent release](#download-recent-release)
 - [How to use](#how-to-use)
+- [Troubleshooting](#troubleshooting)
+    - [Dealing with firewalld](#dealing-with-firewalld)
+    - [Dragit configuration](#dragit-configuration)
+    - [Glibc versions on Linux](#glibc-versions-on-linux)
 - [Development](#development)
     - [How to build on Linux](#how-to-build-on-linux)
     - [How to build on Windows](#how-to-build-on-windows)
@@ -75,6 +79,36 @@ You can run two `dragit` instances on the same machine for testing. No problem w
 6. Done!
 
 ![demo](./static/dragit.gif)
+
+## Troubleshooting
+### Dealing with firewalld
+Dragit automatically detects firewall configuration on the host machine to help resolve the networking problems. The check is done against `firewalld` daemon and uses its D-Bus interface. User is asked for permissions, because some systems require authorization for inspecting `firewalld` rules (such as Ubuntu).
+
+If Dragit detects missing port (mDNS or application one), then application can modify configuration of `firewalld`.
+
+The check is done only on Linux and only on first run of the application.
+
+### Dragit configuration
+Dragit stores config file under `$HOME/.config/dragit/config.toml` on Linux and in standard configuration paths on the other platforms (such as Windows). If you wish to change port under which Dragit is running, change it there. You can also re-trigger firewall check by changing the value of `firewall_checked` setting.
+
+### Glibc versions on Linux
+This application depends on glibc library, which is provided by most of the Linux distros.
+Dragit is built automatically using the [Github Actions](https://github.com/actions/virtual-environments/) under the `ubuntu-latest` image (currently Ubuntu 20.04 LTS), which means that your Linux distribution should have glibc version equal or higher than the one supported by `ubuntu-latest`. Otherwise it might happen that you see this error:
+
+```
+/lib/x86_64-linux-gnu/libc.so.6: version GLIBC_2.29 not found
+```
+
+This means that glibc on your machine is too old and you might consider OS upgrade or [try to build Dragit yourself](#how-to-build-on-linux).
+
+To check highest glibc version on your distro, you can inspect ldd.
+
+```
+$ ldd --version
+ldd (GNU libc) 2.32
+
+(...)
+```
 
 ## Development
 ### How to build on Linux
