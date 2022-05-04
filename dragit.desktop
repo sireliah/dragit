@@ -5,3 +5,4 @@ Exec=dragit
 Type=Application
 Icon=com.sireliah.Dragit
 Terminal=false
+Categories=Utility
