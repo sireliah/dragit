@@ -88,7 +88,7 @@ jobs:
     runs-on: windows-latest
     needs: build-linux
     env:
-      gvsbuildref: 3d3067d1090df7bfdf4b29680b951024e37b20ae
+      gvsbuildref: 861244f84a04da49172c23646d9e23885094cab4
       gvsbuildupdate: 1
 
     outputs:
