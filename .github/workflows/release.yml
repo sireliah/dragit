@@ -85,7 +85,7 @@ jobs:
 
   gvsbuild:
     name: Build GTK libs for Windows
-    runs-on: windows-latest
+    runs-on: windows-2019
     needs: build-linux
     env:
       gvsbuildref: 861244f84a04da49172c23646d9e23885094cab4
