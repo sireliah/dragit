@@ -6,7 +6,7 @@ use std::{
     time::Duration,
 };
 
-use async_std::sync::Sender;
+use async_std::channel::Sender;
 use hostname;
 use libp2p::core::{connection::ConnectionId, ConnectedPoint, Multiaddr, PeerId};
 use libp2p::swarm::{

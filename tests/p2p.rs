@@ -3,7 +3,8 @@ use std::fs;
 use std::sync::Arc;
 use std::time::Duration;
 
-use async_std::sync::{channel, Mutex, Receiver, Sender};
+use async_std::sync::Mutex;
+use async_std::channel::{bounded, Receiver, Sender};
 use async_std::task;
 
 use futures::{future, prelude::*};
@@ -23,7 +24,7 @@ use dragit::p2p::{
 fn test_file_transfer() {
     setup_logger();
 
-    let (tx, mut rx) = channel::<Multiaddr>(10);
+    let (tx, mut rx) = bounded::<Multiaddr>(10);
     let (peer1, sender, _, mut swarm1) = build_swarm();
     let (_, _, _, mut swarm2) = build_swarm();
 
@@ -132,7 +133,7 @@ fn test_file_transfer() {
 
 #[test]
 fn test_text_transfer() {
-    let (tx, mut rx) = channel::<Multiaddr>(10);
+    let (tx, mut rx) = bounded::<Multiaddr>(10);
     let (peer1, sender, _, mut swarm1) = build_swarm();
     let (_, _, _, mut swarm2) = build_swarm();
 
@@ -246,9 +247,9 @@ fn build_swarm() -> (
     Receiver<PeerEvent>,
     Swarm<TransferBehaviour>,
 ) {
-    let (_, _) = channel::<FileToSend>(1024 * 24);
-    let (command_sender, command_receiver) = channel::<TransferCommand>(1024 * 24);
-    let (peer_sender, peer_receiver) = channel::<PeerEvent>(1024 * 24);
+    let (_, _) = bounded::<FileToSend>(1024 * 24);
+    let (command_sender, command_receiver) = bounded::<TransferCommand>(1024 * 24);
+    let (peer_sender, peer_receiver) = bounded::<PeerEvent>(1024 * 24);
 
     let local_keys = identity::Keypair::generate_ed25519();
     let local_peer_id = PeerId::from(local_keys.public());

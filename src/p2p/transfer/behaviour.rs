@@ -3,7 +3,8 @@ use std::sync::Arc;
 use std::task::{Context, Poll};
 use std::time::Duration;
 
-use async_std::sync::{Mutex, Receiver, Sender};
+use async_std::channel::{Receiver, Sender};
+use async_std::sync::Mutex;
 
 use libp2p::core::{connection::ConnectionId, ConnectedPoint, Multiaddr, PeerId};
 use libp2p::swarm::{

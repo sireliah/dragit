@@ -8,8 +8,8 @@ use std::task::{Context, Poll};
 use std::time::Instant;
 use std::{io, iter, pin::Pin};
 
+use async_std::channel::{Receiver, Sender};
 use async_std::sync::Mutex;
-use async_std::sync::{Receiver, Sender};
 use async_std::task;
 
 use futures::future;
@@ -80,7 +80,7 @@ impl TransferPayload {
         let size = meta.size;
         let transfer_type = meta.transfer_type;
         let event = PeerEvent::FileIncoming(name, hash, size, transfer_type);
-        self.sender_queue.to_owned().send(event).await;
+        util::notify(&self.sender_queue, event).await;
     }
 
     async fn block_for_answer(

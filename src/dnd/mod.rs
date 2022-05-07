@@ -13,7 +13,7 @@ mod notifications;
 use glib::Continue;
 use gtk::prelude::GtkWindowExt;
 
-use async_std::sync::{channel, Receiver, Sender};
+use async_std::channel::{bounded, Receiver, Sender};
 
 #[cfg(target_os = "linux")]
 use crate::firewall::Firewall;
@@ -183,9 +183,9 @@ fn handle_firewall(window: &gtk::ApplicationWindow) -> Result<(), Box<dyn Error>
 }
 
 pub fn start_window(name: String) {
-    let (file_sender, file_receiver) = channel::<FileToSend>(1024 * 24);
-    let (peer_sender, peer_receiver) = channel::<PeerEvent>(1024 * 24);
-    let (command_sender, command_receiver) = channel::<TransferCommand>(1024 * 24);
+    let (file_sender, file_receiver) = bounded::<FileToSend>(1024 * 24);
+    let (peer_sender, peer_receiver) = bounded::<PeerEvent>(1024 * 24);
+    let (command_sender, command_receiver) = bounded::<TransferCommand>(1024 * 24);
 
     // Start the p2p server in separate thread
     let sender_clone = peer_sender.clone();

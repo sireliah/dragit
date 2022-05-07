@@ -4,7 +4,7 @@ use std::time::Duration;
 use gio::prelude::*;
 use gtk::prelude::*;
 
-use async_std::sync::{Receiver, Sender};
+use async_std::channel::{Receiver, Sender};
 
 use glib::{timeout_add_local, Continue};
 use gtk::ApplicationWindow;
