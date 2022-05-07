@@ -183,7 +183,7 @@ fn handle_firewall(window: &gtk::ApplicationWindow) -> Result<(), Box<dyn Error>
     Ok(())
 }
 
-pub fn start_window() {
+pub fn start_window(name: String) {
     let (file_sender, file_receiver) = channel::<FileToSend>(1024 * 24);
     let (peer_sender, peer_receiver) = channel::<PeerEvent>(1024 * 24);
     let (command_sender, command_receiver) = channel::<TransferCommand>(1024 * 24);
@@ -203,11 +203,6 @@ pub fn start_window() {
     );
 
     let peer_receiver_arc = Arc::new(Mutex::new(peer_receiver));
-
-    let name = "com.sireliah.Dragit";
-
-    info!("Starting {}", name);
-
     let application = gtk::Application::new(Some(&name), gio::ApplicationFlags::empty())
         .expect("Initialization failed...");
 

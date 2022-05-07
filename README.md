@@ -70,12 +70,10 @@ For Windows:
 dragit.exe
 ```
 
-You can run two `dragit` instances on the same machine for testing. No problem with that!
-
 2. Wait for the two `dragit` instances to discover each other. You should see new drop zone area with IP address of the host.
 3. Drag a file and drop it on the drop zone.
 4. In the other window you will be asked whether you would like to accept the file. Probably you'd like to answer "Yes".
-5. File will be transfered and saved in the `Downloads directory` (which is customizable).
+5. File will be transferred and saved in the `Downloads directory` (which is customizable).
 6. Done!
 
 ![demo](./static/dragit.gif)
@@ -116,8 +114,34 @@ ldd (GNU libc) 2.32
 cargo run
 ```
 
+Note: there are some GTK libraries that are required to build the project locally.
+
+For Ubuntu and Debian-family distros, please check the [build system pipeline](https://github.com/sireliah/dragit/blob/master/.github/workflows/test.yml#L17) to get always up-to-date list.
+For Fedora this list roughly translates to:
+```
+atk-devel
+cairo-gobject-devel
+dbus-devel
+gdk-pixbuf2-devel
+glib2-devel
+gtk3-devel
+pango-devel
+```
+
 ### How to build on Windows
-`Dragit` works best on `x86_64-pc-windows-msvc` target. Detailed build instruction will be added in the future.
+`Dragit` works best on `x86_64-pc-windows-msvc` target.
+While Rust part of the application is relatively easy to build, the GTK bindings part of it requires setup of the GTK environment.
+Please refer to the [release build pipeline](https://github.com/sireliah/dragit/blob/master/.github/workflows/release.yml#L135) for inspiration.
+
+### Starting two instance on the same machine
+
+You can run two `dragit` instances on the same machine for testing. No problem with that!
+
+1. Edit `~/.config/dragit/config.toml` (this might be different path on your OS/distro)
+2. Set `port` value to 0, which will cause the application to pick a random port on startup
+3. Run one instance with `cargo run`
+4. Run another instance, with `APPLICATION_NAME=some.other.Name cargo run`
+5. The two instances should successfully discover each other
 
 #### Windows requirements
 It might happen that you don't have the `vcruntime140_1.dll` installed in your system and the application won't start. You can fix that by installing the [VC++ 2019 runtime dll](https://support.microsoft.com/en-us/help/2977003/the-latest-supported-visual-c-downloads). 
