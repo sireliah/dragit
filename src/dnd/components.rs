@@ -66,7 +66,8 @@ impl MainLayout {
         let layout = gtk::Box::new(gtk::Orientation::Vertical, 10);
         let inner_layout = gtk::Box::new(gtk::Orientation::Vertical, 0);
         let recent_layout = gtk::Grid::new();
-        let recent_scroll = gtk::ScrolledWindow::new(gtk::NONE_ADJUSTMENT, gtk::NONE_ADJUSTMENT);
+        let recent_scroll: gtk::ScrolledWindow =
+            gtk::ScrolledWindow::new(gtk::Adjustment::NONE, gtk::Adjustment::NONE);
 
         recent_layout.set_widget_name("recent-files");
         recent_layout.set_hexpand(false);
@@ -90,7 +91,7 @@ impl MainLayout {
         inner_layout.set_halign(gtk::Align::Center);
         header_layout.set_margin_top(10);
 
-        let scroll = gtk::ScrolledWindow::new(gtk::NONE_ADJUSTMENT, gtk::NONE_ADJUSTMENT);
+        let scroll = gtk::ScrolledWindow::new(gtk::Adjustment::NONE, gtk::Adjustment::NONE);
         scroll.set_policy(gtk::PolicyType::Automatic, gtk::PolicyType::Automatic);
         scroll.set_min_content_width(550);
 
@@ -196,7 +197,7 @@ impl MainLayout {
         file_chooser.set_filename(downloads);
 
         file_chooser.connect_file_set(move |chooser| {
-            match chooser.get_filename() {
+            match chooser.filename() {
                 Some(path) => {
                     info!("Setting downloads directory: {:?}", path);
                     if let Err(e) = config.set_downloads_dir(path.as_path()) {
@@ -280,7 +281,7 @@ impl PeerItem {
 
         self.container.connect_drag_data_received(
             move |_win, _drag_context, _, _, selection_data, _, _| {
-                let file_to_send = match selection_data.get_uris().pop() {
+                let file_to_send = match selection_data.uris().pop() {
                     Some(file) => Self::get_file_payload(&peer_id, file.to_string()),
                     None => Self::get_text_payload(&selection_data, &peer_id),
                 };
@@ -301,23 +302,23 @@ impl PeerItem {
     }
 
     fn get_file_payload(peer_id: &PeerId, file: String) -> Result<FileToSend, Box<dyn Error>> {
-        let file = gio::File::new_for_uri(&file);
+        let file = gio::File::for_uri(&file);
         if file.is_native() {
-            match file.get_path() {
+            match file.path() {
                 Some(p) => {
                     let path = clean_file_proto(&p.display().to_string());
                     let payload = Payload::Path(path);
                     Ok(FileToSend::new(peer_id, payload)?)
                 }
                 None => {
-                    let uri: String = file.get_uri().into();
+                    let uri: String = file.uri().into();
                     let path = clean_file_proto(&uri);
                     let payload = Payload::Path(path);
                     Ok(FileToSend::new(peer_id, payload)?)
                 }
             }
         } else {
-            let uri: String = file.get_uri().into();
+            let uri: String = file.uri().into();
             let path = clean_file_proto(&uri);
             let payload = Payload::Path(path);
             Ok(FileToSend::new(peer_id, payload)?)
@@ -329,7 +330,7 @@ impl PeerItem {
         peer_id: &PeerId,
     ) -> Result<FileToSend, Box<dyn Error>> {
         let text = selection_data
-            .get_text()
+            .text()
             .ok_or(io::Error::new(io::ErrorKind::InvalidData, "No text found"))?;
         let payload = Payload::Text(text.to_string());
         Ok(FileToSend::new(peer_id, payload)?)
@@ -409,13 +410,13 @@ impl EmptyListItem {
 }
 
 pub fn get_item_name<I: IsA<gtk::Widget>>(item: &I) -> String {
-    item.get_widget_name().to_string()
+    item.widget_name().to_string()
 }
 
 #[cfg(not(target_os = "windows"))]
 pub fn get_link(file_name: &str, path: &str) -> gtk::LinkButton {
     let prefixed_path = format!("file://{}", path);
-    gtk::LinkButton::with_label(&prefixed_path, Some(file_name))
+    gtk::LinkButton::with_label(&prefixed_path, file_name)
 }
 
 #[cfg(target_os = "windows")]

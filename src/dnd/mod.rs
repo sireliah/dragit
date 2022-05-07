@@ -1,4 +1,3 @@
-use std::env::args;
 use std::error::Error;
 
 use std::sync::{Arc, Mutex};
@@ -12,7 +11,7 @@ mod events;
 mod notifications;
 
 use glib::Continue;
-use gtk::GtkWindowExt;
+use gtk::prelude::GtkWindowExt;
 
 use async_std::sync::{channel, Receiver, Sender};
 
@@ -203,8 +202,7 @@ pub fn start_window(name: String) {
     );
 
     let peer_receiver_arc = Arc::new(Mutex::new(peer_receiver));
-    let application = gtk::Application::new(Some(&name), gio::ApplicationFlags::empty())
-        .expect("Initialization failed...");
+    let application = gtk::Application::new(Some(&name), gio::ApplicationFlags::empty());
 
     application.connect_startup(move |app| {
         let provider = gtk::CssProvider::new();
@@ -212,7 +210,7 @@ pub fn start_window(name: String) {
             .load_from_data(STYLE.as_bytes())
             .expect("Failed to load CSS");
         gtk::StyleContext::add_provider_for_screen(
-            &gdk::Screen::get_default().expect("Error initializing gtk css provider."),
+            &gdk::Screen::default().expect("Error initializing gtk css provider."),
             &provider,
             gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
         );
@@ -237,5 +235,5 @@ pub fn start_window(name: String) {
     });
     application.connect_activate(|_| {});
 
-    application.run(&args().collect::<Vec<_>>());
+    application.run();
 }

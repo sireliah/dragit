@@ -171,7 +171,7 @@ impl AppNotification {
     }
 
     fn remove_link(&self) {
-        if let Some(child) = self.layout.get_child_at(self.link_pos, 0) {
+        if let Some(child) = self.layout.child_at(self.link_pos, 0) {
             self.layout.remove(&child);
         };
     }

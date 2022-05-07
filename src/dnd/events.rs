@@ -1,4 +1,5 @@
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use gio::prelude::*;
 use gtk::prelude::*;
@@ -26,10 +27,11 @@ pub fn pool_peers(
     let layout_weak = layout.downgrade();
     let weak_window = window.downgrade();
 
-    timeout_add_local(200, move || {
+    let interval = Duration::from_millis(200);
+    timeout_add_local(interval, move || {
         if let Some(layout_in) = layout_weak.upgrade() {
             let children: Vec<String> = layout_in
-                .get_children()
+                .children()
                 .iter()
                 .map(|c| get_item_name(c))
                 .filter(|c| c != "empty-item")
@@ -74,7 +76,7 @@ pub fn pool_peers(
 }
 
 fn remove_items(layout: &gtk::ListBox) {
-    for child in layout.get_children().iter().filter(|c| {
+    for child in layout.children().iter().filter(|c| {
         let name = get_item_name(*c);
         name != "notification" && name != "empty-item"
     }) {
