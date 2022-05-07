@@ -1,4 +1,3 @@
-use std::env::args;
 use std::error::Error;
 
 use std::sync::{Arc, Mutex};
@@ -12,9 +11,9 @@ mod events;
 mod notifications;
 
 use glib::Continue;
-use gtk::GtkWindowExt;
+use gtk::prelude::GtkWindowExt;
 
-use async_std::sync::{channel, Receiver, Sender};
+use async_std::channel::{bounded, Receiver, Sender};
 
 #[cfg(target_os = "linux")]
 use crate::firewall::Firewall;
@@ -184,9 +183,9 @@ fn handle_firewall(window: &gtk::ApplicationWindow) -> Result<(), Box<dyn Error>
 }
 
 pub fn start_window(name: String) {
-    let (file_sender, file_receiver) = channel::<FileToSend>(1024 * 24);
-    let (peer_sender, peer_receiver) = channel::<PeerEvent>(1024 * 24);
-    let (command_sender, command_receiver) = channel::<TransferCommand>(1024 * 24);
+    let (file_sender, file_receiver) = bounded::<FileToSend>(1024 * 24);
+    let (peer_sender, peer_receiver) = bounded::<PeerEvent>(1024 * 24);
+    let (command_sender, command_receiver) = bounded::<TransferCommand>(1024 * 24);
 
     // Start the p2p server in separate thread
     let sender_clone = peer_sender.clone();
@@ -203,8 +202,7 @@ pub fn start_window(name: String) {
     );
 
     let peer_receiver_arc = Arc::new(Mutex::new(peer_receiver));
-    let application = gtk::Application::new(Some(&name), gio::ApplicationFlags::empty())
-        .expect("Initialization failed...");
+    let application = gtk::Application::new(Some(&name), gio::ApplicationFlags::empty());
 
     application.connect_startup(move |app| {
         let provider = gtk::CssProvider::new();
@@ -212,7 +210,7 @@ pub fn start_window(name: String) {
             .load_from_data(STYLE.as_bytes())
             .expect("Failed to load CSS");
         gtk::StyleContext::add_provider_for_screen(
-            &gdk::Screen::get_default().expect("Error initializing gtk css provider."),
+            &gdk::Screen::default().expect("Error initializing gtk css provider."),
             &provider,
             gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
         );
@@ -237,5 +235,5 @@ pub fn start_window(name: String) {
     });
     application.connect_activate(|_| {});
 
-    application.run(&args().collect::<Vec<_>>());
+    application.run();
 }

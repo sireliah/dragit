@@ -1,6 +1,6 @@
 use std::io::{Error, ErrorKind};
 
-use async_std::sync::Sender as AsyncSender;
+use async_std::channel::Sender as AsyncSender;
 use futures::prelude::*;
 
 #[cfg(unix)]
@@ -17,6 +17,12 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin> TSocketAlias for T {}
 
 pub const CHUNK_SIZE: usize = 4096;
 
+pub async fn notify(sender_queue: &AsyncSender<PeerEvent>, event: PeerEvent) {
+    if let Err(err) = sender_queue.to_owned().send(event).await {
+        error!("Failed to send message, {}", err)
+    }
+}
+
 pub async fn notify_progress(
     sender_queue: &AsyncSender<PeerEvent>,
     counter: usize,
@@ -24,35 +30,23 @@ pub async fn notify_progress(
     direction: &Direction,
 ) {
     let event = PeerEvent::TransferProgress((counter, total_size, direction.to_owned()));
-    sender_queue.to_owned().send(event).await;
+    notify(sender_queue, event).await;
 }
 
 pub async fn notify_error(sender_queue: &AsyncSender<PeerEvent>, error_text: &str) {
-    sender_queue
-        .to_owned()
-        .send(PeerEvent::Error(error_text.to_string()))
-        .await;
+    notify(sender_queue, PeerEvent::Error(error_text.to_string())).await;
 }
 
 pub async fn notify_completed(sender_queue: &AsyncSender<PeerEvent>) {
-    sender_queue
-        .to_owned()
-        .send(PeerEvent::TransferCompleted)
-        .await;
+    notify(sender_queue, PeerEvent::TransferCompleted).await
 }
 
 pub async fn notify_waiting(sender_queue: &AsyncSender<PeerEvent>) {
-    sender_queue
-        .to_owned()
-        .send(PeerEvent::WaitingForAnswer)
-        .await;
+    notify(sender_queue, PeerEvent::WaitingForAnswer).await
 }
 
 pub async fn notify_rejected(sender_queue: &AsyncSender<PeerEvent>) {
-    sender_queue
-        .to_owned()
-        .send(PeerEvent::TransferRejected)
-        .await;
+    notify(sender_queue, PeerEvent::TransferRejected).await
 }
 
 pub fn time_to_notify(current_size: usize, total_size: usize) -> bool {

@@ -6,8 +6,8 @@ use std::{
     time::Duration,
 };
 
+use async_std::channel::{Receiver, Sender};
 use async_std::sync::Mutex;
-use async_std::sync::{Receiver, Sender};
 use async_std::task;
 
 use futures::{executor, future, stream::StreamExt};
