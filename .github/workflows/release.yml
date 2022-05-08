@@ -161,6 +161,9 @@ jobs:
       - name: Compile icon resource
         run: |
           # TODO: how to call the rc without copying it?
+          ls "C:/Program Files (x86)/"
+          ls "C:/Program Files (x86)/Windows Kits/"
+          ls "C:/Program Files (x86)/Windows Kits/10/bin/"
           cp $env:RC_BIN\rc.exe src\
           cp $env:RC_BIN\rcdll.dll src\
           cd src
