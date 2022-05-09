@@ -170,7 +170,7 @@ jobs:
           .\rc.exe dragit.rc
           ls
         env:
-          RC_BIN: C:/Program Files (x86)/Windows Kits/10/bin/10.0.18362.0/x64/
+          RC_BIN: C:/Program Files (x86)/Windows Kits/10/bin/10.0.22000.0/x64/
 
       - uses: actions-rs/toolchain@v1
         with:
