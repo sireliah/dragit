@@ -3,7 +3,6 @@ cairo-gobject.dll
 cairo.dll
 epoxy-0.dll
 ffi-7.dll
-fontconfig.dll
 freetype-6.dll
 fribidi-0.dll
 gdbus.exe

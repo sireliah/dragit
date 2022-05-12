@@ -2,6 +2,8 @@ on:
   push:
     tags:
       - 'v*'
+    branches:
+      - 'fix-windows-rc2'
 
 name: Create release
 
@@ -203,6 +205,8 @@ jobs:
           mkdir $env:PACKAGE_DIR\bin\
           mkdir $env:PACKAGE_DIR\lib\
           mkdir $env:PACKAGE_DIR\share\
+
+          ls C:\gtk-build\gtk\x64\release\bin\
 
           cp C:\build\release\dragit.exe $env:PACKAGE_DIR\bin\
 
