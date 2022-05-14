@@ -11,12 +11,12 @@ use crate::p2p::util::TSocketAlias;
 
 type DiscoverySuccess = (String, OperatingSystem);
 type DiscoveryFailure = io::Error;
-pub type DiscoveryResult = Result<DiscoverySuccess, DiscoveryFailure>;
 
 #[derive(Debug)]
 pub struct DiscoveryEvent {
     pub peer: PeerId,
-    pub result: DiscoveryResult,
+    pub hostname: String,
+    pub os: OperatingSystem,
 }
 
 impl fmt::Display for DiscoveryEvent {

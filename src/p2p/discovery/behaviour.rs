@@ -1,7 +1,6 @@
 use std::{
     collections::{HashMap, VecDeque},
     error::Error,
-    fmt,
     task::{Context, Poll},
     time::Duration,
 };
@@ -10,32 +9,31 @@ use async_std::channel::Sender;
 use hostname;
 use libp2p::core::{connection::ConnectionId, ConnectedPoint, Multiaddr, PeerId};
 use libp2p::swarm::{
-    dial_opts::DialOpts, ConnectionHandler, NetworkBehaviour, NetworkBehaviourAction,
-    NotifyHandler, PollParameters, SubstreamProtocol,
+    dial_opts::DialOpts, NetworkBehaviour, NetworkBehaviourAction, NotifyHandler, PollParameters,
+    SubstreamProtocol,
 };
 
 use crate::p2p::discovery::handler::KeepAliveHandler;
 use crate::p2p::discovery::protocol::{Discovery, DiscoveryEvent};
 use crate::p2p::peer::{CurrentPeers, OperatingSystem, Peer, PeerEvent};
 
-#[derive(Debug)]
-pub struct InnerMessage(Discovery);
+type Handler = KeepAliveHandler<Discovery, Discovery, Discovery>;
 
-impl fmt::Display for InnerMessage {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Received host data from peer: {:?}", self.0)
-    }
-}
-
-impl From<Discovery> for InnerMessage {
-    fn from(discovery: Discovery) -> InnerMessage {
-        InnerMessage(discovery)
+impl From<Discovery> for DiscoveryEvent {
+    fn from(discovery: Discovery, peer: PeerId) -> DiscoveryEvent {
+        DiscoveryEvent {
+            peer,
+            hostname: discovery.hostname,
+            os: discovery.os,
+        }
     }
 }
 
 #[derive(Debug)]
 pub struct DiscoveryBehaviour {
-    events: VecDeque<NetworkBehaviourAction<Discovery, DiscoveryEvent>>,
+    events: VecDeque<
+        NetworkBehaviourAction<DiscoveryEvent, Handler>,
+    >,
     peers: HashMap<PeerId, Peer>,
     hostname: String,
     os: OperatingSystem,
@@ -147,7 +145,7 @@ impl DiscoveryBehaviour {
 }
 
 impl NetworkBehaviour for DiscoveryBehaviour {
-    type ConnectionHandler = KeepAliveHandler<Discovery, Discovery, InnerMessage>;
+    type ConnectionHandler = Handler;
     type OutEvent = DiscoveryEvent;
 
     fn new_handler(&mut self) -> Self::ConnectionHandler {
@@ -237,10 +235,11 @@ impl NetworkBehaviour for DiscoveryBehaviour {
         }
     }
 
-    fn inject_event(&mut self, peer: PeerId, _connection: ConnectionId, event: InnerMessage) {
+    fn inject_event(&mut self, peer: PeerId, _connection: ConnectionId, event: Discovery) {
         let message = DiscoveryEvent {
             peer,
-            result: Ok((event.0.hostname, event.0.os)),
+            hostname: event.hostname,
+            os: event.os,
         };
         self.events
             .push_back(NetworkBehaviourAction::GenerateEvent(message));
@@ -250,12 +249,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
         &mut self,
         _: &mut Context<'_>,
         _: &mut impl PollParameters,
-    ) -> Poll<
-        NetworkBehaviourAction<
-            <Self::ConnectionHandler as ConnectionHandler>::InEvent,
-            Self::OutEvent,
-        >,
-    > {
+    ) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ConnectionHandler>> {
         if let Some(event) = self.events.pop_front() {
             Poll::Ready(event)
         } else {

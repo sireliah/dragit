@@ -20,7 +20,12 @@ use crate::p2p::transfer::file::{FileToSend, Payload};
 const TIMEOUT: u64 = 600;
 
 pub struct TransferBehaviour {
-    pub events: Vec<NetworkBehaviourAction<TransferOut, TransferPayload>>,
+    pub events: Vec<
+        NetworkBehaviourAction<
+            TransferOut,
+            OneShotHandler<TransferPayload, TransferOut, ProtocolEvent>,
+        >,
+    >,
     payloads: Vec<FileToSend>,
     pub sender: Sender<PeerEvent>,
     receiver: Arc<Mutex<Receiver<TransferCommand>>>,
@@ -106,7 +111,12 @@ impl NetworkBehaviour for TransferBehaviour {
         &mut self,
         _: &mut Context,
         _: &mut impl PollParameters,
-    ) -> Poll<NetworkBehaviourAction<TransferOut, TransferPayload>> {
+    ) -> Poll<
+        NetworkBehaviourAction<
+            TransferOut,
+            OneShotHandler<TransferPayload, TransferOut, ProtocolEvent>,
+        >,
+    > {
         if let Some(file) = self.payloads.pop() {
             let peer_id = file.peer.clone();
             let transfer = TransferOut {
