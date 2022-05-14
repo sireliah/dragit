@@ -193,6 +193,7 @@ jobs:
       - uses: msys2/setup-msys2@v2
         with:
           update: true
+          location: C:\msys2
           install: >-
             mingw-w64-x86_64-adwaita-icon-theme
             mingw-w64-x86_64-hicolor-icon-theme
@@ -204,6 +205,8 @@ jobs:
           mkdir $env:PACKAGE_DIR\lib\
           mkdir $env:PACKAGE_DIR\share\
 
+          ls C:\gtk-build\gtk\x64\release\bin\
+
           cp C:\build\release\dragit.exe $env:PACKAGE_DIR\bin\
 
           # Those dlls and binaries are provided by gvsbuild
@@ -214,7 +217,7 @@ jobs:
           cp -r C:\gtk-build\gtk\x64\release\share\glib-2.0 $env:PACKAGE_DIR\share\
 
           # Icons are installed from msys2.
-          cp -r $env:RUNNER_TEMP\msys\msys64\mingw64\share\icons $env:PACKAGE_DIR\share\
+          cp -r C:\msys2\msys64\mingw64\share\icons $env:PACKAGE_DIR\share\
 
           # https://github.com/gtk-rs/gtk/issues/422
           cp -r C:\gtk-build\gtk\x64\release\lib\gdk-pixbuf-2.0 $env:PACKAGE_DIR\lib\
