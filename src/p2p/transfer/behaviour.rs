@@ -8,8 +8,8 @@ use async_std::sync::Mutex;
 
 use libp2p::core::{connection::ConnectionId, ConnectedPoint, Multiaddr, PeerId};
 use libp2p::swarm::{
-    NetworkBehaviour, NetworkBehaviourAction, NotifyHandler, OneShotHandler, OneShotHandlerConfig,
-    PollParameters, SubstreamProtocol,
+    DialError, NetworkBehaviour, NetworkBehaviourAction, NotifyHandler, OneShotHandler,
+    OneShotHandlerConfig, PollParameters, SubstreamProtocol,
 };
 
 use super::protocol::{ProtocolEvent, TransferOut, TransferPayload};
@@ -19,13 +19,10 @@ use crate::p2p::transfer::file::{FileToSend, Payload};
 
 const TIMEOUT: u64 = 600;
 
+type Handler = OneShotHandler<TransferPayload, TransferOut, ProtocolEvent>;
+
 pub struct TransferBehaviour {
-    pub events: Vec<
-        NetworkBehaviourAction<
-            TransferOut,
-            OneShotHandler<TransferPayload, TransferOut, ProtocolEvent>,
-        >,
-    >,
+    pub events: Vec<NetworkBehaviourAction<TransferPayload, Handler>>,
     payloads: Vec<FileToSend>,
     pub sender: Sender<PeerEvent>,
     receiver: Arc<Mutex<Receiver<TransferCommand>>>,
@@ -53,7 +50,7 @@ impl TransferBehaviour {
 }
 
 impl NetworkBehaviour for TransferBehaviour {
-    type ConnectionHandler = OneShotHandler<TransferPayload, TransferOut, ProtocolEvent>;
+    type ConnectionHandler = Handler;
     type OutEvent = TransferPayload;
 
     fn new_handler(&mut self) -> Self::ConnectionHandler {
@@ -74,7 +71,7 @@ impl NetworkBehaviour for TransferBehaviour {
             max_dial_negotiated: 8,
         };
         let proto = SubstreamProtocol::new(tp, ()).with_timeout(timeout);
-        Self::ProtocolsHandler::new(proto, handler_config)
+        Self::ConnectionHandler::new(proto, handler_config)
     }
 
     fn addresses_of_peer(&mut self, _peer_id: &PeerId) -> Vec<Multiaddr> {
@@ -83,18 +80,25 @@ impl NetworkBehaviour for TransferBehaviour {
 
     fn inject_connection_established(
         &mut self,
-        peer: &PeerId,
+        peer_id: &PeerId,
         c: &ConnectionId,
         endpoint: &ConnectedPoint,
+        _failed_addresses: Option<&Vec<Multiaddr>>,
+        _other_established: usize,
     ) {
         debug!(
             "Connection established: {:?}, {:?}, c: {:?}",
-            peer, endpoint, c
+            peer_id, endpoint, c
         )
     }
 
-    fn inject_dial_failure(&mut self, peer: &PeerId) {
-        warn!("Dial failure: {:?}", peer);
+    fn inject_dial_failure(
+        &mut self,
+        peer_id: Option<PeerId>,
+        handler: Self::ConnectionHandler,
+        error: &DialError,
+    ) {
+        warn!("Dial failure: {:?}, {}", peer_id, error);
     }
 
     fn inject_event(&mut self, _: PeerId, _: ConnectionId, event: ProtocolEvent) {
@@ -111,12 +115,7 @@ impl NetworkBehaviour for TransferBehaviour {
         &mut self,
         _: &mut Context,
         _: &mut impl PollParameters,
-    ) -> Poll<
-        NetworkBehaviourAction<
-            TransferOut,
-            OneShotHandler<TransferPayload, TransferOut, ProtocolEvent>,
-        >,
-    > {
+    ) -> Poll<NetworkBehaviourAction<TransferPayload, Handler>> {
         if let Some(file) = self.payloads.pop() {
             let peer_id = file.peer.clone();
             let transfer = TransferOut {

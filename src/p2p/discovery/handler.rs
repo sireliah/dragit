@@ -2,6 +2,7 @@ use libp2p::swarm::handler::{
     ConnectionHandler, ConnectionHandlerEvent, ConnectionHandlerUpgrErr, InboundUpgradeSend,
     KeepAlive, OutboundUpgradeSend, SubstreamProtocol,
 };
+use std::fmt::Debug;
 
 use smallvec::SmallVec;
 use std::{error, task::Context, task::Poll, time::Duration};
@@ -9,7 +10,7 @@ use std::{error, task::Context, task::Poll, time::Duration};
 /// Shamelessly copied OneShotHandler that keeps the connections open
 pub struct KeepAliveHandler<TInbound, TOutbound, TEvent>
 where
-    TOutbound: OutboundUpgradeSend,
+    TOutbound: OutboundUpgradeSend + Debug,
 {
     /// The upgrade for inbound substreams.
     listen_protocol: SubstreamProtocol<TInbound, ()>,
@@ -28,7 +29,7 @@ where
 
 impl<TInbound, TOutbound, TEvent> KeepAliveHandler<TInbound, TOutbound, TEvent>
 where
-    TOutbound: OutboundUpgradeSend,
+    TOutbound: OutboundUpgradeSend + Debug,
 {
     pub fn new(
         listen_protocol: SubstreamProtocol<TInbound, ()>,
@@ -74,7 +75,7 @@ where
 
 impl<TInbound, TOutbound, TEvent> Default for KeepAliveHandler<TInbound, TOutbound, TEvent>
 where
-    TOutbound: OutboundUpgradeSend,
+    TOutbound: OutboundUpgradeSend + Debug,
     TInbound: InboundUpgradeSend + Default,
 {
     fn default() -> Self {
@@ -89,12 +90,12 @@ impl<TInbound, TOutbound, TEvent> ConnectionHandler
     for KeepAliveHandler<TInbound, TOutbound, TEvent>
 where
     TInbound: InboundUpgradeSend + Send + 'static,
-    TOutbound: OutboundUpgradeSend,
+    TOutbound: OutboundUpgradeSend + Debug,
     TInbound::Output: Into<TEvent>,
     TOutbound::Output: Into<TEvent>,
     TOutbound::Error: error::Error + Send + 'static,
     SubstreamProtocol<TInbound, ()>: Clone,
-    TEvent: Send + 'static,
+    TEvent: Debug + Send + 'static,
 {
     type InEvent = TOutbound;
     type OutEvent = TEvent;

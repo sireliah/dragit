@@ -9,8 +9,8 @@ use async_std::channel::Sender;
 use hostname;
 use libp2p::core::{connection::ConnectionId, ConnectedPoint, Multiaddr, PeerId};
 use libp2p::swarm::{
-    dial_opts::DialOpts, NetworkBehaviour, NetworkBehaviourAction, NotifyHandler, PollParameters,
-    SubstreamProtocol,
+    dial_opts::{DialOpts, PeerCondition},
+    NetworkBehaviour, NetworkBehaviourAction, NotifyHandler, PollParameters, SubstreamProtocol,
 };
 
 use crate::p2p::discovery::handler::KeepAliveHandler;
@@ -19,21 +19,8 @@ use crate::p2p::peer::{CurrentPeers, OperatingSystem, Peer, PeerEvent};
 
 type Handler = KeepAliveHandler<Discovery, Discovery, Discovery>;
 
-impl From<Discovery> for DiscoveryEvent {
-    fn from(discovery: Discovery, peer: PeerId) -> DiscoveryEvent {
-        DiscoveryEvent {
-            peer,
-            hostname: discovery.hostname,
-            os: discovery.os,
-        }
-    }
-}
-
-#[derive(Debug)]
 pub struct DiscoveryBehaviour {
-    events: VecDeque<
-        NetworkBehaviourAction<DiscoveryEvent, Handler>,
-    >,
+    events: VecDeque<NetworkBehaviourAction<DiscoveryEvent, Handler>>,
     peers: HashMap<PeerId, Peer>,
     hostname: String,
     os: OperatingSystem,
@@ -86,8 +73,14 @@ impl DiscoveryBehaviour {
 
     fn dial_peer(&mut self, peer_id: PeerId, addr: Multiaddr, insert_peer: bool) {
         self.events.push_back(NetworkBehaviourAction::Dial {
-            opts: DialOpts::peer_id(peer_id).address(addr).build(),
-            handler: self.new_handler(),
+            opts: DialOpts::peer_id(peer_id)
+                .addresses(vec![addr.clone()])
+                .condition(PeerCondition::NotDialing)
+                .build(),
+            // Discovery behaviour doesn't care about closed connections or connection failures,
+            // because dialing is done frequently enough on each peer discovered by mdns.
+            // That is why the default handler is fine to be passed here.
+            handler: Handler::default(),
         });
 
         if insert_peer {
@@ -169,6 +162,8 @@ impl NetworkBehaviour for DiscoveryBehaviour {
         peer_id: &PeerId,
         c: &ConnectionId,
         endpoint: &ConnectedPoint,
+        _failed_addresses: Option<&Vec<Multiaddr>>,
+        _other_established: usize,
     ) {
         info!("Connection established: {:?}, c: {:?}", endpoint, c);
         match endpoint {
@@ -226,7 +221,14 @@ impl NetworkBehaviour for DiscoveryBehaviour {
         };
     }
 
-    fn inject_connection_closed(&mut self, peer: &PeerId) {
+    fn inject_connection_closed(
+        &mut self,
+        peer: &PeerId,
+        _connection_id: &ConnectionId,
+        _connected_point: &ConnectedPoint,
+        _handler: Handler,
+        _remaining_established: usize,
+    ) {
         info!("Peer disconnected: {:?}", peer);
         self.peers.remove(peer);
 

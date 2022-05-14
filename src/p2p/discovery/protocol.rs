@@ -9,8 +9,6 @@ use super::proto::Host;
 use crate::p2p::peer::OperatingSystem;
 use crate::p2p::util::TSocketAlias;
 
-type DiscoverySuccess = (String, OperatingSystem);
-type DiscoveryFailure = io::Error;
 
 #[derive(Debug)]
 pub struct DiscoveryEvent {
@@ -23,8 +21,8 @@ impl fmt::Display for DiscoveryEvent {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "DiscoveryEvent: result: {:?}, peer: {}",
-            self.result, self.peer
+            "DiscoveryEvent: peer: {}, hostname: {}, os: {:?}",
+            self.peer, self.hostname, self.os
         )
     }
 }

@@ -17,7 +17,7 @@ use libp2p::{
     identity,
     mdns::{Mdns, MdnsConfig, MdnsEvent},
     mplex, noise,
-    swarm::NetworkBehaviourEventProcess,
+    swarm::{NetworkBehaviourEventProcess, SwarmEvent},
     tcp::TcpConfig,
     NetworkBehaviour, PeerId, Swarm,
 };
@@ -36,6 +36,7 @@ pub use transfer::metadata::hash_contents;
 pub use transfer::{FileToSend, Payload, TransferBehaviour, TransferOut, TransferPayload};
 
 #[derive(NetworkBehaviour)]
+#[behaviour(event_process = true)]
 pub struct MyBehaviour {
     pub mdns: Mdns,
     pub discovery: DiscoveryBehaviour,
@@ -47,6 +48,7 @@ impl NetworkBehaviourEventProcess<MdnsEvent> for MyBehaviour {
         match event {
             MdnsEvent::Discovered(ref mut list) => {
                 if let Some((peer_id, addr)) = list.next() {
+                    info!("Discovered peer_id: {}", peer_id);
                     self.discovery.add_peer(peer_id.clone(), addr);
                 }
             }
@@ -66,14 +68,8 @@ impl NetworkBehaviourEventProcess<MdnsEvent> for MyBehaviour {
 impl NetworkBehaviourEventProcess<DiscoveryEvent> for MyBehaviour {
     fn inject_event(&mut self, event: DiscoveryEvent) {
         info!("Discovered: {}", event);
-        match event.result {
-            Ok((hostname, os)) => {
-                self.discovery.update_peer(event.peer, hostname, os);
-            }
-            Err(e) => {
-                error!("Failed to get host info: {:?}", e);
-            }
-        }
+        self.discovery
+            .update_peer(event.peer, event.hostname, event.os);
     }
 }
 
@@ -184,7 +180,7 @@ async fn execute_swarm(
                     info!("Some event main: {:?}", event);
                     return Poll::Ready(event);
                 }
-                Poll::Ready(None) => return Poll::Ready(()),
+                Poll::Ready(None) => return Poll::Ready(SwarmEvent::Behaviour(())),
                 Poll::Pending => {
                     if !listening {
                         for addr in Swarm::listeners(&swarm) {
