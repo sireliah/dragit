@@ -1,6 +1,6 @@
-use libp2p::swarm::protocols_handler::{
-    InboundUpgradeSend, KeepAlive, OutboundUpgradeSend, ProtocolsHandler, ProtocolsHandlerEvent,
-    ProtocolsHandlerUpgrErr, SubstreamProtocol,
+use libp2p::swarm::handler::{
+    ConnectionHandler, ConnectionHandlerEvent, ConnectionHandlerUpgrErr, InboundUpgradeSend,
+    KeepAlive, OutboundUpgradeSend, SubstreamProtocol,
 };
 
 use smallvec::SmallVec;
@@ -14,7 +14,7 @@ where
     /// The upgrade for inbound substreams.
     listen_protocol: SubstreamProtocol<TInbound, ()>,
     /// If `Some`, something bad happened and we should shut down the handler with an error.
-    pending_error: Option<ProtocolsHandlerUpgrErr<<TOutbound as OutboundUpgradeSend>::Error>>,
+    pending_error: Option<ConnectionHandlerUpgrErr<<TOutbound as OutboundUpgradeSend>::Error>>,
     /// Queue of events to produce in `poll()`.
     events_out: SmallVec<[TEvent; 4]>,
     /// Queue of outbound substreams to open.
@@ -85,7 +85,8 @@ where
     }
 }
 
-impl<TInbound, TOutbound, TEvent> ProtocolsHandler for KeepAliveHandler<TInbound, TOutbound, TEvent>
+impl<TInbound, TOutbound, TEvent> ConnectionHandler
+    for KeepAliveHandler<TInbound, TOutbound, TEvent>
 where
     TInbound: InboundUpgradeSend + Send + 'static,
     TOutbound: OutboundUpgradeSend,
@@ -97,7 +98,7 @@ where
 {
     type InEvent = TOutbound;
     type OutEvent = TEvent;
-    type Error = ProtocolsHandlerUpgrErr<<Self::OutboundProtocol as OutboundUpgradeSend>::Error>;
+    type Error = ConnectionHandlerUpgrErr<<Self::OutboundProtocol as OutboundUpgradeSend>::Error>;
     type InboundProtocol = TInbound;
     type OutboundProtocol = TOutbound;
     type OutboundOpenInfo = ();
@@ -131,7 +132,7 @@ where
     fn inject_dial_upgrade_error(
         &mut self,
         _info: Self::OutboundOpenInfo,
-        error: ProtocolsHandlerUpgrErr<<Self::OutboundProtocol as OutboundUpgradeSend>::Error>,
+        error: ConnectionHandlerUpgrErr<<Self::OutboundProtocol as OutboundUpgradeSend>::Error>,
     ) {
         if self.pending_error.is_none() {
             self.pending_error = Some(error);
@@ -146,7 +147,7 @@ where
         &mut self,
         _: &mut Context<'_>,
     ) -> Poll<
-        ProtocolsHandlerEvent<
+        ConnectionHandlerEvent<
             Self::OutboundProtocol,
             Self::OutboundOpenInfo,
             Self::OutEvent,
@@ -154,11 +155,11 @@ where
         >,
     > {
         if let Some(err) = self.pending_error.take() {
-            return Poll::Ready(ProtocolsHandlerEvent::Close(err));
+            return Poll::Ready(ConnectionHandlerEvent::Close(err));
         }
 
         if !self.events_out.is_empty() {
-            return Poll::Ready(ProtocolsHandlerEvent::Custom(self.events_out.remove(0)));
+            return Poll::Ready(ConnectionHandlerEvent::Custom(self.events_out.remove(0)));
         } else {
             self.events_out.shrink_to_fit();
         }
@@ -167,7 +168,7 @@ where
             if self.dial_negotiated < self.max_dial_negotiated {
                 self.dial_negotiated += 1;
                 let upgrade = self.dial_queue.remove(0);
-                return Poll::Ready(ProtocolsHandlerEvent::OutboundSubstreamRequest {
+                return Poll::Ready(ConnectionHandlerEvent::OutboundSubstreamRequest {
                     protocol: SubstreamProtocol::new(upgrade, ())
                         .with_timeout(self.outbound_substream_timeout),
                 });

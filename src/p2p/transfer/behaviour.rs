@@ -48,10 +48,10 @@ impl TransferBehaviour {
 }
 
 impl NetworkBehaviour for TransferBehaviour {
-    type ProtocolsHandler = OneShotHandler<TransferPayload, TransferOut, ProtocolEvent>;
+    type ConnectionHandler = OneShotHandler<TransferPayload, TransferOut, ProtocolEvent>;
     type OutEvent = TransferPayload;
 
-    fn new_handler(&mut self) -> Self::ProtocolsHandler {
+    fn new_handler(&mut self) -> Self::ConnectionHandler {
         let timeout = Duration::from_secs(TIMEOUT);
         let tp = TransferPayload {
             name: "default".to_string(),
@@ -76,8 +76,6 @@ impl NetworkBehaviour for TransferBehaviour {
         Vec::new()
     }
 
-    fn inject_connected(&mut self, _peer: &PeerId) {}
-
     fn inject_connection_established(
         &mut self,
         peer: &PeerId,
@@ -93,8 +91,6 @@ impl NetworkBehaviour for TransferBehaviour {
     fn inject_dial_failure(&mut self, peer: &PeerId) {
         warn!("Dial failure: {:?}", peer);
     }
-
-    fn inject_disconnected(&mut self, _peer: &PeerId) {}
 
     fn inject_event(&mut self, _: PeerId, _: ConnectionId, event: ProtocolEvent) {
         info!("Inject event: {}", event);

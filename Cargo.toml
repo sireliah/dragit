@@ -18,7 +18,7 @@ glib = "0.15.4"
 gtk = "0.15.4"
 hex = "0.4.2"
 hostname = "0.3.0"
-libp2p = { version = "0.37.1", features = [ "dns-async-std", "websocket", "mplex", "mdns", "tcp-async-io", "noise" ], default-features = false }
+libp2p = { version = "0.44.0", features = [ "dns-async-std", "websocket", "mplex", "mdns", "tcp-async-io", "noise" ], default-features = false }
 log = "0.4.8"
 env_logger = "0.9"
 md-5 = "^0.8.0"
