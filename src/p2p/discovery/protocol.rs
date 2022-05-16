@@ -9,7 +9,6 @@ use super::proto::Host;
 use crate::p2p::peer::OperatingSystem;
 use crate::p2p::util::TSocketAlias;
 
-
 #[derive(Debug)]
 pub struct DiscoveryEvent {
     pub peer: PeerId,

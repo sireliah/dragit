@@ -44,8 +44,8 @@ impl TransferBehaviour {
         }
     }
 
-    pub fn push_file(&mut self, file: FileToSend) -> Result<(), Box<dyn Error>> {
-        Ok(self.payloads.push(file))
+    pub fn push_file(&mut self, file: FileToSend) {
+        self.payloads.push(file)
     }
 }
 

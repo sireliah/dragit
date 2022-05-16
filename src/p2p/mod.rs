@@ -1,23 +1,16 @@
-use std::{
-    error::Error,
-    sync::Arc,
-    task::{Context, Poll},
-    thread::sleep,
-    time::Duration,
-};
+use std::{error::Error, sync::Arc, thread::sleep, time::Duration};
 
 use async_std::channel::{Receiver, Sender};
 use async_std::sync::Mutex;
-use async_std::task;
 
-use futures::{executor, future, stream::StreamExt};
+use futures::{executor, select, stream::StreamExt, FutureExt};
 use libp2p::{
     core::transport::Transport,
     core::upgrade,
     identity,
     mdns::{Mdns, MdnsConfig, MdnsEvent},
     mplex, noise,
-    swarm::{NetworkBehaviourEventProcess, SwarmEvent},
+    swarm::NetworkBehaviourEventProcess,
     tcp::TcpConfig,
     NetworkBehaviour, PeerId, Swarm,
 };
@@ -110,7 +103,7 @@ impl NetworkBehaviourEventProcess<TransferOut> for MyBehaviour {
 
 async fn execute_swarm(
     sender: Sender<PeerEvent>,
-    mut receiver: Receiver<FileToSend>,
+    receiver: Receiver<FileToSend>,
     command_receiver: Receiver<TransferCommand>,
 ) -> Result<(), Box<dyn Error>> {
     let local_keys = identity::Keypair::generate_ed25519();
@@ -157,45 +150,22 @@ async fn execute_swarm(
     let address = format!("/ip4/0.0.0.0/tcp/{}", port);
     Swarm::listen_on(&mut swarm, address.parse()?)?;
 
-    let mut listening = false;
-
-    task::block_on(future::poll_fn(move |context: &mut Context| {
-        loop {
-            match Receiver::poll_next_unpin(&mut receiver, context) {
-                Poll::Ready(Some(event)) => {
-                    let behaviour = swarm.behaviour_mut();
-                    match behaviour.transfer_behaviour.push_file(event) {
-                        Ok(_) => (),
-                        Err(e) => error!("{:?}", e),
-                    };
+    loop {
+        select! {
+            received = receiver.recv().fuse() => {
+                let behaviour = swarm.behaviour_mut();
+                match received {
+                    Ok(file_to_send) => {
+                        behaviour.transfer_behaviour.push_file(file_to_send);
+                    },
+                    Err(e) => error!("Receiver error: {:?}", e),
                 }
-                Poll::Ready(None) => info!("Nothing in queue"),
-                Poll::Pending => break,
-            };
-        }
-
-        loop {
-            match swarm.poll_next_unpin(context) {
-                Poll::Ready(Some(event)) => {
-                    info!("Some event main: {:?}", event);
-                    return Poll::Ready(event);
-                }
-                Poll::Ready(None) => return Poll::Ready(SwarmEvent::Behaviour(())),
-                Poll::Pending => {
-                    if !listening {
-                        for addr in Swarm::listeners(&swarm) {
-                            info!("Listening on {:?}", addr);
-                            listening = true;
-                        }
-                    }
-
-                    break;
-                }
+            },
+            swarm_event = swarm.select_next_some() => {
+                info!("Swarm event: {:?}", swarm_event);
             }
         }
-        Poll::Pending
-    }));
-    Ok(())
+    }
 }
 
 pub fn run_server(
