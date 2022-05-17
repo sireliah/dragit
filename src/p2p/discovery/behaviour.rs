@@ -169,7 +169,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
         match endpoint {
             ConnectedPoint::Dialer {
                 address,
-                role_override,
+                role_override: _,
             } => {
                 if let Some(peer) = self.peers.get_mut(peer_id) {
                     info!("Dialer, updating the address");

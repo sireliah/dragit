@@ -1,4 +1,3 @@
-use std::error::Error;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 use std::time::Duration;
@@ -95,7 +94,7 @@ impl NetworkBehaviour for TransferBehaviour {
     fn inject_dial_failure(
         &mut self,
         peer_id: Option<PeerId>,
-        handler: Self::ConnectionHandler,
+        _handler: Self::ConnectionHandler,
         error: &DialError,
     ) {
         warn!("Dial failure: {:?}, {}", peer_id, error);
