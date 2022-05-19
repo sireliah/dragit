@@ -81,8 +81,8 @@ impl Metadata {
             TransferType::File => self.name.to_string(),
             TransferType::Text => {
                 let mut hasher = Md5::new();
-                hasher.input(self.name.to_string());
-                let result = hasher.result();
+                hasher.update(self.name.to_string());
+                let result = hasher.finalize();
                 hex::encode::<Vec<u8>>(result.to_vec())
             }
         }
@@ -159,16 +159,16 @@ pub fn hash_contents(mut file: fs::File) -> Result<String, Error> {
     loop {
         match file.read(&mut buffer) {
             Ok(n) if n == 0 || n < HASH_BUFFER_SIZE => {
-                state.input(&buffer[..n]);
+                state.update(&buffer[..n]);
                 break;
             }
             Ok(n) => {
-                state.input(&buffer[..n]);
+                state.update(&buffer[..n]);
             }
             Err(e) => return Err(e),
         };
     }
-    Ok(hex::encode::<Vec<u8>>(state.result().to_vec()))
+    Ok(hex::encode::<Vec<u8>>(state.finalize().to_vec()))
 }
 
 #[cfg(test)]
