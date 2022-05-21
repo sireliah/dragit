@@ -1,7 +1,6 @@
 use std::{
     collections::{HashMap, VecDeque},
     error::Error,
-    fmt,
     task::{Context, Poll},
     time::Duration,
 };
@@ -10,32 +9,18 @@ use async_std::channel::Sender;
 use hostname;
 use libp2p::core::{connection::ConnectionId, ConnectedPoint, Multiaddr, PeerId};
 use libp2p::swarm::{
-    protocols_handler::SubstreamProtocol, DialPeerCondition, NetworkBehaviour,
-    NetworkBehaviourAction, NotifyHandler, PollParameters, ProtocolsHandler,
+    dial_opts::{DialOpts, PeerCondition},
+    NetworkBehaviour, NetworkBehaviourAction, NotifyHandler, PollParameters, SubstreamProtocol,
 };
 
 use crate::p2p::discovery::handler::KeepAliveHandler;
 use crate::p2p::discovery::protocol::{Discovery, DiscoveryEvent};
 use crate::p2p::peer::{CurrentPeers, OperatingSystem, Peer, PeerEvent};
 
-#[derive(Debug)]
-pub struct InnerMessage(Discovery);
+type Handler = KeepAliveHandler<Discovery, Discovery, Discovery>;
 
-impl fmt::Display for InnerMessage {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Received host data from peer: {:?}", self.0)
-    }
-}
-
-impl From<Discovery> for InnerMessage {
-    fn from(discovery: Discovery) -> InnerMessage {
-        InnerMessage(discovery)
-    }
-}
-
-#[derive(Debug)]
 pub struct DiscoveryBehaviour {
-    events: VecDeque<NetworkBehaviourAction<Discovery, DiscoveryEvent>>,
+    events: VecDeque<NetworkBehaviourAction<DiscoveryEvent, Handler>>,
     peers: HashMap<PeerId, Peer>,
     hostname: String,
     os: OperatingSystem,
@@ -87,9 +72,15 @@ impl DiscoveryBehaviour {
     }
 
     fn dial_peer(&mut self, peer_id: PeerId, addr: Multiaddr, insert_peer: bool) {
-        self.events.push_back(NetworkBehaviourAction::DialPeer {
-            condition: DialPeerCondition::NotDialing,
-            peer_id: peer_id.clone(),
+        self.events.push_back(NetworkBehaviourAction::Dial {
+            opts: DialOpts::peer_id(peer_id)
+                .addresses(vec![addr.clone()])
+                .condition(PeerCondition::NotDialing)
+                .build(),
+            // Discovery behaviour doesn't care about closed connections or connection failures,
+            // because dialing is done frequently enough on each peer discovered by mdns.
+            // That is why the default handler is fine to be passed here.
+            handler: Handler::default(),
         });
 
         if insert_peer {
@@ -147,10 +138,10 @@ impl DiscoveryBehaviour {
 }
 
 impl NetworkBehaviour for DiscoveryBehaviour {
-    type ProtocolsHandler = KeepAliveHandler<Discovery, Discovery, InnerMessage>;
+    type ConnectionHandler = Handler;
     type OutEvent = DiscoveryEvent;
 
-    fn new_handler(&mut self) -> Self::ProtocolsHandler {
+    fn new_handler(&mut self) -> Self::ConnectionHandler {
         let substream_proto = SubstreamProtocol::new(
             Discovery {
                 hostname: self.hostname.clone(),
@@ -159,15 +150,11 @@ impl NetworkBehaviour for DiscoveryBehaviour {
             (),
         );
         let outbound_substream_timeout = Duration::from_secs(2);
-        Self::ProtocolsHandler::new(substream_proto, outbound_substream_timeout)
+        Self::ConnectionHandler::new(substream_proto, outbound_substream_timeout)
     }
 
     fn addresses_of_peer(&mut self, _peer_id: &PeerId) -> Vec<Multiaddr> {
         Vec::new()
-    }
-
-    fn inject_connected(&mut self, peer_id: &PeerId) {
-        info!("Connected: {:?}", peer_id);
     }
 
     fn inject_connection_established(
@@ -175,10 +162,15 @@ impl NetworkBehaviour for DiscoveryBehaviour {
         peer_id: &PeerId,
         c: &ConnectionId,
         endpoint: &ConnectedPoint,
+        _failed_addresses: Option<&Vec<Multiaddr>>,
+        _other_established: usize,
     ) {
         info!("Connection established: {:?}, c: {:?}", endpoint, c);
         match endpoint {
-            ConnectedPoint::Dialer { address } => {
+            ConnectedPoint::Dialer {
+                address,
+                role_override: _,
+            } => {
                 if let Some(peer) = self.peers.get_mut(peer_id) {
                     info!("Dialer, updating the address");
                     peer.address = address.clone();
@@ -229,7 +221,14 @@ impl NetworkBehaviour for DiscoveryBehaviour {
         };
     }
 
-    fn inject_disconnected(&mut self, peer: &PeerId) {
+    fn inject_connection_closed(
+        &mut self,
+        peer: &PeerId,
+        _connection_id: &ConnectionId,
+        _connected_point: &ConnectedPoint,
+        _handler: Handler,
+        _remaining_established: usize,
+    ) {
         info!("Peer disconnected: {:?}", peer);
         self.peers.remove(peer);
 
@@ -238,10 +237,11 @@ impl NetworkBehaviour for DiscoveryBehaviour {
         }
     }
 
-    fn inject_event(&mut self, peer: PeerId, _connection: ConnectionId, event: InnerMessage) {
+    fn inject_event(&mut self, peer: PeerId, _connection: ConnectionId, event: Discovery) {
         let message = DiscoveryEvent {
             peer,
-            result: Ok((event.0.hostname, event.0.os)),
+            hostname: event.hostname,
+            os: event.os,
         };
         self.events
             .push_back(NetworkBehaviourAction::GenerateEvent(message));
@@ -251,12 +251,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
         &mut self,
         _: &mut Context<'_>,
         _: &mut impl PollParameters,
-    ) -> Poll<
-        NetworkBehaviourAction<
-            <Self::ProtocolsHandler as ProtocolsHandler>::InEvent,
-            Self::OutEvent,
-        >,
-    > {
+    ) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ConnectionHandler>> {
         if let Some(event) = self.events.pop_front() {
             Poll::Ready(event)
         } else {

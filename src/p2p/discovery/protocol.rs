@@ -9,22 +9,19 @@ use super::proto::Host;
 use crate::p2p::peer::OperatingSystem;
 use crate::p2p::util::TSocketAlias;
 
-type DiscoverySuccess = (String, OperatingSystem);
-type DiscoveryFailure = io::Error;
-pub type DiscoveryResult = Result<DiscoverySuccess, DiscoveryFailure>;
-
 #[derive(Debug)]
 pub struct DiscoveryEvent {
     pub peer: PeerId,
-    pub result: DiscoveryResult,
+    pub hostname: String,
+    pub os: OperatingSystem,
 }
 
 impl fmt::Display for DiscoveryEvent {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "DiscoveryEvent: result: {:?}, peer: {}",
-            self.result, self.peer
+            "DiscoveryEvent: peer: {}, hostname: {}, os: {:?}",
+            self.peer, self.hostname, self.os
         )
     }
 }
@@ -56,25 +53,7 @@ impl UpgradeInfo for Discovery {
 async fn read_peer(
     mut socket: impl TSocketAlias,
 ) -> Result<(Discovery, impl TSocketAlias), io::Error> {
-    let data = match upgrade::read_one(&mut socket, 1024).await {
-        Ok(value) => value,
-        Err(err) => match err {
-            upgrade::ReadOneError::Io(e) => {
-                error!("IO error: {:?}", e);
-                return Err(e);
-            }
-            upgrade::ReadOneError::TooLarge {
-                requested: _,
-                max: _,
-            } => {
-                error!("Payload too large!");
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    "Payload too large",
-                ));
-            }
-        },
-    };
+    let data = upgrade::read_length_prefixed(&mut socket, 1024).await?;
     let host = Host::decode(&data[..])?;
     let os = match OperatingSystem::from_i32(host.os) {
         Some(v) => v,
@@ -99,7 +78,7 @@ async fn write_peer(
     let mut buf = Vec::with_capacity(proto.encoded_len());
 
     proto.encode(&mut buf)?;
-    upgrade::write_one(&mut socket, buf).await?;
+    upgrade::write_length_prefixed(&mut socket, buf).await?;
 
     Ok(socket)
 }

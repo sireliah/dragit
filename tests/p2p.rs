@@ -3,8 +3,8 @@ use std::fs;
 use std::sync::Arc;
 use std::time::Duration;
 
-use async_std::sync::Mutex;
 use async_std::channel::{bounded, Receiver, Sender};
+use async_std::sync::Mutex;
 use async_std::task;
 
 use futures::{future, prelude::*};
@@ -42,12 +42,12 @@ fn test_file_transfer() {
         }
 
         for addr in Swarm::listeners(&mut swarm1) {
-            tx.send(addr.clone()).await;
+            tx.send(addr.clone()).await.unwrap();
         }
 
         loop {
             println!("Pool1");
-            match Swarm::next_event(&mut swarm1).await {
+            match swarm1.next().await.unwrap() {
                 SwarmEvent::ConnectionClosed {
                     peer_id: _,
                     endpoint: _,
@@ -68,48 +68,52 @@ fn test_file_transfer() {
     };
     let mut pushed = false;
     let sw2 = async move {
-        Swarm::dial_addr(&mut swarm2, rx.next().await.unwrap()).unwrap();
+        let addr = rx.next().await.unwrap();
+        swarm2.dial(addr).unwrap();
         loop {
             println!("Pool2");
-            match Swarm::next_event(&mut swarm2).await {
-                SwarmEvent::ConnectionEstablished {
-                    peer_id,
-                    endpoint: _,
-                    num_established: _,
-                } => {
-                    println!("Established!: {:?}", peer_id);
-                    if !pushed {
-                        println!("Pushing file");
-                        let behaviour = swarm2.behaviour_mut();
-                        let payload = Payload::Path("tests/file.txt".to_string());
-                        let file = FileToSend::new(&peer1, payload).unwrap();
-                        let transfer = TransferOut {
-                            file,
-                            sender_queue: behaviour.sender.clone(),
-                        };
-                        let event = NetworkBehaviourAction::NotifyHandler {
-                            handler: NotifyHandler::Any,
-                            peer_id: peer1.to_owned(),
-                            event: transfer,
-                        };
-                        behaviour.events.push(event);
-                        pushed = true;
+            if let Some(event) = swarm2.next().await {
+                match event {
+                    SwarmEvent::ConnectionEstablished {
+                        peer_id,
+                        endpoint: _,
+                        num_established: _,
+                        concurrent_dial_errors: _,
+                    } => {
+                        println!("Established!: {:?}", peer_id);
+                        if !pushed {
+                            println!("Pushing file");
+                            let behaviour = swarm2.behaviour_mut();
+                            let payload = Payload::Path("tests/file.txt".to_string());
+                            let file = FileToSend::new(&peer1, payload).unwrap();
+                            let transfer = TransferOut {
+                                file,
+                                sender_queue: behaviour.sender.clone(),
+                            };
+                            let event = NetworkBehaviourAction::NotifyHandler {
+                                handler: NotifyHandler::Any,
+                                peer_id: peer1.to_owned(),
+                                event: transfer,
+                            };
+                            behaviour.events.push(event);
+                            pushed = true;
+                        }
                     }
-                }
-                SwarmEvent::ConnectionClosed {
-                    peer_id: _,
-                    endpoint: _,
-                    num_established: _,
-                    cause,
-                } => {
-                    panic!("Conn2 closed {:?}", cause);
-                }
-                SwarmEvent::Behaviour(event) => {
-                    println!("Event2: {:?}", event);
-                    return event;
-                }
-                other => {
-                    println!("Other2: {:?}", other);
+                    SwarmEvent::ConnectionClosed {
+                        peer_id: _,
+                        endpoint: _,
+                        num_established: _,
+                        cause,
+                    } => {
+                        panic!("Conn2 closed {:?}", cause);
+                    }
+                    SwarmEvent::Behaviour(event) => {
+                        println!("Event2: {:?}", event);
+                        return event;
+                    }
+                    other => {
+                        println!("Other2: {:?}", other);
+                    }
                 }
             }
         }
@@ -153,74 +157,80 @@ fn test_text_transfer() {
         }
 
         for addr in Swarm::listeners(&mut swarm1) {
-            tx.send(addr.clone()).await;
+            tx.send(addr.clone()).await.unwrap();
         }
 
         loop {
             println!("Pool1");
-            match Swarm::next_event(&mut swarm1).await {
-                SwarmEvent::ConnectionClosed {
-                    peer_id: _,
-                    endpoint: _,
-                    num_established: _,
-                    cause,
-                } => {
-                    panic!("Conn1 closed! {:?}", cause);
-                }
-                SwarmEvent::Behaviour(event) => {
-                    println!("Event1: {:?}", event);
-                    return event;
-                }
-                event => {
-                    println!("Other1: {:?}", event);
+            if let Some(event) = swarm1.next().await {
+                match event {
+                    SwarmEvent::ConnectionClosed {
+                        peer_id: _,
+                        endpoint: _,
+                        num_established: _,
+                        cause,
+                    } => {
+                        panic!("Conn1 closed! {:?}", cause);
+                    }
+                    SwarmEvent::Behaviour(event) => {
+                        println!("Event1: {:?}", event);
+                        return event;
+                    }
+                    event => {
+                        println!("Other1: {:?}", event);
+                    }
                 }
             }
         }
     };
     let mut pushed = false;
     let sw2 = async move {
-        Swarm::dial_addr(&mut swarm2, rx.next().await.unwrap()).unwrap();
+        let addr = rx.next().await.unwrap();
+        swarm2.dial(addr).unwrap();
         loop {
             println!("Pool2");
-            match Swarm::next_event(&mut swarm2).await {
-                SwarmEvent::ConnectionEstablished {
-                    peer_id,
-                    endpoint: _,
-                    num_established: _,
-                } => {
-                    println!("Established!: {:?}", peer_id);
-                    if !pushed {
-                        println!("Pushing file");
-                        let behaviour = swarm2.behaviour_mut();
-                        let payload = Payload::Text("Hello there".to_string());
-                        let file = FileToSend::new(&peer1, payload).unwrap();
-                        let transfer = TransferOut {
-                            file,
-                            sender_queue: behaviour.sender.clone(),
-                        };
-                        let event = NetworkBehaviourAction::NotifyHandler {
-                            handler: NotifyHandler::Any,
-                            peer_id: peer1.to_owned(),
-                            event: transfer,
-                        };
-                        behaviour.events.push(event);
-                        pushed = true;
+            if let Some(event) = swarm2.next().await {
+                match event {
+                    SwarmEvent::ConnectionEstablished {
+                        peer_id,
+                        endpoint: _,
+                        num_established: _,
+                        concurrent_dial_errors: _,
+                    } => {
+                        println!("Established!: {:?}", peer_id);
+                        if !pushed {
+                            println!("Pushing file");
+                            let behaviour = swarm2.behaviour_mut();
+                            let payload = Payload::Text("Hello there".to_string());
+                            let file = FileToSend::new(&peer1, payload).unwrap();
+                            let transfer = TransferOut {
+                                file,
+                                sender_queue: behaviour.sender.clone(),
+                            };
+                            let event = NetworkBehaviourAction::NotifyHandler {
+                                handler: NotifyHandler::Any,
+                                peer_id: peer1.to_owned(),
+                                event: transfer,
+                            };
+                            behaviour.events.push(event);
+                            pushed = true;
+                        }
                     }
-                }
-                SwarmEvent::ConnectionClosed {
-                    peer_id: _,
-                    endpoint: _,
-                    num_established: _,
-                    cause,
-                } => {
-                    panic!("Conn2 closed {:?}", cause);
-                }
-                SwarmEvent::Behaviour(event) => {
-                    println!("Event2: {:?}", event);
-                    return event;
-                }
-                other => {
-                    println!("Other2: {:?}", other);
+                    SwarmEvent::ConnectionClosed {
+                        peer_id: _,
+                        endpoint: _,
+                        num_established: _,
+                        cause,
+                    } => {
+                        panic!("Conn2 closed {:?}", cause);
+                    }
+                    SwarmEvent::Behaviour(event) => {
+                        println!("Event2: {:?}", event);
+                        return event;
+                    }
+                    other => {
+                        println!("Other2: {:?}", other);
+                    }
                 }
             }
         }
