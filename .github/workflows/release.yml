@@ -2,6 +2,7 @@ on:
   push:
     tags:
       - 'v*'
+      - 'test*'
 
 name: Create release
 
@@ -213,6 +214,9 @@ jobs:
           foreach($line in Get-Content .\scripts\windows_deps.txt) {
               cp C:\gtk-build\gtk\x64\release\bin\$line $env:PACKAGE_DIR\bin\
           }
+
+          ls C:\msys2\msys64\mingw64\bin\
+          cp C:\msys2\msys64\mingw64\bin\libexpat-1.dll $env:PACKAGE_DIR\bin\expat.dll
 
           cp -r C:\gtk-build\gtk\x64\release\share\glib-2.0 $env:PACKAGE_DIR\share\
 
