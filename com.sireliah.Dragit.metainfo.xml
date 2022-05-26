@@ -15,6 +15,11 @@
     </p>
   </description>
   <releases>
+    <release version="0.6.2" date="2022-05-26">
+      <description>
+        <p>Updated dependencies</p>
+      </description>
+    </release>
     <release version="0.6.1" date="2021-06-27">
       <description>
         <p>Made Dragit check firewalld config when the application is started.</p>
