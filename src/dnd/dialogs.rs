@@ -89,7 +89,7 @@ impl FirewallDialog {
     }
 
     pub fn close(&self) {
-        self.0.hide();
         self.0.close();
+        self.0.hide();
     }
 }
