@@ -38,6 +38,7 @@ The application uses mDNS for automatic device discovery with help of `libp2p` l
     - [Performance](#performance)
     - [TODO](#todos)
     - [Done](#done)
+- [Contributing](#contributing)
 
 ## Preview
 <img src="https://raw.githubusercontent.com/sireliah/dragit/master/static/dragit_screen.png" alt="Dragit screenshot" width=500px>
@@ -157,31 +158,30 @@ $ cargo build --release
 $ ./target/release/dragit
 ```
 
-### TODOs
-#### Features
-- find out how to use text drag&drop API on Windows with Gtk 
-- show username in the device list
-- have list of trusted devices
-- add files queue
+## Contributing
+Contributions to Dragit are welcome and encouraged!
 
-#### Maintenance
-- TCP retransmissions - what is wrong?
-- fix the outbound memory issue (consumes too much memory on file reading)
-- add Windows CI/CD
-- add timeout on the Accept/Deny event
-- inject_dial_upgrade_error - but why not inbound?
-- adjust network timeouts
+You can help in following aspects:
 
-### Done
-- handle firewalld rules when needed
-- show easy to understand instruction on startup
-- show details about the host
-- choose directory
-- show version in the title bar
-- crashes when no network interface is available
-- implement error events
-- TransferCommand::Accept should specify which file should be accepted
-- add sender side progress bar
-- fix the inbound memory issue
-- add logging
-- add test for the outbound/inbound
+- suggest new ideas
+- implement features
+- provide bug reports
+- fix identified bugs
+- review existing code
+- improve the documentation
+
+Before creating a new Pull Request, please open an Issue containing explanation of the idea or a problem. This will help us to coordinate works and discuss solutions.
+
+### Code quality
+
+Format the code using [cargo fmt](https://github.com/rust-lang/rustfmt).
+
+While not every feature is testable, please include tests for the new functionalities that could benefit from tests. Examples:
+
+- utility functions: unit tests
+- libp2p/network: [integration tests](./tests/p2p.rs)
+- Gtk: it's enough to test manually
+
+### Compatibility
+
+Dragit works on Linux and Windows operating systems. When developing new features, please have in mind that both platforms should be supported.
