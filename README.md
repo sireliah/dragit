@@ -36,8 +36,6 @@ The application uses mDNS for automatic device discovery with help of `libp2p` l
     - [How to build on Windows](#how-to-build-on-windows)
         - [Windows requirements](#windows-requirements)
     - [Performance](#performance)
-    - [TODO](#todos)
-    - [Done](#done)
 - [Contributing](#contributing)
 
 ## Preview
