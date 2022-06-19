@@ -1,6 +1,6 @@
 use std::fmt;
 use std::fs::remove_file;
-use std::io::ErrorKind;
+use std::io::{ErrorKind, Read};
 use std::sync::mpsc::sync_channel;
 use std::sync::Arc;
 
@@ -234,7 +234,6 @@ impl UpgradeInfo for TransferPayload {
 impl TransferOut {
     async fn write_socket(&self, socket: impl TSocketAlias) -> Result<(), io::Error> {
         let direction = Direction::Outgoing;
-        let (sender, receiver) = sync_channel::<Vec<u8>>(CHUNK_SIZE * 128);
         info!("File to send: {}", self.file);
 
         util::notify_waiting(&self.sender_queue).await;
@@ -247,8 +246,7 @@ impl TransferOut {
 
         if accepted {
             let mut writer = futio::BufWriter::new(socket);
-            let file = self.file.get_file()?;
-            let job = jobs::spawn_read_file_job(sender.clone(), file);
+            let mut file = self.file.get_file()?;
 
             util::notify_progress(&self.sender_queue, 0, size, &direction).await;
 
@@ -256,12 +254,12 @@ impl TransferOut {
             let mut current_size: usize = 0;
 
             loop {
-                let value = receiver.recv();
-                match value {
-                    Ok(payload) if payload.len() > 0 => {
-                        writer.write_all(&payload).await?;
-                        counter += payload.len();
-                        current_size += payload.len();
+                let mut buff = vec![0u8; CHUNK_SIZE * 32];
+                match file.read(&mut buff) {
+                    Ok(n) if n > 0 => {
+                        writer.write_all(&buff[..n]).await?;
+                        counter += buff.len();
+                        current_size += buff.len();
 
                         if util::time_to_notify(current_size, size) {
                             util::notify_progress(&self.sender_queue, counter, size, &direction)
@@ -270,28 +268,13 @@ impl TransferOut {
                         }
                     }
                     Ok(_) => {
-                        util::notify_progress(&self.sender_queue, counter, size, &direction).await;
-                        break;
+                        writer.close().await?;
+                        break
                     }
-                    Err(e) => {
-                        error!("Channel error: {:?}", e);
-                        return Err(io::Error::new(
-                            ErrorKind::Other,
-                            "Sending half of the channel is disconnected",
-                        ));
-                    }
+                    Err(e) => return Err(e),
                 }
             }
 
-            let _ = job.join().or_else(|e| {
-                error!("File thread error: {:?}", e);
-                Err(io::Error::new(
-                    io::ErrorKind::Other,
-                    "Error in file writer thread",
-                ))
-            })?;
-            writer.close().await?;
-            drop(writer);
             util::notify_completed(&self.sender_queue).await;
             Ok(())
         } else {
