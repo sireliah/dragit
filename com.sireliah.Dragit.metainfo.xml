@@ -15,6 +15,12 @@
     </p>
   </description>
   <releases>
+    <release version="0.6.3" date="2022-06-27">
+      <description>
+        <p>Reduced the memory usage when sending large files</p>
+        <p>Updated the icon to match GNOME standards</p>
+      </description>
+    </release>
     <release version="0.6.2" date="2022-05-26">
       <description>
         <p>Updated dependencies</p>
