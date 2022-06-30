@@ -281,6 +281,11 @@ impl PeerItem {
 
         self.container.connect_drag_data_received(
             move |_win, _drag_context, _, _, selection_data, _, _| {
+                let data: String = String::from_utf8(selection_data.data()).expect("not a string!");
+                info!("Selection data: {:?}, type: {:?}", selection_data.uris(), data);
+
+
+
                 let file_to_send = match selection_data.uris().pop() {
                     Some(file) => Self::get_file_payload(&peer_id, file.to_string()),
                     None => Self::get_text_payload(&selection_data, &peer_id),
@@ -303,6 +308,7 @@ impl PeerItem {
 
     fn get_file_payload(peer_id: &PeerId, file: String) -> Result<FileToSend, Box<dyn Error>> {
         let file = gio::File::for_uri(&file);
+
         if file.is_native() {
             match file.path() {
                 Some(p) => {

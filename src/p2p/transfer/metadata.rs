@@ -50,7 +50,9 @@ impl Metadata {
         file: &FileToSend,
         mut socket: impl TSocketAlias,
     ) -> Result<(usize, impl TSocketAlias), io::Error> {
+        info!("Getting hash");
         let hash = file.calculate_hash().await?;
+        info!("Getting size");
         let size = file.check_size()?;
 
         let proto = ProtoMetadata {

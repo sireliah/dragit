@@ -8,6 +8,8 @@ use std::path::Path;
 use libp2p::core::PeerId;
 use tempfile::NamedTempFile;
 
+use tar::Builder;
+
 use crate::p2p::transfer::metadata::hash_contents;
 use crate::p2p::TransferType;
 
@@ -20,7 +22,23 @@ pub enum Payload {
 impl Payload {
     pub fn new(transfer_type: TransferType, path: String) -> Result<Payload, io::Error> {
         match transfer_type {
-            TransferType::File => Ok(Payload::Path(path)),
+            TransferType::File => {
+                let path_clone = path.clone();
+                let meta = metadata(path)?;
+                if meta.is_dir() {
+                    info!("It's a directory");
+                    // zip here
+                    let path = "/tmp/file.tar";
+                    let tar_file = File::create(path)?;
+                    let mut archive = Builder::new(Vec::new());
+                    archive.append_dir_all(path, path)?;
+                    archive.finish()?;
+                    Ok(Payload::Path(path.to_string()))
+                } else {
+                    info!("It's a file");
+                    Ok(Payload::Path(path_clone))
+                }
+            }
             TransferType::Text => {
                 let mut file = File::open(path)?;
                 let mut contents = String::new();
@@ -46,9 +64,27 @@ impl FileToSend {
         match payload {
             Payload::Path(path) => {
                 let name = Self::extract_name_path(&path)?;
+                let path_clone = path.clone();
+                let path_c = path.clone();
+
+                let meta = metadata(path)?;
+                let (name, payload) = if meta.is_dir() {
+                    info!("It's a directory: {:?}", path_c);
+                    let out_path = "dir";
+                    let tar_file = File::create(&out_path).expect("File creation failed");
+                    let mut archive = Builder::new(tar_file);
+                    archive.append_dir_all(out_path, &path_c).expect("tar failed");
+                    archive.finish().expect("Finish failed");
+                    (format!("{}.tar", name), Payload::Path(out_path.to_string()))
+                } else {
+                    info!("It's a file");
+                    (name, Payload::Path(path_clone))
+                };
+
+
                 Ok(FileToSend {
                     name,
-                    payload: Payload::Path(path),
+                    payload,
                     peer: peer.to_owned(),
                     transfer_type: TransferType::File,
                 })
@@ -66,9 +102,14 @@ impl FileToSend {
     }
 
     pub fn get_file(&self) -> Result<File, io::Error> {
+        info!("Self payload: {:?}", self.payload);
         match &self.payload {
             Payload::Text(text) => Ok(Self::create_temp_file(text)?),
-            Payload::Path(path) => Ok(File::open(path)?),
+            Payload::Path(path) => {
+                info!("Get file path: {:?}", path);
+                Ok(File::open(path)?)
+
+            }
         }
     }
 
@@ -136,6 +177,7 @@ impl fmt::Display for Payload {
 pub fn get_hash_from_payload(payload: &Payload) -> Result<String, io::Error> {
     match payload {
         Payload::Path(path) => {
+            info!("Path for hash: {:?}", path);
             let file = File::open(&path)?;
             Ok(hash_contents(file)?)
         }
