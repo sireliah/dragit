@@ -14,7 +14,7 @@ use gtk::{DestDefaults, Label, TargetEntry, TargetFlags};
 
 use libp2p::{multiaddr::Protocol, Multiaddr, PeerId};
 
-use crate::p2p::{FileToSend, OperatingSystem, Payload, Peer};
+use crate::p2p::{FileToSend, OperatingSystem, Payload, Peer, PeerEvent};
 use crate::user_data::UserConfig;
 
 pub const STYLE: &str = "
@@ -125,6 +125,10 @@ impl MainLayout {
         let recent_item = gtk::Box::new(gtk::Orientation::Horizontal, 0);
         recent_item.set_halign(gtk::Align::Start);
         match payload {
+            Payload::Dir(file) => {
+                // TODO
+                info!("Showing directory not implemented");
+            }
             Payload::Path(path) => {
                 let link = get_link(file_name, &path);
                 let image =
@@ -264,6 +268,7 @@ impl PeerItem {
         self,
         peer: &Peer,
         file_sender: Arc<Mutex<Sender<FileToSend>>>,
+        peer_event_sender: glib::Sender<PeerEvent>,
     ) -> Self {
         let peer_id = peer.peer_id.clone();
         // Order of the targets matters!
@@ -293,6 +298,9 @@ impl PeerItem {
                     }
                     Err(e) => {
                         error!("Could not extract dragged content: {:?}", e);
+                        peer_event_sender
+                            .send(PeerEvent::Error(e.to_string()))
+                            .expect("sending error event failed");
                     }
                 }
             },
@@ -307,20 +315,20 @@ impl PeerItem {
             match file.path() {
                 Some(p) => {
                     let path = clean_file_proto(&p.display().to_string());
-                    let payload = Payload::Path(path);
+                    let payload = Payload::new_for_path(path)?;
                     Ok(FileToSend::new(peer_id, payload)?)
                 }
                 None => {
                     let uri: String = file.uri().into();
                     let path = clean_file_proto(&uri);
-                    let payload = Payload::Path(path);
+                    let payload = Payload::new_for_path(path)?;
                     Ok(FileToSend::new(peer_id, payload)?)
                 }
             }
         } else {
             let uri: String = file.uri().into();
             let path = clean_file_proto(&uri);
-            let payload = Payload::Path(path);
+            let payload = Payload::new_for_path(path)?;
             Ok(FileToSend::new(peer_id, payload)?)
         }
     }

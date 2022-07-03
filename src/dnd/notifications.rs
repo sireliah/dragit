@@ -178,6 +178,13 @@ impl AppNotification {
 
     pub fn show_payload(&self, overlay: &gtk::Overlay, file_name: &str, payload: &Payload) {
         match payload {
+            Payload::Dir(path) => {
+                // TODO: this is copy
+                self.label.set_text("Received");
+                self.remove_link();
+                let link = get_link(file_name, &path);
+                self.layout.attach(&link, self.link_pos, 0, 1, 1);
+            }
             Payload::Path(path) => {
                 self.label.set_text("Received");
                 self.remove_link();

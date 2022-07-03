@@ -4,7 +4,7 @@ package dragit.p2p.transfer.metadata;
 enum TransferType {
     FILE = 0;
     TEXT = 1;
-    IMAGE = 2;
+    DIRECTORY = 2;
     OTHER = 3;
 }
 

@@ -1,6 +1,6 @@
 use std::fmt;
 use std::fs::remove_file;
-use std::io::{ErrorKind, Read};
+use std::io::ErrorKind;
 use std::sync::mpsc::sync_channel;
 use std::sync::Arc;
 
@@ -19,7 +19,7 @@ use libp2p::core::{InboundUpgrade, OutboundUpgrade, UpgradeInfo};
 
 use crate::p2p::commands::TransferCommand;
 use crate::p2p::peer::{Direction, PeerEvent};
-use crate::p2p::transfer::file::{get_hash_from_payload, FileToSend, Payload};
+use crate::p2p::transfer::file::{get_hash_from_payload, FileToSend, Payload, StreamOption};
 use crate::p2p::transfer::jobs;
 use crate::p2p::transfer::metadata::{Answer, Metadata};
 use crate::p2p::util::{self, TSocketAlias, CHUNK_SIZE};
@@ -52,7 +52,8 @@ pub struct TransferPayload {
 
 impl TransferPayload {
     pub fn check_file(&self) -> Result<(), io::Error> {
-        let hash_from_disk = get_hash_from_payload(&self.payload)?;
+        let (hash_from_disk, _) =
+            task::block_on(async { get_hash_from_payload(&self.payload).await })?;
 
         if hash_from_disk != self.hash {
             Err(io::Error::new(ErrorKind::InvalidData, "File corrupted!"))
@@ -245,42 +246,58 @@ impl TransferOut {
         info!("File accepted? {:?}", accepted);
 
         if accepted {
-            let mut writer = futio::BufWriter::new(socket);
-            let mut file = self.file.get_file()?;
-
-            util::notify_progress(&self.sender_queue, 0, size, &direction).await;
-
-            let mut counter: usize = 0;
-            let mut current_size: usize = 0;
-
-            loop {
-                let mut buff = vec![0u8; CHUNK_SIZE * 32];
-                match file.read(&mut buff) {
-                    Ok(n) if n > 0 => {
-                        writer.write_all(&buff[..n]).await?;
-                        counter += buff.len();
-                        current_size += buff.len();
-
-                        if util::time_to_notify(current_size, size) {
-                            util::notify_progress(&self.sender_queue, counter, size, &direction)
-                                .await;
-                            current_size = 0;
-                        }
+            match self.file.get_file_stream().await? {
+                StreamOption::File(file) => {
+                    self.stream_data(socket, file, size, direction).await?;
+                    Ok(())
+                }
+                StreamOption::Zip(file, task_handle) => {
+                    self.stream_data(socket, file, size, direction).await?;
+                    if let Some(handle) = task_handle {
+                        handle.await?;
                     }
-                    Ok(_) => {
-                        writer.close().await?;
-                        break
-                    }
-                    Err(e) => return Err(e),
+                    Ok(())
                 }
             }
-
-            util::notify_completed(&self.sender_queue).await;
-            Ok(())
         } else {
             util::notify_rejected(&self.sender_queue).await;
             Ok(())
         }
+    }
+
+    async fn stream_data(
+        &self,
+        socket: impl TSocketAlias,
+        mut file: impl AsyncRead + Unpin,
+        size: usize,
+        direction: Direction,
+    ) -> Result<(), io::Error> {
+        let mut writer = futio::BufWriter::new(socket);
+        util::notify_progress(&self.sender_queue, 0, size, &direction).await;
+        let mut counter: usize = 0;
+        let mut current_size: usize = 0;
+        loop {
+            let mut buff = vec![0u8; 1024];
+            match file.read(&mut buff).await {
+                Ok(n) if n > 0 => {
+                    writer.write_all(&buff[..n]).await?;
+                    counter += buff.len();
+                    current_size += buff.len();
+
+                    if util::time_to_notify(current_size, size) {
+                        util::notify_progress(&self.sender_queue, counter, size, &direction).await;
+                        current_size = 0;
+                    }
+                }
+                Ok(_) => {
+                    writer.close().await?;
+                    break;
+                }
+                Err(e) => return Err(e),
+            }
+        }
+        util::notify_completed(&self.sender_queue).await;
+        Ok(())
     }
 }
 

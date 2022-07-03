@@ -1,5 +1,4 @@
 use std::fmt;
-use std::fs;
 use std::io::{self, Error, Read};
 
 use super::proto::Answer as ProtoAnswer;
@@ -50,8 +49,7 @@ impl Metadata {
         file: &FileToSend,
         mut socket: impl TSocketAlias,
     ) -> Result<(usize, impl TSocketAlias), io::Error> {
-        let hash = file.calculate_hash().await?;
-        let size = file.check_size()?;
+        let (hash, size) = file.calculate_hash().await?;
 
         let proto = ProtoMetadata {
             name: file.name.to_string(),
@@ -79,6 +77,7 @@ impl Metadata {
     pub fn get_safe_file_name(&self) -> String {
         match self.transfer_type {
             TransferType::File => self.name.to_string(),
+            TransferType::Dir => self.name.to_string(),
             TransferType::Text => {
                 let mut hasher = Md5::new();
                 hasher.update(self.name.to_string());
@@ -152,7 +151,7 @@ async fn read_from_socket(
     Ok((data, socket))
 }
 
-pub fn hash_contents(mut file: fs::File) -> Result<String, Error> {
+pub fn hash_contents(mut file: impl Read) -> Result<String, Error> {
     let mut state = Md5::default();
     let mut buffer = [0u8; HASH_BUFFER_SIZE];
 
@@ -169,6 +168,27 @@ pub fn hash_contents(mut file: fs::File) -> Result<String, Error> {
         };
     }
     Ok(hex::encode::<Vec<u8>>(state.finalize().to_vec()))
+}
+
+// FIXME: how to avoid duplication here?
+pub async fn async_hash_contents(mut file: impl AsyncRead + Unpin) -> Result<(String, u64), Error> {
+    let mut state = Md5::default();
+    let mut buffer = [0u8; HASH_BUFFER_SIZE];
+    let mut i: u64 = 0;
+    loop {
+        match file.read(&mut buffer).await {
+            Ok(n) if n == 0 => {
+                break;
+            }
+            Ok(n) => {
+                i += n as u64;
+                state.update(&buffer[..n]);
+            }
+            Err(e) => return Err(e),
+        };
+    }
+    let hash = hex::encode::<Vec<u8>>(state.finalize().to_vec());
+    Ok((hash, i))
 }
 
 #[cfg(test)]

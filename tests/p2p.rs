@@ -131,6 +131,7 @@ fn test_file_transfer() {
             let meta = fs::metadata(path).expect("No file found");
             assert!(meta.is_file());
         }
+        Payload::Dir(_) => panic!("Got directory instead!"),
         Payload::Text(_) => panic!("Got text instead!"),
     };
 }
@@ -245,6 +246,7 @@ fn test_text_transfer() {
 
     match p1.payload {
         Payload::Path(_) => panic!("Got file instead!"),
+        Payload::Dir(_) => panic!("Got directory instead!"),
         Payload::Text(text) => {
             assert_eq!(text, "Hello there".to_string());
         }
