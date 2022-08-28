@@ -16,10 +16,7 @@ impl AcceptFileDialog {
     ) -> AcceptFileDialog {
         let readable_size = ByteSize(size as u64);
         let message = match transfer_type {
-            TransferType::File => format!(
-                "Incoming file {} ({}).",
-                name, readable_size
-            ),
+            TransferType::File => format!("Incoming file {} ({}).", name, readable_size),
             TransferType::Text => format!("Incoming text {}.", name),
             TransferType::Dir => format!("Incoming directory {}.", name),
         };

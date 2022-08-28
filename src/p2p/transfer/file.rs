@@ -68,8 +68,8 @@ impl FileToSend {
                     Some(base) => {
                         let child_path = os_path.strip_prefix(base)?;
                         child_path.to_string_lossy().to_string()
-                    },
-                    None => os_path.to_string_lossy().to_string()
+                    }
+                    None => os_path.to_string_lossy().to_string(),
                 };
                 Ok(FileToSend {
                     name,

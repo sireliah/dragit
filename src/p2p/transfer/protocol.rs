@@ -1,5 +1,5 @@
-use std::fmt;
 use async_std::fs::File;
+use std::fmt;
 use std::fs::remove_file;
 use std::io::ErrorKind;
 use std::sync::mpsc::sync_channel;
@@ -23,8 +23,10 @@ use crate::p2p::commands::TransferCommand;
 use crate::p2p::peer::{Direction, PeerEvent};
 use crate::p2p::transfer::file::{get_hash_from_payload, FileToSend, Payload, StreamOption};
 use crate::p2p::transfer::jobs;
+use crate::p2p::transfer::directory::unzip_stream;
 use crate::p2p::transfer::metadata::{Answer, Metadata};
 use crate::p2p::util::{self, TSocketAlias, CHUNK_SIZE};
+use crate::p2p::TransferType;
 use crate::user_data;
 
 #[derive(Clone, Debug)]
@@ -107,23 +109,16 @@ impl TransferPayload {
         ))
     }
 
-    async fn read_file_payload(
+    async fn stream_file(
         &mut self,
-        socket: impl TSocketAlias,
-        meta: &Metadata,
+        path: &str,
+        mut reader: impl AsyncRead + Unpin,
         size: usize,
         direction: &Direction,
-    ) -> Result<(usize, String), io::Error> {
-        let mut reader = BufReader::new(socket);
-
-        let path =
-            user_data::get_target_path(&meta.get_safe_file_name(), self.target_path.as_ref())?;
-
-        // TODO: reader is already AsyncRead. Use Compat for directories
-
+    ) -> Result<usize, io::Error> {
+        let mut file = File::create(path).await?;
         let mut counter: usize = 0;
         let mut current_size: usize = 0;
-        let mut file = File::create(&path).await?;
         loop {
             let mut buff = vec![0u8; CHUNK_SIZE];
             match reader.read(&mut buff).await {
@@ -135,16 +130,10 @@ impl TransferPayload {
                         file.write(&buff[..n]).await?;
 
                         if util::time_to_notify(current_size, size) {
-                            util::notify_progress(
-                                &self.sender_queue,
-                                counter,
-                                size,
-                                &direction,
-                            )
-                            .await;
+                            util::notify_progress(&self.sender_queue, counter, size, &direction)
+                                .await;
                             current_size = 0;
                         }
-                        // }
                     } else {
                         file.close().await?;
                         util::notify_progress(&self.sender_queue, counter, size, &direction).await;
@@ -154,11 +143,56 @@ impl TransferPayload {
                 Err(e) => return Err(e),
             }
         }
+        Ok(counter)
+    }
+
+    async fn stream_dir(
+        &mut self,
+        path: String,
+        reader: BufReader<impl TSocketAlias + 'static>,
+        size: usize,
+        direction: &Direction,
+    ) -> Result<usize, io::Error> {
+        let task = unzip_stream(path, reader).await?;
+        task.await?;
+        Ok(0)
+    }
+
+    async fn read_file_payload(
+        &mut self,
+        socket: impl TSocketAlias + 'static,
+        meta: &Metadata,
+        size: usize,
+        direction: &Direction,
+    ) -> Result<(usize, String), io::Error> {
+        let reader = BufReader::new(socket);
+
+        let path =
+            user_data::get_target_path(&meta.get_safe_file_name(), self.target_path.as_ref())?;
+
+        // TODO: reader is already AsyncRead. Use Compat for directories
+
+        let counter = match meta.transfer_type {
+            TransferType::File => {
+                self.stream_file(&path, reader, size, direction).await?
+            },
+            TransferType::Text => {
+                self.stream_file(&path, reader, size, direction).await?
+            },
+            TransferType::Dir => {
+                // [fut AsyncRead] socket - compressed
+                // [fut AsyncRead] reader
+                // [Compat<AsyncRead>] reader
+                // [Compat<AsyncRead>] UnzipStream - uncompressed
+                // [Compat<AsyncRead>] File(s)
+                self.stream_dir(path.clone(), reader, size, direction).await?
+            },
+        };
 
         Ok((counter, path))
     }
 
-    async fn read_socket(&mut self, socket: impl TSocketAlias) -> Result<(), io::Error> {
+    async fn read_socket(&mut self, socket: impl TSocketAlias + 'static) -> Result<(), io::Error> {
         let direction = Direction::Incoming;
         let (meta, mut socket) = Metadata::read(socket).await?;
         info!("Meta received! \n{}", meta);
