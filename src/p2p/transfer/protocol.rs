@@ -1,4 +1,5 @@
 use std::fmt;
+use async_std::fs::File;
 use std::fs::remove_file;
 use std::io::ErrorKind;
 use std::sync::mpsc::sync_channel;
@@ -9,6 +10,7 @@ use std::time::Instant;
 use std::{io, iter, pin::Pin};
 
 use async_std::channel::{Receiver, Sender};
+use async_std::io::BufReader;
 use async_std::sync::Mutex;
 use async_std::task;
 
@@ -112,44 +114,39 @@ impl TransferPayload {
         size: usize,
         direction: &Direction,
     ) -> Result<(usize, String), io::Error> {
-        let mut reader = futio::BufReader::new(socket);
+        let mut reader = BufReader::new(socket);
 
-        let mut payloads: Vec<u8> = vec![];
-        let (sender, receiver) = sync_channel::<Vec<u8>>(CHUNK_SIZE * 128);
         let path =
             user_data::get_target_path(&meta.get_safe_file_name(), self.target_path.as_ref())?;
 
-        let job = jobs::spawn_write_file_job(receiver, path.clone());
+        // TODO: reader is already AsyncRead. Use Compat for directories
 
         let mut counter: usize = 0;
         let mut current_size: usize = 0;
+        let mut file = File::create(&path).await?;
         loop {
             let mut buff = vec![0u8; CHUNK_SIZE];
             match reader.read(&mut buff).await {
                 Ok(n) => {
                     if n > 0 {
-                        payloads.extend(&buff[..n]);
                         counter += n;
                         current_size += n;
 
-                        if payloads.len() >= (CHUNK_SIZE * 8) {
-                            jobs::send_buffer(&sender, payloads.clone())?;
-                            payloads.clear();
+                        file.write(&buff[..n]).await?;
 
-                            if util::time_to_notify(current_size, size) {
-                                util::notify_progress(
-                                    &self.sender_queue,
-                                    counter,
-                                    size,
-                                    &direction,
-                                )
-                                .await;
-                                current_size = 0;
-                            }
+                        if util::time_to_notify(current_size, size) {
+                            util::notify_progress(
+                                &self.sender_queue,
+                                counter,
+                                size,
+                                &direction,
+                            )
+                            .await;
+                            current_size = 0;
                         }
+                        // }
                     } else {
-                        jobs::send_buffer(&sender, payloads.clone())?;
-                        jobs::send_buffer(&sender, vec![])?;
+                        file.close().await?;
                         util::notify_progress(&self.sender_queue, counter, size, &direction).await;
                         break;
                     }
@@ -157,15 +154,6 @@ impl TransferPayload {
                 Err(e) => return Err(e),
             }
         }
-
-        drop(reader);
-        let _ = job.join().or_else(|e| {
-            error!("File thread error: {:?}", e);
-            Err(io::Error::new(
-                io::ErrorKind::Other,
-                "Error in file writer thread",
-            ))
-        })?;
 
         Ok((counter, path))
     }
