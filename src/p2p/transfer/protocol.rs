@@ -2,7 +2,6 @@ use async_std::fs::File;
 use std::fmt;
 use std::fs::remove_file;
 use std::io::ErrorKind;
-use std::sync::mpsc::sync_channel;
 use std::sync::Arc;
 
 use std::task::{Context, Poll};
@@ -21,9 +20,8 @@ use libp2p::core::{InboundUpgrade, OutboundUpgrade, UpgradeInfo};
 
 use crate::p2p::commands::TransferCommand;
 use crate::p2p::peer::{Direction, PeerEvent};
-use crate::p2p::transfer::file::{get_hash_from_payload, FileToSend, Payload, StreamOption};
-use crate::p2p::transfer::jobs;
 use crate::p2p::transfer::directory::unzip_stream;
+use crate::p2p::transfer::file::{get_hash_from_payload, FileToSend, Payload, StreamOption};
 use crate::p2p::transfer::metadata::{Answer, Metadata};
 use crate::p2p::util::{self, TSocketAlias, CHUNK_SIZE};
 use crate::p2p::TransferType;
@@ -170,23 +168,13 @@ impl TransferPayload {
         let path =
             user_data::get_target_path(&meta.get_safe_file_name(), self.target_path.as_ref())?;
 
-        // TODO: reader is already AsyncRead. Use Compat for directories
-
         let counter = match meta.transfer_type {
-            TransferType::File => {
-                self.stream_file(&path, reader, size, direction).await?
-            },
-            TransferType::Text => {
-                self.stream_file(&path, reader, size, direction).await?
-            },
+            TransferType::File => self.stream_file(&path, reader, size, direction).await?,
+            TransferType::Text => self.stream_file(&path, reader, size, direction).await?,
             TransferType::Dir => {
-                // [fut AsyncRead] socket - compressed
-                // [fut AsyncRead] reader
-                // [Compat<AsyncRead>] reader
-                // [Compat<AsyncRead>] UnzipStream - uncompressed
-                // [Compat<AsyncRead>] File(s)
-                self.stream_dir(path.clone(), reader, size, direction).await?
-            },
+                self.stream_dir(path.clone(), reader, size, direction)
+                    .await?
+            }
         };
 
         Ok((counter, path))

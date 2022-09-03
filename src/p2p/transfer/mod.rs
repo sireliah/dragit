@@ -1,7 +1,6 @@
 pub mod behaviour;
 pub mod directory;
 pub mod file;
-pub mod jobs;
 pub mod metadata;
 pub mod protocol;
 

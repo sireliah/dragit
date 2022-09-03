@@ -10,7 +10,7 @@ use tempfile::NamedTempFile;
 use walkdir::WalkDir;
 
 use crate::p2p::transfer::directory::{MaybeTaskHandle, ZipStream};
-use crate::p2p::transfer::metadata::{async_hash_contents, hash_contents};
+use crate::p2p::transfer::metadata::async_hash_contents;
 use crate::p2p::TransferType;
 
 #[derive(Debug, Clone)]
