@@ -128,16 +128,16 @@ fn test_directory_transfer() {
             let meta = fs::metadata(&path).expect("No file found");
             assert!(meta.is_dir());
             assert_eq!(
-                fs::metadata(Path::new(&path).join("test_dir/DE Metro 2033.epub"))
+                fs::metadata(Path::new(&path).join("test_dir/test.odt"))
                     .unwrap()
                     .len(),
-                1126521
+                8988
             );
             assert_eq!(
-                fs::metadata(Path::new(&path).join("test_dir/Dan Brown - Inferno.epub"))
+                fs::metadata(Path::new(&path).join("test_dir/Der_Zauberberg.epub"))
                     .unwrap()
                     .len(),
-                2000205
+                659903
             );
         }
         Payload::Path(_) => panic!("Got file instead!"),

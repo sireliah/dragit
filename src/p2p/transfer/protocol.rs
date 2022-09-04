@@ -145,15 +145,16 @@ impl TransferPayload {
     }
 
     async fn stream_dir(
-        &mut self,
+        &self,
         path: String,
         reader: BufReader<impl TSocketAlias + 'static>,
         size: usize,
         direction: &Direction,
     ) -> Result<usize, io::Error> {
-        let task = unzip_stream(path, reader).await?;
-        task.await?;
-        Ok(0)
+        let sender_copy = self.sender_queue.clone();
+        let task = unzip_stream(path, reader, sender_copy, size, direction.clone()).await?;
+        let received_bytes = task.await?;
+        Ok(received_bytes)
     }
 
     async fn read_file_payload(
@@ -211,7 +212,7 @@ impl TransferPayload {
                 self.payload = Payload::new(meta.transfer_type, path.clone())?;
                 self.size_bytes = counter;
 
-                // TransferPayload needs to know where is the actual file after successful transfer.
+                // TransferPayload needs to know where is the actual file after successful transfer
                 self.target_path = Some(path);
 
                 Ok(())

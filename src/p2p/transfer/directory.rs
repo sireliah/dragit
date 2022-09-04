@@ -1,9 +1,11 @@
+use std::convert::TryFrom;
 use std::fs::{create_dir, create_dir_all};
 use std::io::{Error, ErrorKind, Result as IOResult};
 use std::path::Path;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
+use async_std::channel::Sender;
 use async_std::io::BufReader;
 use async_std::task::{spawn, JoinHandle};
 use async_zip::error::ZipError;
@@ -16,7 +18,9 @@ use tokio::io::{copy_buf, duplex, BufReader as TokioBufReader, DuplexStream};
 use tokio_util::compat::{Compat, FuturesAsyncReadCompatExt, TokioAsyncReadCompatExt};
 use walkdir::WalkDir;
 
-use crate::p2p::util::TSocketAlias;
+use crate::p2p::peer::Direction;
+use crate::p2p::util::{notify_progress, TSocketAlias};
+use crate::p2p::PeerEvent;
 
 const ZIP_BUFFER_SIZE: usize = 1024 * 64;
 
@@ -146,12 +150,16 @@ fn is_zip_dir(path: &Path) -> bool {
 pub async fn unzip_stream(
     target_path: String,
     buf_reader: BufReader<impl TSocketAlias + 'static>,
-) -> Result<JoinHandle<Result<(), Error>>, Error> {
+    sender_queue: Sender<PeerEvent>,
+    size: usize,
+    direction: Direction,
+) -> Result<JoinHandle<Result<usize, Error>>, Error> {
     let mut compat_reader = buf_reader.compat();
 
     let task = spawn(async move {
         let base_path = Path::new(&target_path);
         let mut zip = ZipFileReader::new(&mut compat_reader);
+        let mut counter: usize = 0;
         while !zip.finished() {
             if let Some(reader) = zip.entry_reader().await.map_err(|err| zip_error(err))? {
                 let entry = reader.entry();
@@ -161,7 +169,6 @@ pub async fn unzip_stream(
                 }
                 debug!("Unzip: {:?}", path.to_string_lossy());
                 if is_zip_dir(&path) {
-                    info!("PATH: {:?}", path);
                     create_dir(path)?;
                 } else {
                     let mut file = File::create(&path).await?;
@@ -169,10 +176,16 @@ pub async fn unzip_stream(
                         .copy_to_end_crc(&mut file, ZIP_BUFFER_SIZE)
                         .await
                         .map_err(|err| zip_error(err))?;
+
+                    let meta = file.metadata().await?;
+                    let file_size = usize::try_from(meta.len())
+                        .map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?;
+                    counter += file_size;
+                    notify_progress(&sender_queue, counter, size, &direction).await;
                 }
             }
         }
-        Ok::<(), Error>(())
+        Ok::<usize, Error>(counter)
     });
     Ok(task)
 }
