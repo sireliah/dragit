@@ -125,9 +125,12 @@ impl MainLayout {
         let recent_item = gtk::Box::new(gtk::Orientation::Horizontal, 0);
         recent_item.set_halign(gtk::Align::Start);
         match payload {
-            Payload::Dir(file) => {
-                // TODO
-                info!("Showing directory not implemented");
+            Payload::Dir(path) => {
+                let link = get_link(file_name, &path);
+                let image =
+                    gtk::Image::from_icon_name(Some("inode-directory"), gtk::IconSize::Dialog);
+                recent_item.pack_start(&image, false, false, 0);
+                recent_item.pack_start(&link, false, false, 0);
             }
             Payload::Path(path) => {
                 let link = get_link(file_name, &path);
