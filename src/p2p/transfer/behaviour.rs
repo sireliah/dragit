@@ -57,7 +57,7 @@ impl NetworkBehaviour for TransferBehaviour {
         let tp = TransferPayload {
             name: "default".to_string(),
             hash: "".to_string(),
-            payload: Payload::Path(".".to_string()),
+            payload: Payload::File(".".to_string()),
             size_bytes: 0,
             sender_queue: self.sender.clone(),
             receiver: Arc::clone(&self.receiver),

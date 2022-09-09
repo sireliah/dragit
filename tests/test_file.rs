@@ -81,7 +81,7 @@ fn test_file_transfer() {
                         if !pushed {
                             println!("Pushing file");
                             let behaviour = swarm2.behaviour_mut();
-                            let payload = Payload::Path(file_path.clone());
+                            let payload = Payload::File(file_path.clone());
                             let file = FileToSend::new(&peer1, payload).unwrap();
                             let transfer = TransferOut {
                                 file,
@@ -124,7 +124,7 @@ fn test_file_transfer() {
     assert_eq!(p1.name, "file.txt".to_string());
 
     match p1.payload {
-        Payload::Path(path) => {
+        Payload::File(path) => {
             let meta = fs::metadata(path).expect("No file found");
             assert!(meta.is_file());
         }

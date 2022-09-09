@@ -185,7 +185,7 @@ impl AppNotification {
                 let link = get_link(file_name, &path);
                 self.layout.attach(&link, self.link_pos, 0, 1, 1);
             }
-            Payload::Path(path) => {
+            Payload::File(path) => {
                 self.label.set_text("Received");
                 self.remove_link();
                 let link = get_link(file_name, &path);

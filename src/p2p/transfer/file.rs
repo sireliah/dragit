@@ -16,14 +16,14 @@ use crate::p2p::TransferType;
 #[derive(Debug, Clone)]
 pub enum Payload {
     Dir(String),
-    Path(String),
+    File(String),
     Text(String),
 }
 
 impl Payload {
     pub fn new(transfer_type: TransferType, path: String) -> Result<Payload, io::Error> {
         match transfer_type {
-            TransferType::File => Ok(Payload::Path(path)),
+            TransferType::File => Ok(Payload::File(path)),
             TransferType::Dir => Ok(Payload::Dir(path)),
             TransferType::Text => {
                 let mut file = File::open(path)?;
@@ -39,7 +39,7 @@ impl Payload {
         if meta.is_dir() {
             Ok(Payload::Dir(path))
         } else {
-            Ok(Payload::Path(path))
+            Ok(Payload::File(path))
         }
     }
 }
@@ -78,9 +78,9 @@ impl FileToSend {
                     transfer_type: TransferType::Dir,
                 })
             }
-            Payload::Path(path) => {
+            Payload::File(path) => {
                 let name = Self::extract_name_path(&path)?;
-                let new_payload = Payload::Path(path);
+                let new_payload = Payload::File(path);
                 Ok(FileToSend {
                     name,
                     payload: new_payload,
@@ -111,26 +111,12 @@ impl FileToSend {
                 let file = asyncfs::File::from(Self::create_temp_file(text)?);
                 Ok(StreamOption::File(file))
             }
-            Payload::Path(path) => Ok(StreamOption::File(asyncfs::File::open(path).await?)),
+            Payload::File(path) => Ok(StreamOption::File(asyncfs::File::open(path).await?)),
         }
     }
 
     pub async fn calculate_hash(&self) -> Result<(String, u64), io::Error> {
         get_hash_from_payload(&self.payload).await
-    }
-
-    pub fn check_size(&self) -> Result<u64, io::Error> {
-        match &self.payload {
-            Payload::Dir(path) => {
-                // TODO: should be calculated from the stream
-                Ok(metadata(path)?.len())
-            }
-            Payload::Path(path) => {
-                let meta = metadata(path)?;
-                Ok(meta.len())
-            }
-            Payload::Text(text) => Ok(text.len() as u64),
-        }
     }
 
     /// Creates temporary file from text payload, so this kind of payload
@@ -176,7 +162,7 @@ impl fmt::Display for Payload {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Dir(path) => write!(f, "DirPayload({})", path),
-            Self::Path(path) => write!(f, "PathPayload({})", path),
+            Self::File(path) => write!(f, "FilePayload({})", path),
             Self::Text(text) => write!(f, "TextPayload({})", text.len()),
         }
     }
@@ -199,7 +185,7 @@ pub async fn get_hash_from_payload(payload: &Payload) -> Result<(String, u64), i
             // Zip internally maintains hash of the zipped content, no need to calculate the hash here
             Ok(("directory".to_string(), size))
         }
-        Payload::Path(path) => {
+        Payload::File(path) => {
             let file = asyncfs::File::open(&path).await?;
             let (hash, _) = async_hash_contents(file).await?;
             let meta = asyncfs::metadata(path).await?;

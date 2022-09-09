@@ -125,7 +125,7 @@ fn test_text_transfer() {
     assert_eq!(p1.name, "Hello (...)".to_string());
 
     match p1.payload {
-        Payload::Path(_) => panic!("Got file instead!"),
+        Payload::File(_) => panic!("Got file instead!"),
         Payload::Dir(_) => panic!("Got directory instead!"),
         Payload::Text(text) => {
             assert_eq!(text, "Hello there".to_string());

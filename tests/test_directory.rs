@@ -140,7 +140,7 @@ fn test_directory_transfer() {
                 659903
             );
         }
-        Payload::Path(_) => panic!("Got file instead!"),
+        Payload::File(_) => panic!("Got file instead!"),
         Payload::Text(_) => panic!("Got text instead!"),
     };
 }

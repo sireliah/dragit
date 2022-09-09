@@ -132,7 +132,7 @@ impl MainLayout {
                 recent_item.pack_start(&image, false, false, 0);
                 recent_item.pack_start(&link, false, false, 0);
             }
-            Payload::Path(path) => {
+            Payload::File(path) => {
                 let link = get_link(file_name, &path);
                 let image =
                     gtk::Image::from_icon_name(Some("text-x-preview"), gtk::IconSize::Dialog);
