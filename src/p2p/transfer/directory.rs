@@ -84,7 +84,7 @@ impl ZipStream {
         rel_path: String,
     ) -> Result<(), Error> {
         let dir_path = if cfg!(windows) {
-            format!("{}\\", rel_path)
+            format!(r"{}\", rel_path)
         } else {
             format!("{}/", rel_path)
         };
@@ -137,17 +137,9 @@ fn zip_error(err: ZipError) -> Error {
     Error::new(ErrorKind::Other, err.to_string())
 }
 
-#[cfg(not(windows))]
 fn is_zip_dir(path: &Path) -> bool {
-    // When receiving zip stream with paths, the only way to distinguish files and dirs
-    // is to check path suffixes.
-    path.to_string_lossy().ends_with("/")
-}
-
-#[cfg(windows)]
-fn is_zip_dir(path: &Path) -> bool {
-    let string_path = path.to_string_lossy();
-    string_path.ends_with(r"\") || string_path.ends_with(r"\\")
+    let path = path.to_string_lossy();
+    path.ends_with(r"\") || path.ends_with("/")
 }
 
 #[cfg(not(windows))]
@@ -224,14 +216,18 @@ mod tests {
         assert!(!is_zip_dir(path));
     }
 
-    #[cfg(windows)]
     #[test]
     fn test_is_zip_dir_windows() {
         let path = Path::new(r"this\is\directory\");
         assert!(is_zip_dir(path));
     }
 
-    #[cfg(windows)]
+    #[test]
+    fn test_is_zip_dir_windows_double() {
+        let path = Path::new(r"this\\is\\directory\\");
+        assert!(is_zip_dir(path));
+    }
+
     #[test]
     fn test_is_not_zip_dir_windows() {
         let path = Path::new(r"this\is\file.txt");
