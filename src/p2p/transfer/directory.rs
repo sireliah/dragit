@@ -41,14 +41,13 @@ impl ZipStream {
         let (reader, mut writer) = duplex(ZIP_BUFFER_SIZE);
 
         let task_handle = spawn(async move {
-            println!("Zip task starts");
             let mut zip = ZipFileWriter::new(&mut writer);
             let base_path = Path::new(&source_path).parent();
 
             for entry in WalkDir::new(&source_path) {
                 let entry = entry?;
                 let file_path = entry.path();
-                info!("{:?}", file_path);
+                debug!("{:?}", file_path);
                 let rel_path = match base_path {
                     Some(base) => file_path
                         .strip_prefix(base)
@@ -59,7 +58,9 @@ impl ZipStream {
                     .to_str()
                     .unwrap_or(&rel_path.to_string_lossy())
                     .to_owned();
-                info!("{:?}", rel_path);
+                debug!("{:?}", rel_path);
+
+                // Only files and empty directories are supported for now. Symlinks are ignored.
                 if file_path.is_file() {
                     Self::write_file(&mut zip, path_string, &file_path).await?;
                 } else {
@@ -138,6 +139,8 @@ fn zip_error(err: ZipError) -> Error {
 
 #[cfg(not(windows))]
 fn is_zip_dir(path: &Path) -> bool {
+    // When receiving zip stream with paths, the only way to distinguish files and dirs
+    // is to check path suffixes.
     path.to_string_lossy().ends_with("/")
 }
 
@@ -168,6 +171,7 @@ pub async fn unzip_stream(
                     create_dir_all(parent)?;
                 }
                 debug!("Unzip: {:?}", path.to_string_lossy());
+
                 if is_zip_dir(&path) {
                     create_dir(path)?;
                 } else {
@@ -188,4 +192,38 @@ pub async fn unzip_stream(
         Ok::<usize, Error>(counter)
     });
     Ok(task)
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::p2p::transfer::directory::is_zip_dir;
+    use std::path::Path;
+
+    #[cfg(not(windows))]
+    #[test]
+    fn test_is_zip_dir_unix() {
+        let path = Path::new("this/is/a/directory/");
+        assert!(is_zip_dir(path))
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn test_is_not_zip_dir_unix() {
+        let path = Path::new("this/is/a/file.txt");
+        assert!(!is_zip_dir(path))
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn test_is_zip_dir_windows() {
+        let path = Path::new(r"this\is\directory\");
+        assert!(is_zip_dir(path))
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn test_is_not_zip_dir_windows() {
+        let path = Path::new(r"this\is\file.txt");
+        assert!(!is_zip_dir(path))
+    }
 }

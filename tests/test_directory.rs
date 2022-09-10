@@ -81,6 +81,11 @@ fn test_directory_transfer() {
                         if !pushed {
                             println!("Pushing directory");
                             let behaviour = swarm2.behaviour_mut();
+
+                            // Add empty directory to verify that it was sent as well.
+                            // Dir is created runtime, because git disallows empty folders.
+                            fs::create_dir_all("tests/data/test_dir/empty_dir").unwrap();
+
                             let payload = Payload::Dir("tests/data/test_dir".to_string());
                             let file = FileToSend::new(&peer1, payload).unwrap();
                             let transfer = TransferOut {
@@ -139,6 +144,9 @@ fn test_directory_transfer() {
                     .len(),
                 659903
             );
+            assert!(fs::metadata(Path::new(&path).join("test_dir/empty_dir/"))
+                .unwrap()
+                .is_dir());
         }
         Payload::File(_) => panic!("Got file instead!"),
         Payload::Text(_) => panic!("Got text instead!"),
