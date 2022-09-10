@@ -1,5 +1,5 @@
 // Uncomment to hide the terminal on Windows
-#![windows_subsystem = "windows"]
+// #![windows_subsystem = "windows"]
 use std::env;
 
 use env_logger::Env;
