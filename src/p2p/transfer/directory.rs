@@ -1,5 +1,4 @@
 use std::convert::TryFrom;
-use std::fs::{create_dir, create_dir_all};
 use std::io::{Error, ErrorKind, Result as IOResult};
 use std::path::Path;
 use std::pin::Pin;
@@ -7,6 +6,7 @@ use std::task::{Context, Poll};
 
 use async_std::channel::Sender;
 use async_std::io::BufReader;
+use async_std::fs::{create_dir, create_dir_all};
 use async_std::task::{spawn, JoinHandle};
 use async_zip::error::ZipError;
 use async_zip::read::stream::ZipFileReader;
@@ -168,12 +168,12 @@ pub async fn unzip_stream(
                 let entry = reader.entry();
                 let path = base_path.join(entry.name());
                 if let Some(parent) = path.parent() {
-                    create_dir_all(parent)?;
+                    create_dir_all(parent).await?;
                 }
                 debug!("Unzip: {:?}", path.to_string_lossy());
 
                 if is_zip_dir(&path) {
-                    create_dir(path)?;
+                    create_dir(path).await?;
                 } else {
                     let mut file = File::create(&path).await?;
                     reader
