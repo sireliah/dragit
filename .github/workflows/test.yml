@@ -92,7 +92,7 @@ jobs:
           toolchain: stable
           default: true
 
-      - name: Build release
+      - name: Run tests
         uses: actions-rs/cargo@v1
         with:
           command: test

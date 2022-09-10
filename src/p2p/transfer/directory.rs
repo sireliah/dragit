@@ -5,8 +5,8 @@ use std::pin::Pin;
 use std::task::{Context, Poll};
 
 use async_std::channel::Sender;
-use async_std::io::BufReader;
 use async_std::fs::{create_dir, create_dir_all};
+use async_std::io::BufReader;
 use async_std::task::{spawn, JoinHandle};
 use async_zip::error::ZipError;
 use async_zip::read::stream::ZipFileReader;
@@ -147,7 +147,18 @@ fn is_zip_dir(path: &Path) -> bool {
 #[cfg(windows)]
 fn is_zip_dir(path: &Path) -> bool {
     let string_path = path.to_string_lossy();
-    string_path.ends_with("\\") || string_path.ends_with("\\\\")
+    string_path.ends_with(r"\") || string_path.ends_with(r"\\")
+}
+
+#[cfg(not(windows))]
+fn normalize_zip_path(path_name: &str) -> String {
+    path_name.replace(r"\\", "/").replace(r"\", "/")
+}
+
+#[cfg(windows)]
+fn normalize_zip_path(path_name: &str) -> String {
+    // Windows recognizes both back and forward slashes
+    path_name.to_string()
 }
 
 pub async fn unzip_stream(
@@ -166,7 +177,7 @@ pub async fn unzip_stream(
         while !zip.finished() {
             if let Some(reader) = zip.entry_reader().await.map_err(|err| zip_error(err))? {
                 let entry = reader.entry();
-                let path = base_path.join(entry.name());
+                let path = base_path.join(normalize_zip_path(entry.name()));
                 if let Some(parent) = path.parent() {
                     create_dir_all(parent).await?;
                 }
@@ -196,34 +207,56 @@ pub async fn unzip_stream(
 
 #[cfg(test)]
 mod tests {
-    use crate::p2p::transfer::directory::is_zip_dir;
+    use crate::p2p::transfer::directory::{is_zip_dir, normalize_zip_path};
     use std::path::Path;
 
     #[cfg(not(windows))]
     #[test]
     fn test_is_zip_dir_unix() {
         let path = Path::new("this/is/a/directory/");
-        assert!(is_zip_dir(path))
+        assert!(is_zip_dir(path));
     }
 
     #[cfg(not(windows))]
     #[test]
     fn test_is_not_zip_dir_unix() {
         let path = Path::new("this/is/a/file.txt");
-        assert!(!is_zip_dir(path))
+        assert!(!is_zip_dir(path));
     }
 
     #[cfg(windows)]
     #[test]
     fn test_is_zip_dir_windows() {
         let path = Path::new(r"this\is\directory\");
-        assert!(is_zip_dir(path))
+        assert!(is_zip_dir(path));
     }
 
     #[cfg(windows)]
     #[test]
     fn test_is_not_zip_dir_windows() {
         let path = Path::new(r"this\is\file.txt");
-        assert!(!is_zip_dir(path))
+        assert!(!is_zip_dir(path));
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn test_normalize_zip_path_windows_to_unix() {
+        assert_eq!(
+            normalize_zip_path(r"dir\\subdir\\file.txt"),
+            "dir/subdir/file.txt"
+        );
+        assert_eq!(
+            normalize_zip_path(r"dir\subdir\file.txt"),
+            "dir/subdir/file.txt"
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn test_normalize_zip_path_unix_to_windows() {
+        assert_eq!(
+            normalize_zip_path("dir/subdir/file.txt"),
+            "dir/subdir/file.txt"
+        );
     }
 }
