@@ -14,7 +14,7 @@ use async_zip::write::{EntryOptions, ZipFileWriter};
 use async_zip::Compression;
 use futures::AsyncRead;
 use tokio::fs::File;
-use tokio::io::{copy_buf, duplex, BufReader as TokioBufReader, DuplexStream};
+use tokio::io::{copy_buf, duplex, AsyncReadExt, BufReader as TokioBufReader, DuplexStream};
 use tokio_util::compat::{Compat, FuturesAsyncReadCompatExt, TokioAsyncReadCompatExt};
 use walkdir::WalkDir;
 
@@ -23,11 +23,7 @@ use crate::p2p::util::{notify_progress, TSocketAlias};
 use crate::p2p::PeerEvent;
 
 const ZIP_BUFFER_SIZE: usize = 1024 * 64;
-
-// For "Stored" compression, some files cause "A computed CRC32 value did not match the expected value." error
-// I didn't figure out why yet
-// Lzma was used for the most compatibility
-const COMPRESSION: Compression = Compression::Lzma;
+const DEFAULT_COMPRESSION: Compression = Compression::Deflate;
 
 pub type MaybeTaskHandle = Option<JoinHandle<Result<(), Error>>>;
 
@@ -62,6 +58,7 @@ impl ZipStream {
 
                 // Only files and empty directories are supported for now. Symlinks are ignored.
                 if file_path.is_file() {
+                    debug!("Writing file: {}", path_string);
                     Self::write_file(&mut zip, path_string, &file_path).await?;
                 } else {
                     if file_path.read_dir()?.next().is_none() {
@@ -89,7 +86,7 @@ impl ZipStream {
             format!("{}/", rel_path)
         };
 
-        let opts = EntryOptions::new(dir_path, COMPRESSION);
+        let opts = EntryOptions::new(dir_path, DEFAULT_COMPRESSION);
         zip.write_entry_stream(opts)
             .await
             .map_err(|err| zip_error(err))?;
@@ -101,7 +98,8 @@ impl ZipStream {
         rel_path: String,
         file_path: &Path,
     ) -> Result<(), Error> {
-        let opts = EntryOptions::new(rel_path, COMPRESSION);
+        let compression = get_compression(&file_path).await?;
+        let opts = EntryOptions::new(rel_path, compression);
 
         let mut entry_writer = zip
             .write_entry_stream(opts)
@@ -130,6 +128,19 @@ impl AsyncRead for ZipStream {
         slice: &mut [u8],
     ) -> Poll<IOResult<usize>> {
         Pin::new(&mut self.reader).poll_read(cx, slice)
+    }
+}
+
+async fn get_compression(path: &Path) -> Result<Compression, Error> {
+    // Check the magic number of the file to detect if the file is a zip.
+    // This is a remedy for the "unexpected BufError" bug when decompressing
+    // a stream that contains a zip file.
+    let mut buf: [u8; 4] = [0; 4];
+    let mut file = File::open(&path).await?;
+    file.read_exact(&mut buf).await?;
+    match buf {
+        [80, 75, 3, 4] => Ok(Compression::Bz),
+        _ => Ok(DEFAULT_COMPRESSION),
     }
 }
 
@@ -173,11 +184,13 @@ pub async fn unzip_stream(
                 if let Some(parent) = path.parent() {
                     create_dir_all(parent).await?;
                 }
-                debug!("Unzip: {:?}", path.to_string_lossy());
+                info!("Unzip: {:?}", path.to_string_lossy());
 
                 if is_zip_dir(&path) {
+                    debug!("Creating dir {:?}", path);
                     create_dir(path).await?;
                 } else {
+                    debug!("Creating file {:?}", path);
                     let mut file = File::create(&path).await?;
                     reader
                         .copy_to_end_crc(&mut file, ZIP_BUFFER_SIZE)
@@ -199,8 +212,33 @@ pub async fn unzip_stream(
 
 #[cfg(test)]
 mod tests {
-    use crate::p2p::transfer::directory::{is_zip_dir, normalize_zip_path};
+    use crate::p2p::transfer::directory::{
+        get_compression, is_zip_dir, normalize_zip_path, DEFAULT_COMPRESSION,
+    };
+    use async_zip::Compression;
     use std::path::Path;
+
+    #[tokio::test]
+    async fn test_get_compression_is_zip() {
+        let path = Path::new("tests/data/test_dir/file.zip");
+        let compression = get_compression(&path).await.unwrap();
+        assert_eq!(compression, Compression::Bz);
+    }
+
+    #[tokio::test]
+    async fn test_get_compression_epub_is_zip() {
+        // Epub is internally a zip file
+        let path = Path::new("tests/data/test_dir/Der_Zauberberg.epub");
+        let compression = get_compression(&path).await.unwrap();
+        assert_eq!(compression, Compression::Bz);
+    }
+
+    #[tokio::test]
+    async fn test_get_compression_is_not_zip() {
+        let path = Path::new("tests/data/file.txt");
+        let compression = get_compression(&path).await.unwrap();
+        assert_eq!(compression, DEFAULT_COMPRESSION);
+    }
 
     #[cfg(not(windows))]
     #[test]
