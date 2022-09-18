@@ -23,7 +23,7 @@ use crate::p2p::util::{notify_progress, TSocketAlias};
 use crate::p2p::PeerEvent;
 
 const ZIP_BUFFER_SIZE: usize = 1024 * 64;
-const DEFAULT_COMPRESSION: Compression = Compression::Deflate;
+const DEFAULT_COMPRESSION: Compression = Compression::Stored;
 
 pub type MaybeTaskHandle = Option<JoinHandle<Result<(), Error>>>;
 
