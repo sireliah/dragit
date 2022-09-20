@@ -178,7 +178,7 @@ pub async fn get_hash_from_payload(payload: &Payload) -> Result<(String, u64), i
     match payload {
         Payload::Dir(path) => {
             let size = check_directory_size(path)?;
-            // Zip internally maintains hash of the zipped content, no need to calculate the hash here
+            // Zip internally maintains the (CRC) hash of the zipped content, no need to calculate the hash here
             Ok(("directory".to_string(), size))
         }
         Payload::File(path) => {

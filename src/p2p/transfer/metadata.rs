@@ -198,7 +198,7 @@ mod tests {
         write!(file, "I'll fly to device!").unwrap();
         file.seek(SeekFrom::Start(0)).unwrap();
         let async_file = File::from(file);
-        let (hash, size) = hash_contents_sync(file).await.unwrap();
+        let (hash, size) = hash_contents(async_file).await.unwrap();
 
         assert_eq!(hash, "a909b834a8f95194ee2ce975e38cec31".to_string());
         assert_eq!(size, 19);
