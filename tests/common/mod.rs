@@ -1,14 +1,38 @@
+use std::io::{Error, Read};
 use std::sync::Arc;
 use std::time::Duration;
 
 use async_std::channel::{bounded, Receiver, Sender};
 use async_std::sync::Mutex;
+use hex;
+use md5::{Digest, Md5};
 
 use libp2p::{
     core::transport::Transport, core::upgrade, identity, mplex, noise, tcp, PeerId, Swarm,
 };
 
+use dragit::p2p::transfer::metadata::HASH_BUFFER_SIZE;
 use dragit::p2p::{FileToSend, PeerEvent, TransferBehaviour, TransferCommand};
+
+#[allow(dead_code)]
+pub fn hash_contents_sync(mut file: impl Read) -> Result<String, Error> {
+    let mut state = Md5::default();
+    let mut buffer = [0u8; HASH_BUFFER_SIZE];
+
+    loop {
+        match file.read(&mut buffer) {
+            Ok(n) if n == 0 || n < HASH_BUFFER_SIZE => {
+                state.update(&buffer[..n]);
+                break;
+            }
+            Ok(n) => {
+                state.update(&buffer[..n]);
+            }
+            Err(e) => return Err(e),
+        };
+    }
+    Ok(hex::encode::<Vec<u8>>(state.finalize().to_vec()))
+}
 
 pub fn build_swarm() -> (
     PeerId,

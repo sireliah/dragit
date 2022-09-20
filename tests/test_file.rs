@@ -10,11 +10,11 @@ use libp2p::{
     Multiaddr, Swarm,
 };
 
-use dragit::p2p::{hash_contents, FileToSend, Payload, TransferCommand, TransferOut};
+use dragit::p2p::{FileToSend, Payload, TransferCommand, TransferOut};
 
 mod common;
 
-use common::{build_swarm, setup_logger};
+use common::{build_swarm, hash_contents_sync, setup_logger};
 
 #[test]
 fn test_file_transfer() {
@@ -27,7 +27,7 @@ fn test_file_transfer() {
 
     // File hash should be accepted from the beginning
     let file = fs::File::open(&file_path).unwrap();
-    let file_hash = hash_contents(file).unwrap();
+    let file_hash = hash_contents_sync(file).unwrap();
     sender.try_send(TransferCommand::Accept(file_hash)).unwrap();
 
     let addr = "/ip4/127.0.0.1/tcp/3000".parse().unwrap();

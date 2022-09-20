@@ -10,7 +10,7 @@ use tempfile::NamedTempFile;
 use walkdir::WalkDir;
 
 use crate::p2p::transfer::directory::{MaybeTaskHandle, ZipStream};
-use crate::p2p::transfer::metadata::async_hash_contents;
+use crate::p2p::transfer::metadata::hash_contents;
 use crate::p2p::TransferType;
 
 #[derive(Debug, Clone)]
@@ -137,14 +137,10 @@ impl FileToSend {
 
     fn extract_name_path(path: &str) -> Result<String, Box<dyn Error>> {
         let path = Path::new(path).canonicalize()?;
-        let name = path
-            .file_name()
-            // TODO: handle there cases
-            .expect("There is no file name")
-            .to_str()
-            .expect("Expected a name")
-            .to_string();
-        Ok(name)
+        match path.file_name() {
+            Some(name) => Ok(name.to_string_lossy().to_string()),
+            None => Ok("file".to_string()),
+        }
     }
 }
 
@@ -187,13 +183,13 @@ pub async fn get_hash_from_payload(payload: &Payload) -> Result<(String, u64), i
         }
         Payload::File(path) => {
             let file = asyncfs::File::open(&path).await?;
-            let (hash, _) = async_hash_contents(file).await?;
+            let (hash, _) = hash_contents(file).await?;
             let meta = asyncfs::metadata(path).await?;
             Ok((hash, meta.len()))
         }
         Payload::Text(text) => {
             let file = asyncfs::File::from(FileToSend::create_temp_file(text)?);
-            let (hash, _) = async_hash_contents(file).await?;
+            let (hash, _) = hash_contents(file).await?;
             Ok((hash, text.len() as u64))
         }
     }

@@ -1,5 +1,5 @@
 use std::fmt;
-use std::io::{self, Error, Read};
+use std::io::{self, Error};
 
 use super::proto::Answer as ProtoAnswer;
 use super::proto::Metadata as ProtoMetadata;
@@ -151,27 +151,7 @@ async fn read_from_socket(
     Ok((data, socket))
 }
 
-pub fn hash_contents(mut file: impl Read) -> Result<String, Error> {
-    let mut state = Md5::default();
-    let mut buffer = [0u8; HASH_BUFFER_SIZE];
-
-    loop {
-        match file.read(&mut buffer) {
-            Ok(n) if n == 0 || n < HASH_BUFFER_SIZE => {
-                state.update(&buffer[..n]);
-                break;
-            }
-            Ok(n) => {
-                state.update(&buffer[..n]);
-            }
-            Err(e) => return Err(e),
-        };
-    }
-    Ok(hex::encode::<Vec<u8>>(state.finalize().to_vec()))
-}
-
-// FIXME: how to avoid duplication here?
-pub async fn async_hash_contents(mut file: impl AsyncRead + Unpin) -> Result<(String, u64), Error> {
+pub async fn hash_contents(mut file: impl AsyncRead + Unpin) -> Result<(String, u64), Error> {
     let mut state = Md5::default();
     let mut buffer = [0u8; HASH_BUFFER_SIZE];
     let mut i: u64 = 0;
@@ -194,28 +174,33 @@ pub async fn async_hash_contents(mut file: impl AsyncRead + Unpin) -> Result<(St
 #[cfg(test)]
 mod tests {
     use crate::p2p::transfer::metadata::hash_contents;
+    use async_std::fs::File;
     use std::io::{Seek, SeekFrom, Write};
 
-    #[test]
+    #[async_std::test]
     #[cfg(not(target_os = "windows"))]
-    fn test_hash_local_file() {
+    async fn test_hash_local_file() {
         let mut file = tempfile::tempfile().unwrap();
         write!(file, "I'll fly to device!").unwrap();
         file.seek(SeekFrom::Start(0)).unwrap();
-        let result = hash_contents(file).unwrap();
+        let async_file = File::from(file);
+        let (hash, size) = hash_contents(async_file).await.unwrap();
 
-        assert_eq!(result, "a909b834a8f95194ee2ce975e38cec31");
+        assert_eq!(hash, "a909b834a8f95194ee2ce975e38cec31".to_string());
+        assert_eq!(size, 19);
     }
 
-    #[test]
+    #[async_std::test]
     #[cfg(target_os = "windows")]
-    fn test_hash_local_file() {
+    async fn test_hash_local_file() {
         // Windows file has carriage endings, so the hash is different
         let mut file = tempfile::tempfile().unwrap();
         write!(file, "I'll fly to device!").unwrap();
         file.seek(SeekFrom::Start(0)).unwrap();
-        let result = hash_contents(file).unwrap();
+        let async_file = File::from(file);
+        let (hash, size) = hash_contents_sync(file).await.unwrap();
 
-        assert_eq!(result, "a909b834a8f95194ee2ce975e38cec31");
+        assert_eq!(hash, "a909b834a8f95194ee2ce975e38cec31".to_string());
+        assert_eq!(size, 19);
     }
 }
