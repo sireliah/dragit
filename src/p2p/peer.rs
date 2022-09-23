@@ -15,6 +15,7 @@ pub enum Direction {
 pub enum TransferType {
     File = 0,
     Text = 1,
+    Dir = 2,
 }
 
 #[derive(Debug, Clone)]
@@ -61,6 +62,7 @@ impl fmt::Display for TransferType {
         match self {
             Self::File => write!(f, "TransferType: File"),
             Self::Text => write!(f, "TransferType: Text"),
+            Self::Dir => write!(f, "TransferType: Directory"),
         }
     }
 }

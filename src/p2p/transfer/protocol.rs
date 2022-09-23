@@ -1,7 +1,7 @@
+use async_std::fs::File;
 use std::fmt;
 use std::fs::remove_file;
-use std::io::{ErrorKind, Read};
-use std::sync::mpsc::sync_channel;
+use std::io::ErrorKind;
 use std::sync::Arc;
 
 use std::task::{Context, Poll};
@@ -9,6 +9,7 @@ use std::time::Instant;
 use std::{io, iter, pin::Pin};
 
 use async_std::channel::{Receiver, Sender};
+use async_std::io::BufReader;
 use async_std::sync::Mutex;
 use async_std::task;
 
@@ -19,10 +20,11 @@ use libp2p::core::{InboundUpgrade, OutboundUpgrade, UpgradeInfo};
 
 use crate::p2p::commands::TransferCommand;
 use crate::p2p::peer::{Direction, PeerEvent};
-use crate::p2p::transfer::file::{get_hash_from_payload, FileToSend, Payload};
-use crate::p2p::transfer::jobs;
+use crate::p2p::transfer::directory::unzip_stream;
+use crate::p2p::transfer::file::{get_hash_from_payload, FileToSend, Payload, StreamOption};
 use crate::p2p::transfer::metadata::{Answer, Metadata};
 use crate::p2p::util::{self, TSocketAlias, CHUNK_SIZE};
+use crate::p2p::TransferType;
 use crate::user_data;
 
 #[derive(Clone, Debug)]
@@ -52,7 +54,8 @@ pub struct TransferPayload {
 
 impl TransferPayload {
     pub fn check_file(&self) -> Result<(), io::Error> {
-        let hash_from_disk = get_hash_from_payload(&self.payload)?;
+        let (hash_from_disk, _) =
+            task::block_on(async { get_hash_from_payload(&self.payload).await })?;
 
         if hash_from_disk != self.hash {
             Err(io::Error::new(ErrorKind::InvalidData, "File corrupted!"))
@@ -104,22 +107,14 @@ impl TransferPayload {
         ))
     }
 
-    async fn read_file_payload(
+    async fn stream_file(
         &mut self,
-        socket: impl TSocketAlias,
-        meta: &Metadata,
+        path: &str,
+        mut reader: impl AsyncRead + Unpin,
         size: usize,
         direction: &Direction,
-    ) -> Result<(usize, String), io::Error> {
-        let mut reader = futio::BufReader::new(socket);
-
-        let mut payloads: Vec<u8> = vec![];
-        let (sender, receiver) = sync_channel::<Vec<u8>>(CHUNK_SIZE * 128);
-        let path =
-            user_data::get_target_path(&meta.get_safe_file_name(), self.target_path.as_ref())?;
-
-        let job = jobs::spawn_write_file_job(receiver, path.clone());
-
+    ) -> Result<usize, io::Error> {
+        let mut file = File::create(path).await?;
         let mut counter: usize = 0;
         let mut current_size: usize = 0;
         loop {
@@ -127,28 +122,18 @@ impl TransferPayload {
             match reader.read(&mut buff).await {
                 Ok(n) => {
                     if n > 0 {
-                        payloads.extend(&buff[..n]);
                         counter += n;
                         current_size += n;
 
-                        if payloads.len() >= (CHUNK_SIZE * 8) {
-                            jobs::send_buffer(&sender, payloads.clone())?;
-                            payloads.clear();
+                        file.write(&buff[..n]).await?;
 
-                            if util::time_to_notify(current_size, size) {
-                                util::notify_progress(
-                                    &self.sender_queue,
-                                    counter,
-                                    size,
-                                    &direction,
-                                )
+                        if util::time_to_notify(current_size, size) {
+                            util::notify_progress(&self.sender_queue, counter, size, &direction)
                                 .await;
-                                current_size = 0;
-                            }
+                            current_size = 0;
                         }
                     } else {
-                        jobs::send_buffer(&sender, payloads.clone())?;
-                        jobs::send_buffer(&sender, vec![])?;
+                        file.close().await?;
                         util::notify_progress(&self.sender_queue, counter, size, &direction).await;
                         break;
                     }
@@ -156,20 +141,47 @@ impl TransferPayload {
                 Err(e) => return Err(e),
             }
         }
+        Ok(counter)
+    }
 
-        drop(reader);
-        let _ = job.join().or_else(|e| {
-            error!("File thread error: {:?}", e);
-            Err(io::Error::new(
-                io::ErrorKind::Other,
-                "Error in file writer thread",
-            ))
-        })?;
+    async fn stream_dir(
+        &self,
+        path: String,
+        reader: BufReader<impl TSocketAlias + 'static>,
+        size: usize,
+        direction: &Direction,
+    ) -> Result<usize, io::Error> {
+        let sender_copy = self.sender_queue.clone();
+        let task = unzip_stream(path, reader, sender_copy, size, direction.clone()).await?;
+        let received_bytes = task.await?;
+        Ok(received_bytes)
+    }
+
+    async fn read_file_payload(
+        &mut self,
+        socket: impl TSocketAlias + 'static,
+        meta: &Metadata,
+        size: usize,
+        direction: &Direction,
+    ) -> Result<(usize, String), io::Error> {
+        let reader = BufReader::new(socket);
+
+        let path =
+            user_data::get_target_path(&meta.get_safe_file_name(), self.target_path.as_ref())?;
+
+        let counter = match meta.transfer_type {
+            TransferType::File => self.stream_file(&path, reader, size, direction).await?,
+            TransferType::Text => self.stream_file(&path, reader, size, direction).await?,
+            TransferType::Dir => {
+                self.stream_dir(path.clone(), reader, size, direction)
+                    .await?
+            }
+        };
 
         Ok((counter, path))
     }
 
-    async fn read_socket(&mut self, socket: impl TSocketAlias) -> Result<(), io::Error> {
+    async fn read_socket(&mut self, socket: impl TSocketAlias + 'static) -> Result<(), io::Error> {
         let direction = Direction::Incoming;
         let (meta, mut socket) = Metadata::read(socket).await?;
         info!("Meta received! \n{}", meta);
@@ -200,7 +212,7 @@ impl TransferPayload {
                 self.payload = Payload::new(meta.transfer_type, path.clone())?;
                 self.size_bytes = counter;
 
-                // TransferPayload needs to know where is the actual file after successful transfer.
+                // TransferPayload needs to know where is the actual file after successful transfer
                 self.target_path = Some(path);
 
                 Ok(())
@@ -245,42 +257,58 @@ impl TransferOut {
         info!("File accepted? {:?}", accepted);
 
         if accepted {
-            let mut writer = futio::BufWriter::new(socket);
-            let mut file = self.file.get_file()?;
-
-            util::notify_progress(&self.sender_queue, 0, size, &direction).await;
-
-            let mut counter: usize = 0;
-            let mut current_size: usize = 0;
-
-            loop {
-                let mut buff = vec![0u8; CHUNK_SIZE * 32];
-                match file.read(&mut buff) {
-                    Ok(n) if n > 0 => {
-                        writer.write_all(&buff[..n]).await?;
-                        counter += buff.len();
-                        current_size += buff.len();
-
-                        if util::time_to_notify(current_size, size) {
-                            util::notify_progress(&self.sender_queue, counter, size, &direction)
-                                .await;
-                            current_size = 0;
-                        }
+            match self.file.get_file_stream().await? {
+                StreamOption::File(file) => {
+                    self.stream_data(socket, file, size, direction).await?;
+                    Ok(())
+                }
+                StreamOption::Zip(file, task_handle) => {
+                    self.stream_data(socket, file, size, direction).await?;
+                    if let Some(handle) = task_handle {
+                        handle.await?;
                     }
-                    Ok(_) => {
-                        writer.close().await?;
-                        break
-                    }
-                    Err(e) => return Err(e),
+                    Ok(())
                 }
             }
-
-            util::notify_completed(&self.sender_queue).await;
-            Ok(())
         } else {
             util::notify_rejected(&self.sender_queue).await;
             Ok(())
         }
+    }
+
+    async fn stream_data(
+        &self,
+        socket: impl TSocketAlias,
+        mut file: impl AsyncRead + Unpin,
+        size: usize,
+        direction: Direction,
+    ) -> Result<(), io::Error> {
+        let mut writer = futio::BufWriter::new(socket);
+        util::notify_progress(&self.sender_queue, 0, size, &direction).await;
+        let mut counter: usize = 0;
+        let mut current_size: usize = 0;
+        loop {
+            let mut buff = vec![0u8; 1024];
+            match file.read(&mut buff).await {
+                Ok(n) if n > 0 => {
+                    writer.write_all(&buff[..n]).await?;
+                    counter += buff.len();
+                    current_size += buff.len();
+
+                    if util::time_to_notify(current_size, size) {
+                        util::notify_progress(&self.sender_queue, counter, size, &direction).await;
+                        current_size = 0;
+                    }
+                }
+                Ok(_) => {
+                    writer.close().await?;
+                    break;
+                }
+                Err(e) => return Err(e),
+            }
+        }
+        util::notify_completed(&self.sender_queue).await;
+        Ok(())
     }
 }
 

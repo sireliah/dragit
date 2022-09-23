@@ -1,4 +1,4 @@
-// Uncomment to hide the terminal on Windows
+// Comment this to show the terminal on Windows
 #![windows_subsystem = "windows"]
 use std::env;
 

@@ -61,7 +61,8 @@ pub fn pool_peers(
 
                     let item = PeerItem::new(name, addr, &hostname, &os);
                     let sender = file_sender.clone();
-                    let item = item.bind_drag_and_drop(peer, sender);
+                    let event_sender = peer_event_sender.clone();
+                    let item = item.bind_drag_and_drop(peer, sender, event_sender);
 
                     layout_in.add(&item.container);
                 }
