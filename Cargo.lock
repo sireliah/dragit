@@ -162,7 +162,7 @@ dependencies = [
  "parking",
  "polling",
  "slab",
- "socket2 0.4.4",
+ "socket2",
  "waker-fn",
  "winapi 0.3.9",
 ]
@@ -242,7 +242,7 @@ dependencies = [
  "futures-io",
  "futures-util",
  "pin-utils",
- "socket2 0.4.4",
+ "socket2",
  "trust-dns-resolver",
 ]
 
@@ -788,7 +788,7 @@ dependencies = [
  "gtk",
  "hex",
  "hostname",
- "ipconfig 0.2.2",
+ "ipconfig",
  "libp2p",
  "log 0.4.14",
  "md-5",
@@ -1461,26 +1461,14 @@ dependencies = [
 
 [[package]]
 name = "ipconfig"
-version = "0.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f7e2f18aece9709094573a9f24f483c4f65caa4298e2f7ae1b71cc65d853fad7"
-dependencies = [
- "socket2 0.3.15",
- "widestring 0.4.3",
- "winapi 0.3.9",
- "winreg 0.6.2",
-]
-
-[[package]]
-name = "ipconfig"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "723519edce41262b05d4143ceb95050e4c614f483e78e9fd9e39a8275a84ad98"
 dependencies = [
- "socket2 0.4.4",
- "widestring 0.5.1",
+ "socket2",
+ "widestring",
  "winapi 0.3.9",
- "winreg 0.7.0",
+ "winreg",
 ]
 
 [[package]]
@@ -1668,7 +1656,7 @@ dependencies = [
  "log 0.4.14",
  "rand 0.8.3",
  "smallvec",
- "socket2 0.4.4",
+ "socket2",
  "void",
 ]
 
@@ -1756,7 +1744,7 @@ dependencies = [
  "libc",
  "libp2p-core",
  "log 0.4.14",
- "socket2 0.4.4",
+ "socket2",
 ]
 
 [[package]]
@@ -1960,7 +1948,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b1bb540dc6ef51cfe1916ec038ce7a620daf3a111e2502d745197cd53d6bca15"
 dependencies = [
  "libc",
- "socket2 0.4.4",
+ "socket2",
 ]
 
 [[package]]
@@ -2150,7 +2138,7 @@ checksum = "09a279cbf25cb0757810394fbc1e359949b59e348145c643a939a525692e6929"
 dependencies = [
  "cfg-if 1.0.0",
  "libc",
- "redox_syscall 0.2.13",
+ "redox_syscall",
  "smallvec",
  "windows-sys",
 ]
@@ -2708,12 +2696,6 @@ dependencies = [
 
 [[package]]
 name = "redox_syscall"
-version = "0.1.57"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "41cc0f7e4d5d4544e8861606a285bb08d3e70712ccc7d2b84d7c0ccfaf4b05ce"
-
-[[package]]
-name = "redox_syscall"
 version = "0.2.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "62f25bc4c7e55e0b0b7a1d43fb893f4fa1361d0abe38b9ce4f323c2adfe6ef42"
@@ -2728,7 +2710,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "528532f3d801c87aec9def2add9ca802fe569e44a544afe633765267840abe64"
 dependencies = [
  "getrandom 0.2.6",
- "redox_syscall 0.2.13",
+ "redox_syscall",
 ]
 
 [[package]]
@@ -3023,18 +3005,6 @@ dependencies = [
 
 [[package]]
 name = "socket2"
-version = "0.3.15"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b1fa70dc5c8104ec096f4fe7ede7a221d35ae13dcd19ba1ad9a81d2cab9a1c44"
-dependencies = [
- "cfg-if 0.1.10",
- "libc",
- "redox_syscall 0.1.57",
- "winapi 0.3.9",
-]
-
-[[package]]
-name = "socket2"
 version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "66d72b759436ae32898a2af0a14218dbf55efde3feeb170eb623637db85ee1e0"
@@ -3192,7 +3162,7 @@ dependencies = [
  "cfg-if 1.0.0",
  "libc",
  "rand 0.8.3",
- "redox_syscall 0.2.13",
+ "redox_syscall",
  "remove_dir_all",
  "winapi 0.3.9",
 ]
@@ -3343,7 +3313,7 @@ checksum = "e4ba72c2ea84515690c9fcef4c6c660bb9df3036ed1051686de84605b74fd558"
 dependencies = [
  "cfg-if 1.0.0",
  "futures-util",
- "ipconfig 0.3.0",
+ "ipconfig",
  "lazy_static",
  "log 0.4.14",
  "lru-cache",
@@ -3627,12 +3597,6 @@ dependencies = [
 
 [[package]]
 name = "widestring"
-version = "0.4.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c168940144dd21fd8046987c16a46a33d5fc84eec29ef9dcddc2ac9e31526b7c"
-
-[[package]]
-name = "widestring"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "17882f045410753661207383517a6f62ec3dbeb6a4ed2acce01f0728238d1983"
@@ -3765,15 +3729,6 @@ name = "windows_x86_64_msvc"
 version = "0.36.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c811ca4a8c853ef420abd8592ba53ddbbac90410fab6903b3e79972a631f7680"
-
-[[package]]
-name = "winreg"
-version = "0.6.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b2986deb581c4fe11b621998a5e53361efe6b48a151178d0cd9eeffa4dc6acc9"
-dependencies = [
- "winapi 0.3.9",
-]
 
 [[package]]
 name = "winreg"
