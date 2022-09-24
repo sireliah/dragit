@@ -18,38 +18,58 @@ fn get_timestamp() -> u64 {
         .as_secs()
 }
 
+fn extend_dir(path: &Path, time: u64) -> PathBuf {
+    let dir = match path.file_name() {
+        Some(dir_name) => dir_name.to_string_lossy().to_string(),
+        None => "directory".to_string(),
+    };
+    match path.parent() {
+        Some(parent_path) => parent_path.join(format!("{}_{}", dir, time)),
+        // Probably not best idea to use this application to move your whole root dir (｡•̀ᴗ-)
+        None => Path::new(&format!("/directory_{}", time)).to_path_buf(),
+    }
+}
+
+fn extend_file(path: &Path, time: u64) -> PathBuf {
+    let extension: String = match path.extension() {
+        Some(v) => v.to_string_lossy().to_string(),
+        None => "".to_string(),
+    };
+    let basename = match path.file_stem() {
+        Some(v) => v.to_string_lossy().to_string(),
+        None => "file".to_string(),
+    };
+    let name = format!("{}_{}", basename, time);
+    let mut path = path.join(&name);
+    path.set_extension(extension);
+    path
+}
+
 fn generate_full_path<F>(name: &str, path: &Path, timestamp: F) -> Result<String, Error>
 where
     F: Fn() -> u64,
 {
+    // If file or dir already exists in the target directory, create a path extended with a timestamp
     let path = Path::new(&path);
     let joined = path.join(&name);
+    let time = timestamp();
 
-    // Add timestamp to the file name if the file already exists in target directory
     let joined = if joined.exists() {
-        let extension: String = match joined.extension() {
-            Some(v) => v.to_string_lossy().to_string(),
-            None => "".to_string(),
-        };
-        let basename = match joined.file_stem() {
-            Some(v) => v.to_string_lossy().to_string(),
-            None => "file".to_string(),
-        };
-        let name = format!("{}_{}", basename, timestamp());
-        let mut path = path.join(&name);
-        path.set_extension(extension);
-        path
+        if joined.is_file() {
+            extend_file(&joined, time)
+        } else {
+            extend_dir(&joined, time)
+        }
     } else {
         joined
     };
 
-    let result = joined.into_os_string().into_string().or_else(|_| {
+    joined.into_os_string().into_string().or_else(|_| {
         Err(Error::new(
             ErrorKind::InvalidData,
             "Could not return target path as string",
         ))
-    });
-    result
+    })
 }
 
 pub fn get_target_path(name: &str, target_path: Option<&String>) -> Result<String, Error> {
@@ -187,13 +207,35 @@ impl UserConfig {
 
 #[cfg(test)]
 mod tests {
-    use crate::user_data::generate_full_path;
+    use crate::user_data::{extend_dir, generate_full_path};
     use std::path::Path;
 
     #[test]
-    fn test_generate_full_path() {
+    fn test_extend_dir_should_extend_name_with_timestamp() {
+        let result = extend_dir(Path::new("/home/user/directory/"), 1111);
+
+        assert_eq!(result, Path::new("/home/user/directory_1111"))
+    }
+
+    #[test]
+    fn test_extend_dir_root_edge_case() {
+        let result = extend_dir(Path::new("/"), 1111);
+
+        assert_eq!(result, Path::new("/directory_1111"))
+    }
+
+    #[test]
+    fn test_generate_full_file_path() {
         let result = generate_full_path("a-file.txt", Path::new("/home/user/"), || 1111).unwrap();
 
         assert_eq!(result, "/home/user/a-file.txt");
+    }
+
+    #[test]
+    fn test_generate_full_dir_path() {
+        let result =
+            generate_full_path("some_directory", Path::new("/home/user/"), || 1111).unwrap();
+
+        assert_eq!(result, "/home/user/some_directory");
     }
 }
