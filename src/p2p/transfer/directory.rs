@@ -23,7 +23,9 @@ use crate::p2p::util::{notify_progress, TSocketAlias};
 use crate::p2p::PeerEvent;
 
 const ZIP_BUFFER_SIZE: usize = 1024 * 64;
-const DEFAULT_COMPRESSION: Compression = Compression::Stored;
+
+// Slower than Stored, but more doesn't cause any CRC32 check errors
+const DEFAULT_COMPRESSION: Compression = Compression::Deflate;
 
 pub type MaybeTaskHandle = Option<JoinHandle<Result<(), Error>>>;
 
@@ -184,7 +186,7 @@ pub async fn unzip_stream(
                 if let Some(parent) = path.parent() {
                     create_dir_all(parent).await?;
                 }
-                info!("Unzip: {:?}", path.to_string_lossy());
+                debug!("Unzip: {:?}", path.to_string_lossy());
 
                 if is_zip_dir(&path) {
                     debug!("Creating dir {:?}", path);
@@ -201,7 +203,11 @@ pub async fn unzip_stream(
                     let file_size = usize::try_from(meta.len())
                         .map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?;
                     counter += file_size;
-                    notify_progress(&sender_queue, counter, size, &direction).await;
+
+                    // Limit progress events, because they seem to be to be inefficient at gtk level
+                    if (file_size as f32 / size as f32) > 0.01 {
+                        notify_progress(&sender_queue, counter, size, &direction).await;
+                    }
                 }
             }
         }
