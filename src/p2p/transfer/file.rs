@@ -168,8 +168,10 @@ fn check_directory_size(path: &str) -> Result<u64, io::Error> {
     let mut total_size = 0;
     for entry in WalkDir::new(path) {
         let entry = entry?;
-        let meta = metadata(entry.path())?;
-        total_size += meta.len();
+        match metadata(entry.path()) {
+            Ok(meta) => total_size += meta.len(),
+            Err(e) => warn!("Can't estimate size of {:?}, {}", entry.path(), e),
+        };
     }
     Ok(total_size)
 }

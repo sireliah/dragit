@@ -20,11 +20,6 @@ fn get_timestamp() -> u64 {
 
 fn extend_dir(path: &Path, dir_name: &str, time: u64) -> PathBuf {
     path.join(format!("{}_{}", dir_name, time))
-    // match path.parent() {
-    //     Some(parent_path) => parent_path.join(format!("{}_{}", dir_name, time)),
-    //     // Probably not best idea to use this application to move your whole root dir (｡•̀ᴗ-)
-    //     None => Path::new(&format!("/directory_{}", time)).to_path_buf(),
-    // }
 }
 
 fn extend_file(path: &Path, name: &str, time: u64) -> PathBuf {
@@ -47,7 +42,6 @@ fn generate_full_path<F>(path: &Path, name: &str, timestamp: F) -> Result<String
 where
     F: Fn() -> u64,
 {
-    info!("PATHS: {:?}, {:?}", path, name);
     // If file or dir already exists in the target directory, create a path extended with a timestamp
     let joined = path.join(&name);
     let time = timestamp();
@@ -55,9 +49,7 @@ where
     let joined = if joined.exists() {
         info!("File already exists: {:?}", joined);
         if joined.is_file() {
-            let outpath = extend_file(path, name, time);
-            info!("File out path: {:?}", outpath);
-            outpath
+            extend_file(path, name, time)
         } else {
             extend_dir(path, name, time)
         }
@@ -209,9 +201,9 @@ impl UserConfig {
 #[cfg(test)]
 mod tests {
     use crate::user_data::{extend_dir, generate_full_path};
+    use std::fs::{create_dir_all, File};
     use std::path::Path;
     use tempfile::tempdir;
-    use std::fs::{create_dir_all, File};
 
     #[test]
     fn test_extend_dir_should_extend_name_with_timestamp() {
@@ -252,8 +244,7 @@ mod tests {
         let path = dir.path();
         let received_dir_name = "some_directory";
         create_dir_all(path.join(received_dir_name)).unwrap();
-        let result =
-            generate_full_path(path, received_dir_name, || 1111).unwrap();
+        let result = generate_full_path(path, received_dir_name, || 1111).unwrap();
 
         assert_eq!(result, path.join("some_directory_1111").to_string_lossy());
     }

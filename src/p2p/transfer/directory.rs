@@ -47,6 +47,10 @@ impl ZipStream {
                 let file_path = entry.path();
                 debug!("{:?}", file_path);
 
+                if !file_path.exists() {
+                    continue;
+                }
+
                 let rel_path = match base_path {
                     Some(base) => file_path
                         .strip_prefix(base)
