@@ -18,47 +18,48 @@ fn get_timestamp() -> u64 {
         .as_secs()
 }
 
-fn extend_dir(path: &Path, time: u64) -> PathBuf {
-    let dir = match path.file_name() {
-        Some(dir_name) => dir_name.to_string_lossy().to_string(),
-        None => "directory".to_string(),
-    };
-    match path.parent() {
-        Some(parent_path) => parent_path.join(format!("{}_{}", dir, time)),
-        // Probably not best idea to use this application to move your whole root dir (｡•̀ᴗ-)
-        None => Path::new(&format!("/directory_{}", time)).to_path_buf(),
-    }
+fn extend_dir(path: &Path, dir_name: &str, time: u64) -> PathBuf {
+    path.join(format!("{}_{}", dir_name, time))
+    // match path.parent() {
+    //     Some(parent_path) => parent_path.join(format!("{}_{}", dir_name, time)),
+    //     // Probably not best idea to use this application to move your whole root dir (｡•̀ᴗ-)
+    //     None => Path::new(&format!("/directory_{}", time)).to_path_buf(),
+    // }
 }
 
-fn extend_file(path: &Path, time: u64) -> PathBuf {
-    let extension: String = match path.extension() {
+fn extend_file(path: &Path, name: &str, time: u64) -> PathBuf {
+    let file_name_path = Path::new(name);
+    let extension: String = match file_name_path.extension() {
         Some(v) => v.to_string_lossy().to_string(),
         None => "".to_string(),
     };
-    let basename = match path.file_stem() {
+    let basename = match file_name_path.file_stem() {
         Some(v) => v.to_string_lossy().to_string(),
         None => "file".to_string(),
     };
-    let name = format!("{}_{}", basename, time);
-    let mut path = path.join(&name);
+    let new_name = format!("{}_{}", basename, time);
+    let mut path = path.join(&new_name);
     path.set_extension(extension);
     path
 }
 
-fn generate_full_path<F>(name: &str, path: &Path, timestamp: F) -> Result<String, Error>
+fn generate_full_path<F>(path: &Path, name: &str, timestamp: F) -> Result<String, Error>
 where
     F: Fn() -> u64,
 {
+    info!("PATHS: {:?}, {:?}", path, name);
     // If file or dir already exists in the target directory, create a path extended with a timestamp
-    let path = Path::new(&path);
     let joined = path.join(&name);
     let time = timestamp();
 
     let joined = if joined.exists() {
+        info!("File already exists: {:?}", joined);
         if joined.is_file() {
-            extend_file(&joined, time)
+            let outpath = extend_file(path, name, time);
+            info!("File out path: {:?}", outpath);
+            outpath
         } else {
-            extend_dir(&joined, time)
+            extend_dir(path, name, time)
         }
     } else {
         joined
@@ -76,12 +77,12 @@ pub fn get_target_path(name: &str, target_path: Option<&String>) -> Result<Strin
     match target_path {
         Some(path) => {
             let path = Path::new(path);
-            generate_full_path(name, path, get_timestamp)
+            generate_full_path(path, name, get_timestamp)
         }
         None => {
             let config = UserConfig::new()?;
             let dir = config.get_downloads_dir();
-            generate_full_path(name, dir.as_path(), get_timestamp)
+            generate_full_path(dir.as_path(), name, get_timestamp)
         }
     }
 }
@@ -209,33 +210,51 @@ impl UserConfig {
 mod tests {
     use crate::user_data::{extend_dir, generate_full_path};
     use std::path::Path;
+    use tempfile::tempdir;
+    use std::fs::{create_dir_all, File};
 
     #[test]
     fn test_extend_dir_should_extend_name_with_timestamp() {
-        let result = extend_dir(Path::new("/home/user/directory/"), 1111);
+        let result = extend_dir(Path::new("/home/user/"), "directory", 1111);
 
         assert_eq!(result, Path::new("/home/user/directory_1111"))
     }
 
     #[test]
-    fn test_extend_dir_root_edge_case() {
-        let result = extend_dir(Path::new("/"), 1111);
-
-        assert_eq!(result, Path::new("/directory_1111"))
-    }
-
-    #[test]
     fn test_generate_full_file_path() {
-        let result = generate_full_path("a-file.txt", Path::new("/home/user/"), || 1111).unwrap();
+        let result = generate_full_path(Path::new("/home/user/"), "a-file.txt", || 1111).unwrap();
 
         assert_eq!(result, "/home/user/a-file.txt");
     }
 
     #[test]
+    fn test_generate_full_file_path_when_file_exists() {
+        let dir = tempdir().unwrap();
+        let path = dir.path();
+        let received_file_name = "a-file.txt";
+        File::create(path.join(received_file_name)).unwrap();
+
+        let result = generate_full_path(path, received_file_name, || 1111).unwrap();
+
+        assert_eq!(result, path.join("a-file_1111.txt").to_string_lossy());
+    }
+
+    #[test]
     fn test_generate_full_dir_path() {
         let result =
-            generate_full_path("some_directory", Path::new("/home/user/"), || 1111).unwrap();
+            generate_full_path(Path::new("/home/user/"), "some_directory", || 1111).unwrap();
 
         assert_eq!(result, "/home/user/some_directory");
+    }
+    #[test]
+    fn test_generate_full_dir_path_when_dir_exists() {
+        let dir = tempdir().unwrap();
+        let path = dir.path();
+        let received_dir_name = "some_directory";
+        create_dir_all(path.join(received_dir_name)).unwrap();
+        let result =
+            generate_full_path(path, received_dir_name, || 1111).unwrap();
+
+        assert_eq!(result, path.join("some_directory_1111").to_string_lossy());
     }
 }

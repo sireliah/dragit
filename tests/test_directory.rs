@@ -144,6 +144,12 @@ fn test_directory_transfer() {
                     .len(),
                 659903
             );
+            assert_eq!(
+                fs::metadata(Path::new(&path).join("test_dir/empty_file"))
+                    .unwrap()
+                    .len(),
+                0
+            );
             assert!(fs::metadata(Path::new(&path).join("test_dir/empty_dir/"))
                 .unwrap()
                 .is_dir());
