@@ -165,8 +165,14 @@ async fn get_compression(path: &Path) -> Result<Compression, Error> {
     let mut file = File::open(&path).await?;
     file.read_exact(&mut buf).await?;
     match buf {
+        // Zip
         [80, 75, 3, 4] => Ok(Compression::Bz),
-        _ => Ok(DEFAULT_COMPRESSION),
+        // Gzip
+        [31, 139, 8, 0] => Ok(Compression::Bz),
+        v => {
+            debug!("Compression: {:?}, {:?}", v, path);
+            Ok(DEFAULT_COMPRESSION)
+        },
     }
 }
 
