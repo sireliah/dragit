@@ -46,6 +46,7 @@ impl ZipStream {
                 let entry = entry?;
                 let file_path = entry.path();
                 debug!("{:?}", file_path);
+
                 let rel_path = match base_path {
                     Some(base) => file_path
                         .strip_prefix(base)
@@ -60,10 +61,16 @@ impl ZipStream {
 
                 // Only files and empty directories are supported for now. Symlinks are ignored.
                 if file_path.is_file() {
-                    debug!("Writing file: {}", path_string);
-                    Self::write_file(&mut zip, path_string, &file_path).await?;
+                    if file_path.metadata()?.len() > 0 {
+                        debug!("Writing file: {}", path_string);
+                        Self::write_file(&mut zip, path_string, &file_path).await?;
+                    } else {
+                        debug!("Writing empty file: {}", path_string);
+                        Self::write_empty_file(&mut zip, path_string).await?;
+                    }
                 } else {
                     if file_path.read_dir()?.next().is_none() {
+                        debug!("Writing empty directory: {}", path_string);
                         Self::write_empty_dir(&mut zip, path_string).await?;
                     }
                 }
@@ -90,6 +97,19 @@ impl ZipStream {
 
         let opts = EntryOptions::new(dir_path, DEFAULT_COMPRESSION);
         zip.write_entry_stream(opts)
+            .await
+            .map_err(|err| zip_error(err))?;
+        Ok(())
+    }
+
+    async fn write_empty_file(
+        zip: &mut ZipFileWriter<&mut DuplexStream>,
+        rel_path: String,
+    ) -> Result<(), Error> {
+        // Trying to unzip the empty file at the reader end makes tokio error with "early eof".
+        // This might be an async-zip bug, but as a workaround it's enough to create empty entry here.
+        let opts = EntryOptions::new(rel_path, DEFAULT_COMPRESSION);
+        zip.write_entry_whole(opts, &[])
             .await
             .map_err(|err| zip_error(err))?;
         Ok(())
@@ -147,7 +167,7 @@ async fn get_compression(path: &Path) -> Result<Compression, Error> {
 }
 
 fn zip_error(err: ZipError) -> Error {
-    Error::new(ErrorKind::Other, err.to_string())
+    Error::new(ErrorKind::Other, format!("Zip error: {}", err.to_string()))
 }
 
 fn is_zip_dir(path: &Path) -> bool {
