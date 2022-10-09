@@ -10,11 +10,12 @@ use async_std::io::BufReader;
 use async_std::task::{spawn, JoinHandle};
 use async_zip::error::ZipError;
 use async_zip::read::stream::ZipFileReader;
-use async_zip::write::{EntryOptions, ZipFileWriter};
+use async_zip::write::ZipFileWriter;
 use async_zip::Compression;
+use async_zip::ZipEntryBuilder;
 use futures::AsyncRead;
 use tokio::fs::File;
-use tokio::io::{copy_buf, duplex, AsyncReadExt, BufReader as TokioBufReader, DuplexStream};
+use tokio::io::{copy_buf, duplex, BufReader as TokioBufReader, DuplexStream};
 use tokio_util::compat::{Compat, FuturesAsyncReadCompatExt, TokioAsyncReadCompatExt};
 use walkdir::WalkDir;
 
@@ -99,7 +100,7 @@ impl ZipStream {
             format!("{}/", rel_path)
         };
 
-        let opts = EntryOptions::new(dir_path, DEFAULT_COMPRESSION);
+        let opts = ZipEntryBuilder::new(dir_path, DEFAULT_COMPRESSION);
         zip.write_entry_stream(opts)
             .await
             .map_err(|err| zip_error(err))?;
@@ -112,7 +113,7 @@ impl ZipStream {
     ) -> Result<(), Error> {
         // Trying to unzip the empty file at the reader end makes tokio error with "early eof".
         // This might be an async-zip bug, but as a workaround it's enough to create empty entry here.
-        let opts = EntryOptions::new(rel_path, DEFAULT_COMPRESSION);
+        let opts = ZipEntryBuilder::new(rel_path, DEFAULT_COMPRESSION);
         zip.write_entry_whole(opts, &[])
             .await
             .map_err(|err| zip_error(err))?;
@@ -124,8 +125,7 @@ impl ZipStream {
         rel_path: String,
         file_path: &Path,
     ) -> Result<(), Error> {
-        let compression = get_compression(&file_path).await?;
-        let opts = EntryOptions::new(rel_path, compression);
+        let opts = ZipEntryBuilder::new(rel_path, DEFAULT_COMPRESSION);
 
         let mut entry_writer = zip
             .write_entry_stream(opts)
@@ -154,25 +154,6 @@ impl AsyncRead for ZipStream {
         slice: &mut [u8],
     ) -> Poll<IOResult<usize>> {
         Pin::new(&mut self.reader).poll_read(cx, slice)
-    }
-}
-
-async fn get_compression(path: &Path) -> Result<Compression, Error> {
-    // Check the magic number of the file to detect if the file is a zip.
-    // This is a remedy for the "unexpected BufError" bug when decompressing
-    // a stream that contains a zip file.
-    let mut buf: [u8; 4] = [0; 4];
-    let mut file = File::open(&path).await?;
-    file.read_exact(&mut buf).await?;
-    match buf {
-        // Zip
-        [80, 75, 3, 4] => Ok(Compression::Bz),
-        // Gzip
-        [31, 139, 8, 0] => Ok(Compression::Bz),
-        v => {
-            debug!("Compression: {:?}, {:?}", v, path);
-            Ok(DEFAULT_COMPRESSION)
-        },
     }
 }
 
@@ -212,7 +193,7 @@ pub async fn unzip_stream(
         while !zip.finished() {
             if let Some(reader) = zip.entry_reader().await.map_err(|err| zip_error(err))? {
                 let entry = reader.entry();
-                let path = base_path.join(normalize_zip_path(entry.name()));
+                let path = base_path.join(normalize_zip_path(entry.filename()));
                 if let Some(parent) = path.parent() {
                     create_dir_all(parent).await?;
                 }
@@ -248,33 +229,8 @@ pub async fn unzip_stream(
 
 #[cfg(test)]
 mod tests {
-    use crate::p2p::transfer::directory::{
-        get_compression, is_zip_dir, normalize_zip_path, DEFAULT_COMPRESSION,
-    };
-    use async_zip::Compression;
+    use crate::p2p::transfer::directory::{is_zip_dir, normalize_zip_path};
     use std::path::Path;
-
-    #[tokio::test]
-    async fn test_get_compression_is_zip() {
-        let path = Path::new("tests/data/test_dir/file.zip");
-        let compression = get_compression(&path).await.unwrap();
-        assert_eq!(compression, Compression::Bz);
-    }
-
-    #[tokio::test]
-    async fn test_get_compression_epub_is_zip() {
-        // Epub is internally a zip file
-        let path = Path::new("tests/data/test_dir/Der_Zauberberg.epub");
-        let compression = get_compression(&path).await.unwrap();
-        assert_eq!(compression, Compression::Bz);
-    }
-
-    #[tokio::test]
-    async fn test_get_compression_is_not_zip() {
-        let path = Path::new("tests/data/file.txt");
-        let compression = get_compression(&path).await.unwrap();
-        assert_eq!(compression, DEFAULT_COMPRESSION);
-    }
 
     #[cfg(not(windows))]
     #[test]
