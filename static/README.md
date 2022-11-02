@@ -9,5 +9,5 @@ Intuitive file sharing application. For more information, please visit [Github D
 5. in both program windows you should see discovered host with hostname, IP address and OS type (Linux or Windows)
 6. drag some file (for example image, video or text file) and drop it on the frame with host
 7. in the other machine you'll be asked if you wish to accept the file. Please answer "Yes"
-8. File will be transfered to your "Downloads" directory (configurable)
+8. File will be transferred to your "Downloads" directory (configurable)
 9. Yay!
