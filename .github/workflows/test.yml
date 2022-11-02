@@ -21,7 +21,7 @@ jobs:
   gvsbuild:
     runs-on: windows-2019
     env:
-      gvsbuildref: 861244f84a04da49172c23646d9e23885094cab4
+      gvsbuildref: 679fa3bdf342ed2b199977b075da8263a04b3c05
       gvsbuildupdate: 1
 
     outputs:
