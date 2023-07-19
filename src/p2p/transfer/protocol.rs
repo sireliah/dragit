@@ -1,4 +1,4 @@
-use async_std::fs::File;
+use async_std::fs::OpenOptions;
 use std::fmt;
 use std::fs::remove_file;
 use std::io::ErrorKind;
@@ -114,7 +114,13 @@ impl TransferPayload {
         size: usize,
         direction: &Direction,
     ) -> Result<usize, io::Error> {
-        let mut file = File::create(path).await?;
+        info!("Path: {}", path);
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .open(path)
+            .await
+            .expect("Opening failed!");
         let mut counter: usize = 0;
         let mut current_size: usize = 0;
         loop {

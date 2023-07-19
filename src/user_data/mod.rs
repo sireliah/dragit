@@ -1,7 +1,6 @@
 use std::fs;
 use std::io::{Error, ErrorKind, Read, Write};
 use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use directories_next::{BaseDirs, UserDirs};
 use serde::{Deserialize, Serialize};
@@ -11,52 +10,9 @@ use toml;
 const DEFAULT_LISTEN_PORT: u16 = 36571;
 const DEFAULT_FIREWALL_CHECKED: bool = false;
 
-fn get_timestamp() -> u64 {
-    let now = SystemTime::now();
-    now.duration_since(UNIX_EPOCH)
-        .expect("Time failed")
-        .as_secs()
-}
-
-fn extend_dir(path: &Path, dir_name: &str, time: u64) -> PathBuf {
-    path.join(format!("{}_{}", dir_name, time))
-}
-
-fn extend_file(path: &Path, name: &str, time: u64) -> PathBuf {
-    let file_name_path = Path::new(name);
-    let extension: String = match file_name_path.extension() {
-        Some(v) => v.to_string_lossy().to_string(),
-        None => "".to_string(),
-    };
-    let basename = match file_name_path.file_stem() {
-        Some(v) => v.to_string_lossy().to_string(),
-        None => "file".to_string(),
-    };
-    let new_name = format!("{}_{}", basename, time);
-    let mut path = path.join(&new_name);
-    path.set_extension(extension);
-    path
-}
-
-fn generate_full_path<F>(path: &Path, name: &str, timestamp: F) -> Result<String, Error>
-where
-    F: Fn() -> u64,
-{
+fn generate_full_path(path: &Path, name: &str) -> Result<String, Error> {
     // If file or dir already exists in the target directory, create a path extended with a timestamp
     let joined = path.join(&name);
-    let time = timestamp();
-
-    let joined = if joined.exists() {
-        info!("File already exists: {:?}", joined);
-        if joined.is_file() {
-            extend_file(path, name, time)
-        } else {
-            extend_dir(path, name, time)
-        }
-    } else {
-        joined
-    };
-
     joined.into_os_string().into_string().or_else(|_| {
         Err(Error::new(
             ErrorKind::InvalidData,
@@ -69,12 +25,12 @@ pub fn get_target_path(name: &str, target_path: Option<&String>) -> Result<Strin
     match target_path {
         Some(path) => {
             let path = Path::new(path);
-            generate_full_path(path, name, get_timestamp)
+            generate_full_path(path, name)
         }
         None => {
             let config = UserConfig::new()?;
             let dir = config.get_downloads_dir();
-            generate_full_path(dir.as_path(), name, get_timestamp)
+            generate_full_path(dir.as_path(), name)
         }
     }
 }
@@ -200,21 +156,14 @@ impl UserConfig {
 
 #[cfg(test)]
 mod tests {
-    use crate::user_data::{extend_dir, generate_full_path};
+    use crate::user_data::generate_full_path;
     use std::fs::{create_dir_all, File};
     use std::path::Path;
     use tempfile::tempdir;
 
     #[test]
-    fn test_extend_dir_should_extend_name_with_timestamp() {
-        let result = extend_dir(Path::new("/home/user/"), "directory", 1111);
-
-        assert_eq!(result, Path::new("/home/user/directory_1111"))
-    }
-
-    #[test]
     fn test_generate_full_file_path() {
-        let result = generate_full_path(Path::new("/home/user/"), "a-file.txt", || 1111).unwrap();
+        let result = generate_full_path(Path::new("/home/user/"), "a-file.txt").unwrap();
 
         assert_eq!(result, "/home/user/a-file.txt");
     }
@@ -226,15 +175,14 @@ mod tests {
         let received_file_name = "a-file.txt";
         File::create(path.join(received_file_name)).unwrap();
 
-        let result = generate_full_path(path, received_file_name, || 1111).unwrap();
+        let result = generate_full_path(path, received_file_name).unwrap();
 
-        assert_eq!(result, path.join("a-file_1111.txt").to_string_lossy());
+        assert_eq!(result, path.join("a-file.txt").to_string_lossy());
     }
 
     #[test]
     fn test_generate_full_dir_path() {
-        let result =
-            generate_full_path(Path::new("/home/user/"), "some_directory", || 1111).unwrap();
+        let result = generate_full_path(Path::new("/home/user/"), "some_directory").unwrap();
 
         assert_eq!(result, "/home/user/some_directory");
     }
@@ -244,8 +192,8 @@ mod tests {
         let path = dir.path();
         let received_dir_name = "some_directory";
         create_dir_all(path.join(received_dir_name)).unwrap();
-        let result = generate_full_path(path, received_dir_name, || 1111).unwrap();
+        let result = generate_full_path(path, received_dir_name).unwrap();
 
-        assert_eq!(result, path.join("some_directory_1111").to_string_lossy());
+        assert_eq!(result, path.join("some_directory").to_string_lossy());
     }
 }

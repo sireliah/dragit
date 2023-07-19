@@ -187,7 +187,9 @@ pub async fn unzip_stream(
     let mut compat_reader = buf_reader.compat();
 
     let task = spawn(async move {
-        let base_path = Path::new(&target_path);
+        let base_path = Path::new(&target_path)
+            .parent()
+            .unwrap_or(Path::new(&target_path));
         let mut zip = ZipFileReader::new(&mut compat_reader);
         let mut counter: usize = 0;
         while !zip.finished() {
@@ -201,7 +203,9 @@ pub async fn unzip_stream(
 
                 if is_zip_dir(&path) {
                     debug!("Creating dir {:?}", path);
-                    create_dir(path).await?;
+                    if let Err(e) = create_dir(path).await {
+                        warn!("Could not create directory: {:?}", e);
+                    };
                 } else {
                     debug!("Creating file {:?}", path);
                     let mut file = File::create(&path).await?;
