@@ -6,6 +6,7 @@ use async_std::channel::{bounded, Receiver, Sender};
 use async_std::sync::Mutex;
 use hex;
 use md5::{Digest, Md5};
+use tempfile::{tempdir, TempDir};
 
 use libp2p::{
     core::transport::Transport, core::upgrade, identity, mplex, noise, tcp, PeerId, Swarm,
@@ -39,6 +40,7 @@ pub fn build_swarm() -> (
     Sender<TransferCommand>,
     Receiver<PeerEvent>,
     Swarm<TransferBehaviour>,
+    TempDir,
 ) {
     let (_, _) = bounded::<FileToSend>(1024 * 24);
     let (command_sender, command_receiver) = bounded::<TransferCommand>(1024 * 24);
@@ -49,10 +51,12 @@ pub fn build_swarm() -> (
 
     let command_receiver = Arc::new(Mutex::new(command_receiver));
 
+    let dir = tempdir().unwrap();
+
     let transfer_behaviour = TransferBehaviour::new(
         peer_sender.clone(),
         command_receiver,
-        Some("/tmp/".to_string()),
+        Some(dir.path().to_string_lossy().to_string()),
     );
 
     let timeout = Duration::from_secs(60);
@@ -81,6 +85,7 @@ pub fn build_swarm() -> (
         command_sender,
         peer_receiver,
         Swarm::new(transport, transfer_behaviour, local_peer_id),
+        dir, // return tmp dir to test function; after value is dropped, directory will be cleaned up
     )
 }
 

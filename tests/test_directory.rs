@@ -21,8 +21,8 @@ use common::{build_swarm, setup_logger};
 fn test_directory_transfer() {
     setup_logger();
     let (tx, mut rx) = bounded::<Multiaddr>(10);
-    let (peer1, sender, _, mut swarm1) = build_swarm();
-    let (_, _, _, mut swarm2) = build_swarm();
+    let (peer1, sender, _, mut swarm1, _tempdir1) = build_swarm();
+    let (_, _, _, mut swarm2, _tempdir2) = build_swarm();
 
     sender
         .try_send(TransferCommand::Accept("directory".to_string()))
@@ -133,24 +133,24 @@ fn test_directory_transfer() {
             let meta = fs::metadata(&path).expect("No file found");
             assert!(meta.is_dir());
             assert_eq!(
-                fs::metadata(Path::new(&path).join("test_dir/test.odt"))
+                fs::metadata(Path::new(&path).join("test.odt"))
                     .unwrap()
                     .len(),
                 8988
             );
             assert_eq!(
-                fs::metadata(Path::new(&path).join("test_dir/Der_Zauberberg.epub"))
+                fs::metadata(Path::new(&path).join("Der_Zauberberg.epub"))
                     .unwrap()
                     .len(),
                 659903
             );
             assert_eq!(
-                fs::metadata(Path::new(&path).join("test_dir/empty_file"))
+                fs::metadata(Path::new(&path).join("empty_file"))
                     .unwrap()
                     .len(),
                 0
             );
-            assert!(fs::metadata(Path::new(&path).join("test_dir/empty_dir/"))
+            assert!(fs::metadata(Path::new(&path).join("empty_dir/"))
                 .unwrap()
                 .is_dir());
         }
