@@ -19,8 +19,8 @@ use common::{build_swarm, setup_logger};
 fn test_text_transfer() {
     setup_logger();
     let (tx, mut rx) = bounded::<Multiaddr>(10);
-    let (peer1, sender, _, mut swarm1) = build_swarm();
-    let (_, _, _, mut swarm2) = build_swarm();
+    let (peer1, sender, _, mut swarm1, _tempdir1) = build_swarm();
+    let (_, _, _, mut swarm2, _tempdir2) = build_swarm();
 
     // Text hash should be accepted from the beginning
     sender
