@@ -95,7 +95,16 @@ impl UserConfig {
         let mut contents = String::new();
         file.read_to_string(&mut contents)?;
 
-        let conf: Config = toml::from_str(&contents)?;
+        let conf: Config = match toml::from_str(&contents) {
+            Ok(c) => c,
+            Err(e) => {
+                error!("{}", e);
+                return Err(Error::new(
+                    ErrorKind::Other,
+                    "Problem with loading user config file",
+                ));
+            }
+        };
 
         Ok(UserConfig {
             conf,
