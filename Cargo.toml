@@ -19,15 +19,15 @@ hex = "0.4.2"
 hostname = "0.3.0"
 libp2p = { version = "0.44.0", features = [ "dns-async-std", "websocket", "mplex", "mdns", "tcp-async-io", "noise" ], default-features = false }
 log = "0.4.8"
-env_logger = "0.9"
+env_logger = "0.10.0"
 md-5 = "0.10.1"
 pnet = "0.27.2"
-prost = "0.10.3"
+prost = "0.11.9"
 serde = { version = "1.0", features = ["derive"] }
 tempfile = "3.2.0"
-tokio = {version = "1.20.2", features = ["io-util", "macros"] }
+tokio = {version = "1.29.1", features = ["io-util", "macros"] }
 tokio-util = {version = "0.7.3", features = ["compat"] }
-toml = "0.5.7"
+toml = "0.7.6"
 smallvec = "1.6.1"
 walkdir = "2.3.2"
 
