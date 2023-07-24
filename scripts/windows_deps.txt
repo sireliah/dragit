@@ -19,10 +19,12 @@ gtk-3-vs16.dll
 harfbuzz.dll
 iconv.dll
 intl.dll
+jpeg62.dll
 libpng16.dll
 libxml2.dll
 pango-1.0-0.dll
 pangocairo-1.0-0.dll
 pangoft2-1.0-0.dll
 pangowin32-1.0-0.dll
+tiff.dll
 zlib1.dll
