@@ -15,6 +15,11 @@
     </p>
   </description>
   <releases>
+    <release version="0.7.1" date="2023-07-30">
+      <description>
+        <p>Improved handling of already existing files</p>
+      </description>
+    </release>
     <release version="0.7.0" date="2022-09-24">
       <description>
         <p>Made it possible to send folders.</p>
