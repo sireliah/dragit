@@ -6,7 +6,11 @@ edition = "2021"
 build = "build.rs"
 
 [dependencies]
-async-std = { version = "1.11.0", features = [ "unstable", "tokio1", "attributes"] }
+async-std = { version = "1.11.0", features = [
+    "unstable",
+    "tokio1",
+    "attributes",
+] }
 async_zip = "0.0.9"
 bytesize = "1.0.0"
 directories-next = "2.0.0"
@@ -17,16 +21,23 @@ glib = "0.15.4"
 gtk = "0.15.4"
 hex = "0.4.2"
 hostname = "0.3.0"
-libp2p = { version = "0.44.0", features = [ "dns-async-std", "websocket", "mplex", "mdns", "tcp-async-io", "noise" ], default-features = false }
+libp2p = { version = "0.44.0", features = [
+    "dns-async-std",
+    "websocket",
+    "mplex",
+    "mdns",
+    "tcp-async-io",
+    "noise",
+], default-features = false }
 log = "0.4.8"
 env_logger = "0.10.0"
 md-5 = "0.10.1"
-pnet = "0.27.2"
+pnet = "0.34.0"
 prost = "0.11.9"
 serde = { version = "1.0", features = ["derive"] }
 tempfile = "3.2.0"
-tokio = {version = "1.29.1", features = ["io-util", "macros"] }
-tokio-util = {version = "0.7.3", features = ["compat"] }
+tokio = { version = "1.29.1", features = ["io-util", "macros"] }
+tokio-util = { version = "0.7.3", features = ["compat"] }
 toml = "0.7.6"
 smallvec = "1.6.1"
 walkdir = "2.3.2"
@@ -35,7 +46,7 @@ walkdir = "2.3.2"
 prost-build = { version = "0.6.1" }
 
 [target.'cfg(unix)'.dependencies]
-pnet_datalink = "0.26.0"
+pnet_datalink = "0.34.0"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 byteorder = "1.4.3"
