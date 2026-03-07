@@ -33,7 +33,7 @@ log = "0.4.8"
 env_logger = "0.10.0"
 md-5 = "0.10.1"
 pnet = "0.35.0"
-prost = "0.11.9"
+prost = "0.14.3"
 serde = { version = "1.0", features = ["derive"] }
 tempfile = "3.2.0"
 tokio = { version = "1.29.1", features = ["io-util", "macros"] }
@@ -41,6 +41,8 @@ tokio-util = { version = "0.7.3", features = ["compat"] }
 toml = "1.0.3"
 smallvec = "1.6.1"
 walkdir = "2.3.2"
+zeroize_derive = "1.1.1"
+rand_core = "0.6.2"
 
 [build-dependencies]
 prost-build = { version = "0.6.1" }
@@ -55,3 +57,4 @@ zvariant = "5.10.0"
 
 [target.'cfg(windows)'.dependencies]
 ipconfig = "0.3.0"
+windows = "0.32.0"
