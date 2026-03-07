@@ -32,7 +32,7 @@ impl Metadata {
         let hash = proto.hash;
         let size = proto.size as usize;
         let transfer_type =
-            TransferType::from_i32(proto.transfer_type).unwrap_or(TransferType::File);
+            TransferType::try_from(proto.transfer_type).unwrap_or(TransferType::File);
         info!("Read: Name: {}, Hash: {}, Size: {}", name, hash, size);
         Ok((
             Metadata {

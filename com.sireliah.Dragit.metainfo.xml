@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8" ?>
 <component type="desktop-application">
   <id>com.sireliah.Dragit</id>
   <name>Dragit</name>
@@ -15,6 +15,11 @@
     </p>
   </description>
   <releases>
+    <release version="0.7.2" date="2026-03-08">
+        <description>
+        <p>Update of the Flatpak runtime and minor dependencies</p>
+        </description>
+    </release>
     <release version="0.7.1" date="2023-07-30">
       <description>
         <p>Improved handling of already existing files</p>
@@ -38,12 +43,14 @@
     </release>
     <release version="0.6.1" date="2021-06-27">
       <description>
-        <p>Made Dragit check firewalld config when the application is started.</p>
+        <p
+                >Made Dragit check firewalld config when the application is started.</p>
       </description>
     </release>
     <release version="0.6.0" date="2021-06-02">
       <description>
-        <p>Updated the discovery behaviour to be more resilient to the network/firewall issues.</p>
+        <p
+                >Updated the discovery behaviour to be more resilient to the network/firewall issues.</p>
         <p>
           Fixed the bug with connection hanging when you rejected the file.
           Watch out, this change is not backward compatible, so make sure to update Dragit on all of your devices.
@@ -67,8 +74,9 @@
   <launchable type="desktop-id">com.sireliah.Dragit.desktop</launchable>
   <screenshots>
     <screenshot type="default">
-      <image>https://raw.githubusercontent.com/sireliah/dragit/master/static/dragit_screen.png</image>
+      <image
+            >https://raw.githubusercontent.com/sireliah/dragit/master/static/dragit_screen.png</image>
     </screenshot>
   </screenshots>
-  <content_rating type="oars-1.1"/>
+  <content_rating type="oars-1.1" />
 </component>

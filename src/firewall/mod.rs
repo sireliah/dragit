@@ -10,9 +10,9 @@ use std::error::Error;
 use std::{collections::HashMap, vec};
 
 use serde::{Deserialize, Serialize};
-use zbus::dbus_proxy;
-use zbus::{self, Connection};
-use zvariant::{derive::Type, OwnedObjectPath, Type};
+use zbus::blocking::Connection;
+use zbus::proxy;
+use zvariant::{OwnedObjectPath, Type};
 
 use crate::user_data::UserConfig;
 
@@ -49,12 +49,12 @@ pub struct Firewall {
 
 impl Firewall {
     pub fn new() -> Result<Firewall, Box<dyn Error>> {
-        let connection = Connection::new_system()?;
+        let connection = Connection::system()?;
         Ok(Firewall { connection })
     }
 
     pub fn check_rules_needed(&self, port: u16) -> Result<(bool, bool), Box<dyn Error>> {
-        let proxy = FirewallD1ZoneProxy::new(&self.connection)?;
+        let proxy = FirewallD1ZoneProxyBlocking::new(&self.connection)?;
         let dragit_port_enabled = proxy.query_port("", &port.to_string(), "tcp")?;
         let mdns_port_enabled = proxy.query_port("", "5353", "udp")?;
 
@@ -91,13 +91,16 @@ impl Firewall {
             // Calls below will prompt user for password
             let zone_path = self.get_default_zone_object_path()?;
             let proxy_config_zone =
-                FirewallD1ConfigZoneProxy::new_for_path(&self.connection, &zone_path)?;
+                FirewallD1ConfigZoneProxyBlocking::new(&self.connection, zone_path.as_str())?;
 
             if dragit_needed {
-                let proxy_config = FirewallD1ConfigProxy::new(&self.connection)?;
+                let proxy_config = FirewallD1ConfigProxyBlocking::new(&self.connection)?;
 
                 let service = ServiceConfig::new(port_str);
-                info!("ServiceConfig signature: {}", ServiceConfig::signature());
+                info!(
+                    "ServiceConfig signature: {}",
+                    <ServiceConfig as zvariant::Type>::SIGNATURE
+                );
                 match proxy_config.add_service("dragit", service) {
                     Ok(v) => info!("Service result: {:?}", v),
                     Err(e) => {
@@ -131,22 +134,22 @@ impl Firewall {
     }
 
     fn reload_firewall(&self) -> Result<(), Box<dyn Error>> {
-        let proxy = FirewallD1Proxy::new(&self.connection)?;
+        let proxy = FirewallD1ProxyBlocking::new(&self.connection)?;
         info!("Reloaded firewall");
         Ok(proxy.reload()?)
     }
 
     fn get_default_zone_object_path(&self) -> Result<String, Box<dyn Error>> {
-        let proxy = FirewallD1Proxy::new(&self.connection)?;
-        let proxy_config = FirewallD1ConfigProxy::new(&self.connection)?;
+        let proxy = FirewallD1ProxyBlocking::new(&self.connection)?;
+        let proxy_config = FirewallD1ConfigProxyBlocking::new(&self.connection)?;
 
         let default_zone = proxy.get_default_zone()?;
         let zone_names = proxy_config.get_zone_names()?;
         let zone_paths = proxy_config.list_zones()?;
 
-        let mut hash = HashMap::new();
+        let mut hash = HashMap::<String, String>::new();
         for (path, zone) in zone_paths.iter().zip(zone_names.iter()) {
-            hash.insert(zone, path);
+            hash.insert(zone.clone(), path.to_string());
         }
         let path = match hash.get(&default_zone) {
             Some(v) => v.to_string(),
@@ -157,66 +160,66 @@ impl Firewall {
     }
 }
 
-#[dbus_proxy(
+#[proxy(
     default_service = "org.fedoraproject.FirewallD1",
     default_path = "/org/fedoraproject/FirewallD1",
     interface = "org.fedoraproject.FirewallD1"
 )]
 trait FirewallD1 {
-    #[dbus_proxy(name = "reload")]
+    #[zbus(name = "reload")]
     fn reload(&self) -> zbus::Result<()>;
 
-    #[dbus_proxy(name = "getDefaultZone")]
+    #[zbus(name = "getDefaultZone")]
     fn get_default_zone(&self) -> zbus::Result<String>;
 }
 
-#[dbus_proxy(
+#[proxy(
     default_service = "org.fedoraproject.FirewallD1",
     default_path = "/org/fedoraproject/FirewallD1",
     interface = "org.fedoraproject.FirewallD1.zone"
 )]
 trait FirewallD1Zone {
-    #[dbus_proxy(name = "queryService")]
+    #[zbus(name = "queryService")]
     fn query_service(&self, zone: &str, service: &str) -> zbus::Result<bool>;
 
-    #[dbus_proxy(name = "queryPort")]
+    #[zbus(name = "queryPort")]
     fn query_port(&self, zone: &str, port: &str, protocol: &str) -> zbus::Result<bool>;
 
-    #[dbus_proxy(name = "getZones")]
+    #[zbus(name = "getZones")]
     fn get_zones(&self) -> zbus::Result<Vec<String>>;
 }
 
-#[dbus_proxy(
+#[proxy(
     default_service = "org.fedoraproject.FirewallD1",
     default_path = "/org/fedoraproject/FirewallD1/config",
     interface = "org.fedoraproject.FirewallD1.config"
 )]
 trait FirewallD1Config {
-    #[dbus_proxy(name = "listZones")]
+    #[zbus(name = "listZones")]
     fn list_zones(&self) -> zbus::Result<Vec<OwnedObjectPath>>;
 
-    #[dbus_proxy(name = "getZoneNames")]
+    #[zbus(name = "getZoneNames")]
     fn get_zone_names(&self) -> zbus::Result<Vec<String>>;
 
     /// Adds new service to permanent configuration
-    #[dbus_proxy(name = "addService")]
+    #[zbus(name = "addService")]
     fn add_service(&self, service: &str, config: ServiceConfig) -> zbus::Result<OwnedObjectPath>;
 }
 
-#[dbus_proxy(
+#[proxy(
     default_service = "org.fedoraproject.FirewallD1",
     interface = "org.fedoraproject.FirewallD1.config.zone"
 )]
 trait FirewallD1ConfigZone {
-    #[dbus_proxy(name = "addPort")]
+    #[zbus(name = "addPort")]
     fn add_port(&self, port: &str, protocol: &str) -> zbus::Result<()>;
 
     /// Enables service in zone permanent configuration
     /// If service is already there, this call will enable the service in runtime
-    #[dbus_proxy(name = "addService")]
+    #[zbus(name = "addService")]
     fn add_service_zone(&self, service: &str) -> zbus::Result<()>;
 
-    #[dbus_proxy(name = "getServices")]
+    #[zbus(name = "getServices")]
     fn get_services(&self) -> zbus::Result<Vec<String>>;
 }
 
@@ -233,18 +236,24 @@ fn catch_dbus_error(e: zbus::Error, text_to_match: &str) -> Result<(), Box<dyn E
 #[cfg(test)]
 mod tests {
     use super::*;
-    use zbus::Message;
-    use zvariant::Fd;
+    use zbus::message::Message;
+    use zbus::names::OwnedErrorName;
+
+    fn make_dummy_message() -> Message {
+        Message::method_call("/", "do")
+            .unwrap()
+            .build(&(1u32, "foo"))
+            .unwrap()
+    }
 
     #[test]
     fn test_catch_dbus_error_should_ignore_expected_response() {
-        let m =
-            Message::method(Some(":1.72"), None, "/", None, "do", &(Fd::from(1), "foo")).unwrap();
-
+        let error_name: OwnedErrorName =
+            "org.fedoraproject.FirewallD1.Exception".try_into().unwrap();
         let message_error = zbus::Error::MethodError(
-            "GDBus.Error:org.fedoraproject.FirewallD1.Exception: ALREADY_ENABLED: mdns".to_string(),
-            None,
-            m,
+            error_name,
+            Some("ALREADY_ENABLED: mdns".to_string()),
+            make_dummy_message(),
         );
         let result = catch_dbus_error(message_error, "ALREADY_ENABLED");
 
@@ -253,19 +262,16 @@ mod tests {
 
     #[test]
     fn test_catch_dbus_error_should_return_error_on_unexpected() {
-        let m =
-            Message::method(Some(":1.72"), None, "/", None, "do", &(Fd::from(1), "foo")).unwrap();
-
-        let message_error = zbus::Error::MethodError(
-            "GDBus.Error:org.fedoraproject.FirewallD1.Exception: oh no".to_string(),
-            None,
-            m,
-        );
+        let error_name: OwnedErrorName =
+            "org.fedoraproject.FirewallD1.Exception".try_into().unwrap();
+        let message_error =
+            zbus::Error::MethodError(error_name, Some("oh no".to_string()), make_dummy_message());
         let result = catch_dbus_error(message_error, "ALREADY_ENABLED");
 
-        assert_eq!(
-            result.unwrap_err().to_string(),
-            "GDBus.Error:org.fedoraproject.FirewallD1.Exception: oh no: no details"
-        );
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("org.fedoraproject.FirewallD1.Exception"));
     }
 }

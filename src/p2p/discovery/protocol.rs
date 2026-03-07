@@ -55,9 +55,9 @@ async fn read_peer(
 ) -> Result<(Discovery, impl TSocketAlias), io::Error> {
     let data = upgrade::read_length_prefixed(&mut socket, 1024).await?;
     let host = Host::decode(&data[..])?;
-    let os = match OperatingSystem::from_i32(host.os) {
-        Some(v) => v,
-        None => OperatingSystem::Unknown,
+    let os = match OperatingSystem::try_from(host.os) {
+        Ok(v) => v,
+        Err(_) => OperatingSystem::Unknown,
     };
     let discovery = Discovery {
         hostname: host.hostname,
