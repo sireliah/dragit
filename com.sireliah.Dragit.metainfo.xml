@@ -4,15 +4,14 @@
   <name>Dragit</name>
   <summary>Intuitive file sharing app for local network</summary>
   <metadata_license>MIT</metadata_license>
+  <developer id="com.sireliah">
+    <name>Piotr Gołąb</name>
+  </developer>
   <project_license>GPL-3.0-or-later</project_license>
   <url type="homepage">https://github.com/sireliah/dragit</url>
   <description>
-    <p>
-      Dragit is an application for intuitive file sharing between devices. Useful when you want to send file from one computer to another with minimal effort. No need to sign-up, create configuration or look up the IP address of the target device. The application automatically detects devices in the local network with help of mDNS protocol and allows you to send file immediately.
-    </p>
-    <p>
-      The file transfer is encrypted and there are no external servers involved - Dragit was designed with privacy in mind.
-    </p>
+    <p>Dragit is an application for intuitive file sharing between devices. Useful when you want to send file from one computer to another with minimal effort. No need to sign-up, create configuration or look up the IP address of the target device. The application automatically detects devices in the local network with help of mDNS protocol and allows you to send file immediately.</p>
+    <p>The file transfer is encrypted and there are no external servers involved - Dragit was designed with privacy in mind.</p>
   </description>
   <releases>
     <release version="0.7.2" date="2026-03-08">
@@ -43,22 +42,14 @@
     </release>
     <release version="0.6.1" date="2021-06-27">
       <description>
-        <p
-                >Made Dragit check firewalld config when the application is started.</p>
+        <p>Made Dragit check firewalld config when the application is started.</p>
       </description>
     </release>
     <release version="0.6.0" date="2021-06-02">
       <description>
-        <p
-                >Updated the discovery behaviour to be more resilient to the network/firewall issues.</p>
-        <p>
-          Fixed the bug with connection hanging when you rejected the file.
-          Watch out, this change is not backward compatible, so make sure to update Dragit on all of your devices.
-        </p>
-        <p>
-          Added notification when Dragit is waiting for the file to be accepted.
-          This was indeed required, because one might have wondered if the program got the file or not.
-        </p>
+        <p>Updated the discovery behaviour to be more resilient to the network/firewall issues.</p>
+        <p>Fixed the bug with connection hanging when you rejected the file. Watch out, this change is not backward compatible, so make sure to update Dragit on all of your devices.</p>
+        <p>Added notification when Dragit is waiting for the file to be accepted. This was indeed required, because one might have wondered if the program got the file or not.</p>
       </description>
     </release>
     <release version="0.5.3" date="2021-04-28">
@@ -68,7 +59,7 @@
       </description>
     </release>
     <release version="0.5.0" date="2021-03-06">
-      <description>First release in Flatpak</description>
+      <description><p>First release in Flatpak</p></description>
     </release>
     </releases>
   <launchable type="desktop-id">com.sireliah.Dragit.desktop</launchable>
