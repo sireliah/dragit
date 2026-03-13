@@ -1,22 +1,21 @@
-use std::convert::TryFrom;
-use std::io::{Error, ErrorKind, Result as IOResult};
+use std::io::{Error, Result as IOResult};
 use std::path::Path;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
 use async_std::channel::Sender;
-use async_std::fs::{create_dir, create_dir_all};
+use async_std::fs::{create_dir, create_dir_all, File as AsyncFile};
 use async_std::io::BufReader;
 use async_std::task::{spawn, JoinHandle};
+use async_zip::base::read::stream::ZipFileReader;
+use async_zip::base::write::ZipFileWriter;
 use async_zip::error::ZipError;
-use async_zip::read::stream::ZipFileReader;
-use async_zip::write::ZipFileWriter;
 use async_zip::Compression;
 use async_zip::ZipEntryBuilder;
+use futures::io::copy as futures_copy;
 use futures::AsyncRead;
-use tokio::fs::File;
-use tokio::io::{copy_buf, duplex, BufReader as TokioBufReader, DuplexStream};
-use tokio_util::compat::{Compat, FuturesAsyncReadCompatExt, TokioAsyncReadCompatExt};
+use tokio::io::{duplex, DuplexStream};
+use tokio_util::compat::{Compat, TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 use walkdir::WalkDir;
 
 use crate::p2p::peer::Direction;
@@ -37,10 +36,11 @@ pub struct ZipStream {
 
 impl ZipStream {
     pub fn new(source_path: String) -> ZipStream {
-        let (reader, mut writer) = duplex(ZIP_BUFFER_SIZE);
+        let (reader, writer) = duplex(ZIP_BUFFER_SIZE);
+        let compat_writer = writer.compat_write();
 
         let task_handle = spawn(async move {
-            let mut zip = ZipFileWriter::new(&mut writer);
+            let mut zip = ZipFileWriter::new(compat_writer);
             let base_path = Path::new(&source_path).parent();
 
             for entry in WalkDir::new(&source_path) {
@@ -55,7 +55,7 @@ impl ZipStream {
                 let rel_path = match base_path {
                     Some(base) => file_path
                         .strip_prefix(base)
-                        .map_err(|err| Error::new(ErrorKind::Other, err.to_string()))?,
+                        .map_err(|err| Error::other(err.to_string()))?,
                     None => file_path,
                 };
                 let path_string = rel_path
@@ -68,7 +68,7 @@ impl ZipStream {
                 if file_path.is_file() {
                     if file_path.metadata()?.len() > 0 {
                         debug!("Writing file: {}", path_string);
-                        Self::write_file(&mut zip, path_string, &file_path).await?;
+                        Self::write_file(&mut zip, path_string, file_path).await?;
                     } else {
                         debug!("Writing empty file: {}", path_string);
                         Self::write_empty_file(&mut zip, path_string).await?;
@@ -80,7 +80,7 @@ impl ZipStream {
                     }
                 }
             }
-            zip.close().await.map_err(|err| zip_error(err))?;
+            zip.close().await.map_err(zip_error)?;
             Ok::<(), Error>(())
         });
         let compat = reader.compat();
@@ -91,7 +91,7 @@ impl ZipStream {
     }
 
     async fn write_empty_dir(
-        zip: &mut ZipFileWriter<&mut DuplexStream>,
+        zip: &mut ZipFileWriter<Compat<DuplexStream>>,
         rel_path: String,
     ) -> Result<(), Error> {
         let dir_path = if cfg!(windows) {
@@ -100,42 +100,43 @@ impl ZipStream {
             format!("{}/", rel_path)
         };
 
-        let opts = ZipEntryBuilder::new(dir_path, DEFAULT_COMPRESSION);
-        zip.write_entry_stream(opts)
+        let opts = ZipEntryBuilder::new(dir_path.into(), DEFAULT_COMPRESSION);
+        let entry_writer = zip
+            .write_entry_stream(opts)
             .await
-            .map_err(|err| zip_error(err))?;
+            .map_err(zip_error)?;
+        entry_writer.close().await.map_err(zip_error)?;
         Ok(())
     }
 
     async fn write_empty_file(
-        zip: &mut ZipFileWriter<&mut DuplexStream>,
+        zip: &mut ZipFileWriter<Compat<DuplexStream>>,
         rel_path: String,
     ) -> Result<(), Error> {
         // Trying to unzip the empty file at the reader end makes tokio error with "early eof".
         // This might be an async-zip bug, but as a workaround it's enough to create empty entry here.
-        let opts = ZipEntryBuilder::new(rel_path, DEFAULT_COMPRESSION);
+        let opts = ZipEntryBuilder::new(rel_path.into(), DEFAULT_COMPRESSION);
         zip.write_entry_whole(opts, &[])
             .await
-            .map_err(|err| zip_error(err))?;
+            .map_err(zip_error)?;
         Ok(())
     }
 
     async fn write_file(
-        zip: &mut ZipFileWriter<&mut DuplexStream>,
+        zip: &mut ZipFileWriter<Compat<DuplexStream>>,
         rel_path: String,
         file_path: &Path,
     ) -> Result<(), Error> {
-        let opts = ZipEntryBuilder::new(rel_path, DEFAULT_COMPRESSION);
+        let opts = ZipEntryBuilder::new(rel_path.into(), DEFAULT_COMPRESSION);
 
         let mut entry_writer = zip
             .write_entry_stream(opts)
             .await
-            .map_err(|err| zip_error(err))?;
+            .map_err(zip_error)?;
 
-        let mut file = File::open(&file_path).await?;
-        let mut buf_reader = TokioBufReader::with_capacity(ZIP_BUFFER_SIZE, &mut file);
-        copy_buf(&mut buf_reader, &mut entry_writer).await?;
-        entry_writer.close().await.map_err(|err| zip_error(err))?;
+        let mut file = AsyncFile::open(&file_path).await?;
+        futures_copy(&mut file, &mut entry_writer).await?;
+        entry_writer.close().await.map_err(zip_error)?;
         Ok(())
     }
 
@@ -158,7 +159,7 @@ impl AsyncRead for ZipStream {
 }
 
 fn zip_error(err: ZipError) -> Error {
-    Error::new(ErrorKind::Other, format!("Zip error: {}", err.to_string()))
+    Error::other(format!("Zip error: {err}"))
 }
 
 fn is_zip_dir(path: &Path) -> bool {
@@ -184,46 +185,46 @@ pub async fn unzip_stream(
     size: usize,
     direction: Direction,
 ) -> Result<JoinHandle<Result<usize, Error>>, Error> {
-    let mut compat_reader = buf_reader.compat();
-
     let task = spawn(async move {
         let base_path = Path::new(&target_path)
             .parent()
             .unwrap_or(Path::new(&target_path));
-        let mut zip = ZipFileReader::new(&mut compat_reader);
+        let mut zip = ZipFileReader::new(buf_reader);
         let mut counter: usize = 0;
-        while !zip.finished() {
-            if let Some(reader) = zip.entry_reader().await.map_err(|err| zip_error(err))? {
-                let entry = reader.entry();
-                let path = base_path.join(normalize_zip_path(entry.filename()));
-                if let Some(parent) = path.parent() {
-                    create_dir_all(parent).await?;
+        while let Some(mut reading) = zip.next_with_entry().await.map_err(zip_error)? {
+            let filename = {
+                let entry = reading.reader().entry();
+                entry
+                    .filename()
+                    .as_str()
+                    .map_err(|e| Error::other(format!("Invalid filename: {e:?}")))?
+                    .to_owned()
+            };
+            let path = base_path.join(normalize_zip_path(&filename));
+            if let Some(parent) = path.parent() {
+                create_dir_all(parent).await?;
+            }
+            debug!("Unzip: {:?}", path.to_string_lossy());
+
+            if is_zip_dir(&path) {
+                debug!("Creating dir {:?}", path);
+                if let Err(e) = create_dir(&path).await {
+                    warn!("Could not create directory: {:?}", e);
+                };
+                zip = reading.skip().await.map_err(zip_error)?;
+            } else {
+                debug!("Creating file {:?}", path);
+                let mut file = AsyncFile::create(&path).await?;
+                let bytes_copied = futures_copy(reading.reader_mut(), &mut file).await?;
+
+                let file_size = bytes_copied as usize;
+                counter += file_size;
+
+                // Limit progress events, because they seem to be to be inefficient at gtk level
+                if (file_size as f32 / size as f32) > 0.01 {
+                    notify_progress(&sender_queue, counter, size, &direction).await;
                 }
-                debug!("Unzip: {:?}", path.to_string_lossy());
-
-                if is_zip_dir(&path) {
-                    debug!("Creating dir {:?}", path);
-                    if let Err(e) = create_dir(path).await {
-                        warn!("Could not create directory: {:?}", e);
-                    };
-                } else {
-                    debug!("Creating file {:?}", path);
-                    let mut file = File::create(&path).await?;
-                    reader
-                        .copy_to_end_crc(&mut file, ZIP_BUFFER_SIZE)
-                        .await
-                        .map_err(|err| zip_error(err))?;
-
-                    let meta = file.metadata().await?;
-                    let file_size = usize::try_from(meta.len())
-                        .map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?;
-                    counter += file_size;
-
-                    // Limit progress events, because they seem to be to be inefficient at gtk level
-                    if (file_size as f32 / size as f32) > 0.01 {
-                        notify_progress(&sender_queue, counter, size, &direction).await;
-                    }
-                }
+                zip = reading.done().await.map_err(zip_error)?;
             }
         }
         Ok::<usize, Error>(counter)
