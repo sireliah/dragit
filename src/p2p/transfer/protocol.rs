@@ -1,22 +1,18 @@
-use async_std::fs::OpenOptions;
 use std::fmt;
 use std::fs::remove_file;
 use std::io::ErrorKind;
 use std::sync::Arc;
 
-use std::task::{Context, Poll};
 use std::time::Instant;
 use std::{io, iter, pin::Pin};
 
-use async_std::channel::{Receiver, Sender};
-use async_std::io::BufReader;
-use async_std::sync::Mutex;
-use async_std::task;
+use async_channel::{Receiver, Sender};
+use tokio::sync::Mutex;
 
-use futures::future;
 use futures::io as futio;
 use futures::prelude::*;
 use libp2p::core::{InboundUpgrade, OutboundUpgrade, UpgradeInfo};
+use tokio::fs::OpenOptions;
 
 use crate::p2p::commands::TransferCommand;
 use crate::p2p::peer::{Direction, PeerEvent};
@@ -53,9 +49,8 @@ pub struct TransferPayload {
 }
 
 impl TransferPayload {
-    pub fn check_file(&self) -> Result<(), io::Error> {
-        let (hash_from_disk, _) =
-            task::block_on(async { get_hash_from_payload(&self.payload).await })?;
+    pub async fn check_file(&self) -> Result<(), io::Error> {
+        let (hash_from_disk, _) = get_hash_from_payload(&self.payload).await?;
 
         if hash_from_disk != self.hash {
             Err(io::Error::new(ErrorKind::InvalidData, "File corrupted!"))
@@ -90,21 +85,20 @@ impl TransferPayload {
         &self,
         receiver: Arc<Mutex<Receiver<TransferCommand>>>,
     ) -> TransferCommand {
-        let mut r = receiver.lock().await;
+        let r = receiver.lock().await;
         // Wait for the user to confirm the incoming file
-        task::block_on(future::poll_fn(
-            move |context: &mut Context| match Receiver::poll_next_unpin(&mut r, context) {
-                Poll::Ready(Some(choice)) => {
+        loop {
+            match r.recv().await {
+                Ok(choice) => {
                     info!("Got the choice: {:?}", choice);
-                    Poll::Ready(choice)
+                    return choice;
                 }
-                Poll::Ready(None) => {
-                    info!("Nothing to handle now");
-                    Poll::Pending
+                Err(_) => {
+                    info!("Receiver closed, retrying...");
+                    tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
                 }
-                Poll::Pending => Poll::Pending,
-            },
-        ))
+            }
+        }
     }
 
     async fn stream_file(
@@ -115,12 +109,17 @@ impl TransferPayload {
         direction: &Direction,
     ) -> Result<usize, io::Error> {
         info!("Path: {}", path);
-        let mut file = OpenOptions::new()
+        let file = OpenOptions::new()
             .write(true)
             .create(true)
             .open(path)
             .await
             .expect("Opening failed!");
+
+        // Wrap tokio file as futures AsyncWrite
+        use tokio_util::compat::TokioAsyncWriteCompatExt;
+        let mut compat_file = file.compat_write();
+
         let mut counter: usize = 0;
         let mut current_size: usize = 0;
         loop {
@@ -131,7 +130,7 @@ impl TransferPayload {
                         counter += n;
                         current_size += n;
 
-                        file.write(&buff[..n]).await?;
+                        compat_file.write(&buff[..n]).await?;
 
                         if util::time_to_notify(current_size, size) {
                             util::notify_progress(&self.sender_queue, counter, size, &direction)
@@ -139,7 +138,7 @@ impl TransferPayload {
                             current_size = 0;
                         }
                     } else {
-                        file.close().await?;
+                        compat_file.close().await?;
                         util::notify_progress(&self.sender_queue, counter, size, &direction).await;
                         break;
                     }
@@ -153,13 +152,13 @@ impl TransferPayload {
     async fn stream_dir(
         &self,
         path: String,
-        reader: BufReader<impl TSocketAlias + 'static>,
+        reader: futures::io::BufReader<impl TSocketAlias + 'static>,
         size: usize,
         direction: &Direction,
     ) -> Result<usize, io::Error> {
         let sender_copy = self.sender_queue.clone();
         let task = unzip_stream(path, reader, sender_copy, size, direction.clone()).await?;
-        let received_bytes = task.await?;
+        let received_bytes = task.await??;
         Ok(received_bytes)
     }
 
@@ -170,7 +169,7 @@ impl TransferPayload {
         size: usize,
         direction: &Direction,
     ) -> Result<(usize, String), io::Error> {
-        let reader = BufReader::new(socket);
+        let reader = futures::io::BufReader::new(socket);
 
         let path =
             user_data::get_target_path(&meta.get_safe_file_name(), self.target_path.as_ref())?;
@@ -271,7 +270,7 @@ impl TransferOut {
                 StreamOption::Zip(file, task_handle) => {
                     self.stream_data(socket, file, size, direction).await?;
                     if let Some(handle) = task_handle {
-                        handle.await?;
+                        let _ = handle.await?;
                     }
                     Ok(())
                 }

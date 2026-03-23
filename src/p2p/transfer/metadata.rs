@@ -174,30 +174,32 @@ pub async fn hash_contents(mut file: impl AsyncRead + Unpin) -> Result<(String, 
 #[cfg(test)]
 mod tests {
     use crate::p2p::transfer::metadata::hash_contents;
-    use async_std::fs::File;
     use std::io::{Seek, SeekFrom, Write};
+    use tokio_util::compat::TokioAsyncReadCompatExt;
 
-    #[async_std::test]
+    #[tokio::test]
     #[cfg(not(target_os = "windows"))]
     async fn test_hash_local_file() {
         let mut file = tempfile::tempfile().unwrap();
         write!(file, "I'll fly to device!").unwrap();
         file.seek(SeekFrom::Start(0)).unwrap();
-        let async_file = File::from(file);
+        let tokio_file = tokio::fs::File::from_std(file);
+        let async_file = tokio_file.compat();
         let (hash, size) = hash_contents(async_file).await.unwrap();
 
         assert_eq!(hash, "a909b834a8f95194ee2ce975e38cec31".to_string());
         assert_eq!(size, 19);
     }
 
-    #[async_std::test]
+    #[tokio::test]
     #[cfg(target_os = "windows")]
     async fn test_hash_local_file() {
         // Windows file has carriage endings, so the hash is different
         let mut file = tempfile::tempfile().unwrap();
         write!(file, "I'll fly to device!").unwrap();
         file.seek(SeekFrom::Start(0)).unwrap();
-        let async_file = File::from(file);
+        let tokio_file = tokio::fs::File::from_std(file);
+        let async_file = tokio_file.compat();
         let (hash, size) = hash_contents(async_file).await.unwrap();
 
         assert_eq!(hash, "a909b834a8f95194ee2ce975e38cec31".to_string());

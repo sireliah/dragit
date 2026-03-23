@@ -1,13 +1,13 @@
 use std::{fmt, io, iter, pin::Pin};
 
+use futures::io::AsyncWriteExt;
 use futures::prelude::*;
-use libp2p::core::{upgrade, InboundUpgrade, OutboundUpgrade, PeerId, UpgradeInfo};
+use libp2p::core::{InboundUpgrade, OutboundUpgrade, PeerId, UpgradeInfo};
 use prost::Message;
 
 use super::proto::Host;
 
 use crate::p2p::peer::OperatingSystem;
-use crate::p2p::util::TSocketAlias;
 
 #[derive(Debug)]
 pub struct DiscoveryEvent {
@@ -50,37 +50,69 @@ impl UpgradeInfo for Discovery {
     }
 }
 
-async fn read_peer(
-    mut socket: impl TSocketAlias,
-) -> Result<(Discovery, impl TSocketAlias), io::Error> {
-    let data = upgrade::read_length_prefixed(&mut socket, 1024).await?;
+/// Encode a `Host` protobuf message as a u32 big-endian length-prefixed frame.
+fn encode_peer(hostname: String, os: OperatingSystem) -> Result<Vec<u8>, io::Error> {
+    let proto = Host {
+        hostname,
+        os: os as i32,
+    };
+    let payload_len = proto.encoded_len();
+    let mut buf = Vec::with_capacity(4 + payload_len);
+    let len = payload_len as u32;
+    buf.extend_from_slice(&len.to_be_bytes());
+    proto.encode(&mut buf)?;
+    Ok(buf)
+}
+
+/// Decode a `Discovery` from a u32 big-endian length-prefixed protobuf frame
+/// read from `socket`.
+async fn read_peer(mut socket: impl AsyncRead + Unpin) -> Result<Discovery, io::Error> {
+    let mut len_buf = [0u8; 4];
+    socket.read_exact(&mut len_buf).await?;
+    let len = u32::from_be_bytes(len_buf) as usize;
+    if len > 4096 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("Discovery message too large: {}", len),
+        ));
+    }
+    let mut data = vec![0u8; len];
+    socket.read_exact(&mut data).await?;
     let host = Host::decode(&data[..])?;
     let os = match OperatingSystem::try_from(host.os) {
         Ok(v) => v,
         Err(_) => OperatingSystem::Unknown,
     };
-    let discovery = Discovery {
+    Ok(Discovery {
         hostname: host.hostname,
         os,
-    };
-    Ok((discovery, socket))
+    })
 }
 
-async fn write_peer(
+/// Exchange host information symmetrically: write our data and read the remote's
+/// data concurrently so that neither side has to go first. This works regardless
+/// of which side opened the substream.
+async fn exchange_peer_info(
+    socket: impl AsyncRead + AsyncWrite + Send + Unpin + 'static,
     hostname: String,
     os: OperatingSystem,
-    mut socket: impl TSocketAlias,
-) -> Result<impl TSocketAlias, io::Error> {
-    let proto = Host {
-        hostname,
-        os: os as i32,
+) -> Result<Discovery, io::Error> {
+    let outgoing = encode_peer(hostname, os)?;
+    let (reader, mut writer) = futures::io::AsyncReadExt::split(socket);
+
+    let write_fut = async move {
+        writer.write_all(&outgoing).await?;
+        writer.flush().await?;
+        // Close the write half so the remote's read_exact can reach EOF if needed.
+        writer.close().await?;
+        Ok::<(), io::Error>(())
     };
-    let mut buf = Vec::with_capacity(proto.encoded_len());
 
-    proto.encode(&mut buf)?;
-    upgrade::write_length_prefixed(&mut socket, buf).await?;
+    let read_fut = read_peer(reader);
 
-    Ok(socket)
+    let (write_res, read_res) = futures::future::join(write_fut, read_fut).await;
+    write_res?;
+    read_res
 }
 
 impl<TSocket> InboundUpgrade<TSocket> for Discovery
@@ -92,14 +124,8 @@ where
     type Future = Pin<Box<dyn Future<Output = Result<Self::Output, Self::Error>> + Send>>;
 
     fn upgrade_inbound(self, socket: TSocket, _info: Self::Info) -> Self::Future {
-        // (As dialer) receiving the host data from remote
-        // and sending own data immediately after
-        Box::pin(async move {
-            let (discovery, socket) = read_peer(socket).await?;
-            let _ = write_peer(self.hostname, self.os, socket).await?;
-
-            Ok(discovery)
-        })
+        // Fully symmetric: write and read concurrently, no ordering dependency.
+        Box::pin(exchange_peer_info(socket, self.hostname, self.os))
     }
 }
 
@@ -112,12 +138,7 @@ where
     type Future = Pin<Box<dyn Future<Output = Result<Self::Output, Self::Error>> + Send>>;
 
     fn upgrade_outbound(self, socket: TSocket, _info: Self::Info) -> Self::Future {
-        // (As listener) sending the host data to remote
-        // and receiving remote host data in exchange
-        Box::pin(async move {
-            let socket = write_peer(self.hostname, self.os, socket).await?;
-            let (discovery, _) = read_peer(socket).await?;
-            Ok(discovery)
-        })
+        // Fully symmetric: write and read concurrently, no ordering dependency.
+        Box::pin(exchange_peer_info(socket, self.hostname, self.os))
     }
 }

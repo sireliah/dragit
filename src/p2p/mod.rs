@@ -1,19 +1,10 @@
 use std::{error::Error, sync::Arc, thread::sleep, time::Duration};
 
-use async_std::channel::{Receiver, Sender};
-use async_std::sync::Mutex;
+use async_channel::{Receiver, Sender};
+use tokio::sync::Mutex;
 
-use futures::{executor, select, stream::StreamExt, FutureExt};
-use libp2p::{
-    core::transport::Transport,
-    core::upgrade,
-    identity,
-    mdns::{Mdns, MdnsConfig, MdnsEvent},
-    mplex, noise,
-    swarm::NetworkBehaviourEventProcess,
-    tcp::TcpConfig,
-    NetworkBehaviour, PeerId, Swarm,
-};
+use futures::{select, stream::StreamExt, FutureExt};
+use libp2p::{mdns, noise, swarm::SwarmEvent, tcp, yamux, PeerId, Swarm, SwarmBuilder};
 
 pub mod commands;
 pub mod discovery;
@@ -28,76 +19,43 @@ pub use peer::{CurrentPeers, OperatingSystem, Peer, PeerEvent, TransferType};
 pub use transfer::metadata::hash_contents;
 pub use transfer::{FileToSend, Payload, TransferBehaviour, TransferOut, TransferPayload};
 
-#[derive(NetworkBehaviour)]
-#[behaviour(event_process = true)]
+#[derive(libp2p::swarm::NetworkBehaviour)]
+#[behaviour(to_swarm = "MyBehaviourEvent")]
 pub struct MyBehaviour {
-    pub mdns: Mdns,
+    pub mdns: mdns::tokio::Behaviour,
     pub discovery: DiscoveryBehaviour,
     pub transfer_behaviour: TransferBehaviour,
 }
 
-impl NetworkBehaviourEventProcess<MdnsEvent> for MyBehaviour {
-    fn inject_event(&mut self, mut event: MdnsEvent) {
-        match event {
-            MdnsEvent::Discovered(ref mut list) => {
-                if let Some((peer_id, addr)) = list.next() {
-                    info!("Discovered peer_id: {}", peer_id);
-                    self.discovery.add_peer(peer_id.clone(), addr);
-                }
-            }
-            MdnsEvent::Expired(list) => {
-                for (peer_id, _addr) in list {
-                    info!("Address expired: {:?}", peer_id);
-                    match self.discovery.remove_peer(&peer_id) {
-                        Ok(_) => (),
-                        Err(e) => error!("Removing peer failed: {:?}", e),
-                    }
-                }
-            }
-        }
+#[derive(Debug)]
+pub enum MyBehaviourEvent {
+    Mdns(mdns::Event),
+    Discovery(DiscoveryEvent),
+    Transfer(TransferPayload),
+    TransferOut(TransferOut),
+}
+
+impl From<mdns::Event> for MyBehaviourEvent {
+    fn from(e: mdns::Event) -> Self {
+        MyBehaviourEvent::Mdns(e)
     }
 }
 
-impl NetworkBehaviourEventProcess<DiscoveryEvent> for MyBehaviour {
-    fn inject_event(&mut self, event: DiscoveryEvent) {
-        info!("Discovered: {}", event);
-        self.discovery
-            .update_peer(event.peer, event.hostname, event.os);
+impl From<DiscoveryEvent> for MyBehaviourEvent {
+    fn from(e: DiscoveryEvent) -> Self {
+        MyBehaviourEvent::Discovery(e)
     }
 }
 
-impl NetworkBehaviourEventProcess<TransferPayload> for MyBehaviour {
-    fn inject_event(&mut self, event: TransferPayload) {
-        info!("Injected {}", event);
-        match event.check_file() {
-            Ok(_) => {
-                info!("File correct");
-                if let Err(e) = event.cleanup() {
-                    error!("Could not clean up file: {:?}", e);
-                };
-                if let Err(e) = event
-                    .sender_queue
-                    .try_send(PeerEvent::FileCorrect(event.name, event.payload))
-                {
-                    error!("{:?}", e);
-                }
-            }
-            Err(e) => {
-                warn!("File not correct: {:?}", e);
-                if let Err(e) = event.sender_queue.try_send(PeerEvent::FileIncorrect) {
-                    error!("{:?}", e);
-                }
-                if let Err(e) = event.cleanup() {
-                    error!("Could not clean up file: {:?}", e);
-                };
-            }
-        }
+impl From<TransferPayload> for MyBehaviourEvent {
+    fn from(e: TransferPayload) -> Self {
+        MyBehaviourEvent::Transfer(e)
     }
 }
 
-impl NetworkBehaviourEventProcess<TransferOut> for MyBehaviour {
-    fn inject_event(&mut self, event: TransferOut) {
-        info!("TransferOut event: {:?}", event);
+impl From<TransferOut> for MyBehaviourEvent {
+    fn from(e: TransferOut) -> Self {
+        MyBehaviourEvent::TransferOut(e)
     }
 }
 
@@ -106,49 +64,45 @@ async fn execute_swarm(
     receiver: Receiver<FileToSend>,
     command_receiver: Receiver<TransferCommand>,
 ) -> Result<(), Box<dyn Error>> {
-    let local_keys = identity::Keypair::generate_ed25519();
+    let config = UserConfig::new()?;
+    let local_keys = config.get_or_create_keypair()?;
     let local_peer_id = PeerId::from(local_keys.public());
     info!("I am Peer: {:?}", local_peer_id);
 
     let command_rec = Arc::new(Mutex::new(command_receiver));
     let command_receiver_c = Arc::clone(&command_rec);
 
-    let mut swarm = {
-        let transfer_behaviour = TransferBehaviour::new(sender.clone(), command_receiver_c, None);
-        let discovery = DiscoveryBehaviour::new(sender);
-        let mdns = Mdns::new(MdnsConfig::default()).await?;
-        let behaviour = MyBehaviour {
-            mdns,
-            discovery,
-            transfer_behaviour,
-        };
-        let timeout = Duration::from_secs(60);
-        let transport = TcpConfig::new().nodelay(true);
-        let mut mplex_config = mplex::MplexConfig::new();
+    let sender_clone = sender.clone();
 
-        // TODO: test different Mplex frame sizes
-        let mp = mplex_config
-            .set_max_buffer_size(40960)
-            .set_split_send_size(1024 * 512);
+    let mut swarm = SwarmBuilder::with_existing_identity(local_keys)
+        .with_tokio()
+        .with_tcp(
+            tcp::Config::default().nodelay(true),
+            noise::Config::new,
+            yamux::Config::default,
+        )?
+        .with_behaviour(move |key| {
+            let mdns =
+                mdns::tokio::Behaviour::new(mdns::Config::default(), key.public().to_peer_id())
+                    .expect("Failed to create mdns behaviour");
 
-        let noise_keys = noise::Keypair::<noise::X25519Spec>::new().into_authentic(&local_keys)?;
+            let transfer_behaviour =
+                TransferBehaviour::new(sender_clone.clone(), command_receiver_c.clone(), None);
+            let discovery = DiscoveryBehaviour::new(sender_clone.clone());
 
-        let noise = noise::NoiseConfig::xx(noise_keys).into_authenticated();
+            MyBehaviour {
+                mdns,
+                discovery,
+                transfer_behaviour,
+            }
+        })?
+        .with_swarm_config(|cfg| cfg.with_idle_connection_timeout(Duration::from_secs(60)))
+        .build();
 
-        let transport = transport
-            .upgrade(upgrade::Version::V1)
-            .authenticate(noise)
-            .multiplex(mp.clone())
-            .timeout(timeout)
-            .boxed();
-        Swarm::new(transport, behaviour, local_peer_id)
-    };
-
-    let config = UserConfig::new()?;
     let port = config.get_port();
 
     let address = format!("/ip4/0.0.0.0/tcp/{}", port);
-    Swarm::listen_on(&mut swarm, address.parse()?)?;
+    swarm.listen_on(address.parse()?)?;
 
     loop {
         select! {
@@ -162,7 +116,71 @@ async fn execute_swarm(
                 }
             },
             swarm_event = swarm.select_next_some() => {
-                info!("Swarm event: {:?}", swarm_event);
+                match swarm_event {
+                    SwarmEvent::Behaviour(MyBehaviourEvent::Mdns(event)) => {
+                        handle_mdns_event(&mut swarm, event);
+                    }
+                    SwarmEvent::Behaviour(MyBehaviourEvent::Discovery(event)) => {
+                        info!("Discovered: {}", event);
+                        swarm.behaviour_mut().discovery.update_peer(
+                            event.peer,
+                            event.hostname,
+                            event.os,
+                        );
+                    }
+                    SwarmEvent::Behaviour(MyBehaviourEvent::Transfer(event)) => {
+                        info!("Transfer event: {}", event);
+                        match event.check_file().await {
+                            Ok(_) => {
+                                info!("File correct");
+                                if let Err(e) = event.cleanup() {
+                                    error!("Could not clean up file: {:?}", e);
+                                };
+                                if let Err(e) = event
+                                    .sender_queue
+                                    .try_send(PeerEvent::FileCorrect(event.name, event.payload))
+                                {
+                                    error!("{:?}", e);
+                                }
+                            }
+                            Err(e) => {
+                                warn!("File not correct: {:?}", e);
+                                if let Err(e) = event.sender_queue.try_send(PeerEvent::FileIncorrect) {
+                                    error!("{:?}", e);
+                                }
+                                if let Err(e) = event.cleanup() {
+                                    error!("Could not clean up file: {:?}", e);
+                                };
+                            }
+                        }
+                    }
+                    SwarmEvent::Behaviour(MyBehaviourEvent::TransferOut(event)) => {
+                        info!("TransferOut event: {:?}", event);
+                    }
+                    other => {
+                        info!("Swarm event: {:?}", other);
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn handle_mdns_event(swarm: &mut Swarm<MyBehaviour>, event: mdns::Event) {
+    match event {
+        mdns::Event::Discovered(list) => {
+            for (peer_id, addr) in list {
+                info!("Discovered peer_id: {}", peer_id);
+                swarm.behaviour_mut().discovery.add_peer(peer_id, addr);
+            }
+        }
+        mdns::Event::Expired(list) => {
+            for (peer_id, _addr) in list {
+                info!("Address expired: {:?}", peer_id);
+                match swarm.behaviour_mut().discovery.remove_peer(&peer_id) {
+                    Ok(_) => (),
+                    Err(e) => error!("Removing peer failed: {:?}", e),
+                }
             }
         }
     }
@@ -184,7 +202,7 @@ pub fn run_server(
         };
     }
 
-    let future = execute_swarm(sender, file_receiver, command_receiver);
-    executor::block_on(future)?;
+    let rt = tokio::runtime::Runtime::new()?;
+    rt.block_on(execute_swarm(sender, file_receiver, command_receiver))?;
     Ok(())
 }

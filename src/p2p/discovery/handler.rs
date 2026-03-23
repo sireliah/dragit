@@ -1,6 +1,6 @@
 use libp2p::swarm::handler::{
-    ConnectionHandler, ConnectionHandlerEvent, ConnectionHandlerUpgrErr, InboundUpgradeSend,
-    KeepAlive, OutboundUpgradeSend, SubstreamProtocol,
+    ConnectionEvent, ConnectionHandler, ConnectionHandlerEvent, FullyNegotiatedInbound,
+    FullyNegotiatedOutbound, InboundUpgradeSend, OutboundUpgradeSend, SubstreamProtocol,
 };
 use std::fmt::Debug;
 
@@ -14,8 +14,6 @@ where
 {
     /// The upgrade for inbound substreams.
     listen_protocol: SubstreamProtocol<TInbound, ()>,
-    /// If `Some`, something bad happened and we should shut down the handler with an error.
-    pending_error: Option<ConnectionHandlerUpgrErr<<TOutbound as OutboundUpgradeSend>::Error>>,
     /// Queue of events to produce in `poll()`.
     events_out: SmallVec<[TEvent; 4]>,
     /// Queue of outbound substreams to open.
@@ -37,7 +35,6 @@ where
     ) -> Self {
         KeepAliveHandler {
             listen_protocol,
-            pending_error: None,
             events_out: SmallVec::new(),
             dial_queue: SmallVec::new(),
             dial_negotiated: 0,
@@ -90,16 +87,15 @@ impl<TInbound, TOutbound, TEvent> ConnectionHandler
     for KeepAliveHandler<TInbound, TOutbound, TEvent>
 where
     TInbound: InboundUpgradeSend + Send + 'static,
-    TOutbound: OutboundUpgradeSend + Debug,
+    TOutbound: OutboundUpgradeSend + Debug + Send + 'static,
     TInbound::Output: Into<TEvent>,
     TOutbound::Output: Into<TEvent>,
     TOutbound::Error: error::Error + Send + 'static,
     SubstreamProtocol<TInbound, ()>: Clone,
     TEvent: Debug + Send + 'static,
 {
-    type InEvent = TOutbound;
-    type OutEvent = TEvent;
-    type Error = ConnectionHandlerUpgrErr<<Self::OutboundProtocol as OutboundUpgradeSend>::Error>;
+    type FromBehaviour = TOutbound;
+    type ToBehaviour = TEvent;
     type InboundProtocol = TInbound;
     type OutboundProtocol = TOutbound;
     type OutboundOpenInfo = ();
@@ -109,58 +105,54 @@ where
         self.listen_protocol.clone()
     }
 
-    fn inject_fully_negotiated_inbound(
-        &mut self,
-        out: <Self::InboundProtocol as InboundUpgradeSend>::Output,
-        (): Self::InboundOpenInfo,
-    ) {
-        self.events_out.push(out.into());
-    }
-
-    fn inject_fully_negotiated_outbound(
-        &mut self,
-        out: <Self::OutboundProtocol as OutboundUpgradeSend>::Output,
-        _: Self::OutboundOpenInfo,
-    ) {
-        self.dial_negotiated -= 1;
-        self.events_out.push(out.into());
-    }
-
-    fn inject_event(&mut self, event: Self::InEvent) {
+    fn on_behaviour_event(&mut self, event: Self::FromBehaviour) {
         self.send_request(event);
     }
 
-    fn inject_dial_upgrade_error(
+    fn on_connection_event(
         &mut self,
-        _info: Self::OutboundOpenInfo,
-        error: ConnectionHandlerUpgrErr<<Self::OutboundProtocol as OutboundUpgradeSend>::Error>,
+        event: ConnectionEvent<
+            Self::InboundProtocol,
+            Self::OutboundProtocol,
+            Self::InboundOpenInfo,
+            Self::OutboundOpenInfo,
+        >,
     ) {
-        if self.pending_error.is_none() {
-            self.pending_error = Some(error);
+        match event {
+            ConnectionEvent::FullyNegotiatedInbound(FullyNegotiatedInbound {
+                protocol: out,
+                ..
+            }) => {
+                self.events_out.push(out.into());
+            }
+            ConnectionEvent::FullyNegotiatedOutbound(FullyNegotiatedOutbound {
+                protocol: out,
+                ..
+            }) => {
+                self.dial_negotiated -= 1;
+                self.events_out.push(out.into());
+            }
+            ConnectionEvent::DialUpgradeError(e) => {
+                warn!("Dial upgrade error in KeepAliveHandler: {:?}", e.error);
+            }
+            _ => {}
         }
     }
 
-    fn connection_keep_alive(&self) -> KeepAlive {
-        KeepAlive::Yes
+    fn connection_keep_alive(&self) -> bool {
+        true
     }
 
     fn poll(
         &mut self,
         _: &mut Context<'_>,
     ) -> Poll<
-        ConnectionHandlerEvent<
-            Self::OutboundProtocol,
-            Self::OutboundOpenInfo,
-            Self::OutEvent,
-            Self::Error,
-        >,
+        ConnectionHandlerEvent<Self::OutboundProtocol, Self::OutboundOpenInfo, Self::ToBehaviour>,
     > {
-        if let Some(err) = self.pending_error.take() {
-            return Poll::Ready(ConnectionHandlerEvent::Close(err));
-        }
-
         if !self.events_out.is_empty() {
-            return Poll::Ready(ConnectionHandlerEvent::Custom(self.events_out.remove(0)));
+            return Poll::Ready(ConnectionHandlerEvent::NotifyBehaviour(
+                self.events_out.remove(0),
+            ));
         } else {
             self.events_out.shrink_to_fit();
         }

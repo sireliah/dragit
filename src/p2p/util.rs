@@ -1,6 +1,6 @@
 use std::io::{Error, ErrorKind};
 
-use async_std::channel::Sender as AsyncSender;
+use async_channel::Sender as AsyncSender;
 use futures::prelude::*;
 
 #[cfg(unix)]

@@ -4,9 +4,9 @@ use std::fs::{metadata, File};
 use std::io::{self, Read, Write};
 use std::path::Path;
 
-use async_std::fs as asyncfs;
 use libp2p::core::PeerId;
 use tempfile::NamedTempFile;
+use tokio_util::compat::TokioAsyncReadCompatExt;
 use walkdir::WalkDir;
 
 use crate::p2p::transfer::directory::{MaybeTaskHandle, ZipStream};
@@ -46,7 +46,7 @@ impl Payload {
 
 pub enum StreamOption {
     Zip(ZipStream, MaybeTaskHandle),
-    File(asyncfs::File),
+    File(Box<dyn futures::AsyncRead + Send + Unpin>),
 }
 
 #[derive(Debug, Clone)]
@@ -108,10 +108,14 @@ impl FileToSend {
                 Ok(StreamOption::Zip(zip_stream, handle))
             }
             Payload::Text(text) => {
-                let file = asyncfs::File::from(Self::create_temp_file(text)?);
-                Ok(StreamOption::File(file))
+                let std_file = Self::create_temp_file(text)?;
+                let tokio_file = tokio::fs::File::from_std(std_file);
+                Ok(StreamOption::File(Box::new(tokio_file.compat())))
             }
-            Payload::File(path) => Ok(StreamOption::File(asyncfs::File::open(path).await?)),
+            Payload::File(path) => {
+                let tokio_file = tokio::fs::File::open(path).await?;
+                Ok(StreamOption::File(Box::new(tokio_file.compat())))
+            }
         }
     }
 
@@ -184,14 +188,17 @@ pub async fn get_hash_from_payload(payload: &Payload) -> Result<(String, u64), i
             Ok(("directory".to_string(), size))
         }
         Payload::File(path) => {
-            let file = asyncfs::File::open(&path).await?;
-            let (hash, _) = hash_contents(file).await?;
-            let meta = asyncfs::metadata(path).await?;
+            let tokio_file = tokio::fs::File::open(&path).await?;
+            let compat_file = tokio_file.compat();
+            let meta = tokio::fs::metadata(path).await?;
+            let (hash, _) = hash_contents(compat_file).await?;
             Ok((hash, meta.len()))
         }
         Payload::Text(text) => {
-            let file = asyncfs::File::from(FileToSend::create_temp_file(text)?);
-            let (hash, _) = hash_contents(file).await?;
+            let std_file = FileToSend::create_temp_file(text)?;
+            let tokio_file = tokio::fs::File::from_std(std_file);
+            let compat_file = tokio_file.compat();
+            let (hash, _) = hash_contents(compat_file).await?;
             Ok((hash, text.len() as u64))
         }
     }

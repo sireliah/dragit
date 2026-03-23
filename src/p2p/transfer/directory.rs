@@ -4,18 +4,18 @@ use std::path::Path;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
-use async_std::channel::Sender;
-use async_std::fs::{create_dir, create_dir_all};
-use async_std::io::BufReader;
-use async_std::task::{spawn, JoinHandle};
+use async_channel::Sender;
 use async_zip::error::ZipError;
 use async_zip::read::stream::ZipFileReader;
 use async_zip::write::ZipFileWriter;
 use async_zip::Compression;
 use async_zip::ZipEntryBuilder;
+use futures::io::BufReader;
 use futures::AsyncRead;
 use tokio::fs::File;
+use tokio::fs::{create_dir, create_dir_all};
 use tokio::io::{copy_buf, duplex, BufReader as TokioBufReader, DuplexStream};
+use tokio::task::{spawn, JoinHandle};
 use tokio_util::compat::{Compat, FuturesAsyncReadCompatExt, TokioAsyncReadCompatExt};
 use walkdir::WalkDir;
 

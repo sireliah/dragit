@@ -3,12 +3,14 @@ use std::io::{Error, ErrorKind, Read, Write};
 use std::path::{Path, PathBuf};
 
 use directories_next::{BaseDirs, UserDirs};
+use libp2p::identity::Keypair;
 use serde::{Deserialize, Serialize};
 use toml;
 
 // Unassigned in IANA
 const DEFAULT_LISTEN_PORT: u16 = 36571;
 const DEFAULT_FIREWALL_CHECKED: bool = false;
+const IDENTITY_FILE: &str = "identity.key";
 
 fn generate_full_path(path: &Path, name: &str) -> Result<String, Error> {
     // If file or dir already exists in the target directory, create a path extended with a timestamp
@@ -57,6 +59,7 @@ fn default_firewall_checked() -> bool {
 pub struct UserConfig {
     conf: Config,
     conf_path: PathBuf,
+    config_dir: PathBuf,
 }
 
 impl UserConfig {
@@ -66,14 +69,16 @@ impl UserConfig {
         let base_config_path = base_dirs.config_dir();
 
         let path = Path::new(base_config_path);
-        let mut joined_path = path.join("dragit");
+        let config_dir = path.join("dragit");
 
-        if !joined_path.exists() {
-            info!("Creating {:?} directory", joined_path);
-            fs::create_dir(&joined_path)?;
+        if !config_dir.exists() {
+            info!("Creating {:?} directory", config_dir);
+            fs::create_dir(&config_dir)?;
         }
 
+        let mut joined_path = config_dir.clone();
         joined_path.push("config.toml");
+
         if !joined_path.exists() {
             info!("Creating default {:?} file", joined_path);
 
@@ -91,6 +96,7 @@ impl UserConfig {
             let mut file = fs::File::create(&joined_path)?;
             file.write_all(&toml.as_bytes())?;
         }
+
         let mut file = fs::File::open(&joined_path)?;
         let mut contents = String::new();
         file.read_to_string(&mut contents)?;
@@ -108,8 +114,44 @@ impl UserConfig {
 
         Ok(UserConfig {
             conf,
-            conf_path: joined_path.to_owned(),
+            conf_path: joined_path,
+            config_dir,
         })
+    }
+
+    /// Load the persisted libp2p keypair from disk, or generate and save a new one.
+    ///
+    /// The key is stored as raw protobuf bytes in `~/.config/dragit/identity.key`.
+    /// Keeping a stable identity across restarts prevents `WrongPeerId` errors that
+    /// occur when a remote peer cached an mDNS-announced address that still embeds
+    /// the old (now gone) PeerId.
+    pub fn get_or_create_keypair(&self) -> Result<Keypair, Error> {
+        let key_path = self.config_dir.join(IDENTITY_FILE);
+
+        if key_path.exists() {
+            info!("Loading existing keypair from {:?}", key_path);
+            let mut file = fs::File::open(&key_path)?;
+            let mut bytes = Vec::new();
+            file.read_to_end(&mut bytes)?;
+            Keypair::from_protobuf_encoding(&bytes).map_err(|e| {
+                Error::new(
+                    ErrorKind::InvalidData,
+                    format!("Failed to decode keypair: {:?}", e),
+                )
+            })
+        } else {
+            info!("Generating new keypair, saving to {:?}", key_path);
+            let keypair = Keypair::generate_ed25519();
+            let bytes = keypair.to_protobuf_encoding().map_err(|e| {
+                Error::new(
+                    ErrorKind::Other,
+                    format!("Failed to encode keypair: {:?}", e),
+                )
+            })?;
+            let mut file = fs::File::create(&key_path)?;
+            file.write_all(&bytes)?;
+            Ok(keypair)
+        }
     }
 
     pub fn get_downloads_dir(&self) -> PathBuf {
@@ -195,6 +237,7 @@ mod tests {
 
         assert_eq!(result, "/home/user/some_directory");
     }
+
     #[test]
     fn test_generate_full_dir_path_when_dir_exists() {
         let dir = tempdir().unwrap();

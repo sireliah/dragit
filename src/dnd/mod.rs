@@ -13,7 +13,7 @@ mod notifications;
 use glib::Continue;
 use gtk::prelude::GtkWindowExt;
 
-use async_std::channel::{bounded, Receiver, Sender};
+use async_channel::{bounded, Receiver, Sender};
 
 #[cfg(target_os = "linux")]
 use crate::firewall::Firewall;
