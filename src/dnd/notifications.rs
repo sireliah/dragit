@@ -58,18 +58,47 @@ impl ProgressNotification {
         self.progress_bar.set_text(Some(text));
     }
 
-    pub fn show_incoming(&self, main_overlay: &gtk::Overlay, size: f64, total: f64) {
-        self.show_progress(main_overlay, size, total, "Receiving file");
+    pub fn show_incoming(
+        &self,
+        main_overlay: &gtk::Overlay,
+        size: f64,
+        total: f64,
+        speed_bps: Option<f64>,
+    ) {
+        let text = format!("Receiving file: {}", format_speed(speed_bps));
+        self.show_progress(main_overlay, size, total, &text);
     }
 
-    pub fn show_outgoing(&self, main_overlay: &gtk::Overlay, size: f64, total: f64) {
-        self.show_progress(main_overlay, size, total, "Sending file");
+    pub fn show_outgoing(
+        &self,
+        main_overlay: &gtk::Overlay,
+        size: f64,
+        total: f64,
+        speed_bps: Option<f64>,
+    ) {
+        let text = format!("Sending file: {}", format_speed(speed_bps));
+        self.show_progress(main_overlay, size, total, &text);
     }
 
     pub fn hide(&self, main_overlay: &gtk::Overlay) {
         main_overlay.reorder_overlay(&self.overlay, 0);
 
         self.revealer.set_reveal_child(false)
+    }
+}
+
+fn format_speed(speed_bps: Option<f64>) -> String {
+    match speed_bps {
+        None => String::new(),
+        Some(bps) => {
+            if bps >= 1_000_000.0 {
+                format!("{:.1} MB/s", bps / 1_000_000.0)
+            } else if bps >= 1_000.0 {
+                format!("{:.1} KB/s", bps / 1_000.0)
+            } else {
+                format!("{:.0} B/s", bps)
+            }
+        }
     }
 }
 

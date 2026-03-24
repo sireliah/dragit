@@ -1,4 +1,5 @@
 use std::task::{Context, Poll};
+use std::time::Instant;
 use std::{io, pin::Pin};
 
 use async_channel::Sender;
@@ -15,6 +16,7 @@ pub struct ProgressReader<R> {
     current_size: usize,
     sender_queue: Sender<PeerEvent>,
     direction: Direction,
+    last_notify: Option<Instant>,
 }
 
 impl<R: AsyncRead + Unpin> ProgressReader<R> {
@@ -31,6 +33,7 @@ impl<R: AsyncRead + Unpin> ProgressReader<R> {
             current_size: 0,
             sender_queue,
             direction,
+            last_notify: None,
         }
     }
 
@@ -53,12 +56,29 @@ impl<R: AsyncRead + Unpin> AsyncRead for ProgressReader<R> {
             self.counter += n;
             self.current_size += n;
             if util::time_to_notify(self.current_size, self.size) {
+                let now = Instant::now();
+
+                // Compute bytes/sec from the bytes accumulated since the last
+                // notification and the wall-clock time elapsed since then.
+                // The first notification has no previous timestamp so speed is
+                // reported as None rather than a meaningless value.
+                let speed_bps: Option<f64> = self.last_notify.map(|prev| {
+                    let elapsed = now.duration_since(prev).as_secs_f64();
+                    if elapsed > 0.0 {
+                        self.current_size as f64 / elapsed
+                    } else {
+                        0.0
+                    }
+                });
+
+                self.last_notify = Some(now);
+
                 let sender = self.sender_queue.clone();
                 let counter = self.counter;
                 let size = self.size;
                 let direction = self.direction.clone();
                 tokio::spawn(async move {
-                    util::notify_progress(&sender, counter, size, &direction).await;
+                    util::notify_progress(&sender, counter, size, &direction, speed_bps).await;
                 });
                 self.current_size = 0;
             }

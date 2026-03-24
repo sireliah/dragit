@@ -3,6 +3,7 @@ use std::io::{Error, ErrorKind, Result as IOResult};
 use std::path::Path;
 use std::pin::Pin;
 use std::task::{Context, Poll};
+use std::time::Instant;
 
 use async_channel::Sender;
 use async_zip::error::ZipError;
@@ -192,6 +193,8 @@ pub async fn unzip_stream(
             .unwrap_or(Path::new(&target_path));
         let mut zip = ZipFileReader::new(&mut compat_reader);
         let mut counter: usize = 0;
+        let mut last_notify: Option<Instant> = None;
+        let mut bytes_since_notify: usize = 0;
         while !zip.finished() {
             if let Some(reader) = zip.entry_reader().await.map_err(|err| zip_error(err))? {
                 let entry = reader.entry();
@@ -218,10 +221,22 @@ pub async fn unzip_stream(
                     let file_size = usize::try_from(meta.len())
                         .map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?;
                     counter += file_size;
+                    bytes_since_notify += file_size;
 
-                    // Limit progress events, because they seem to be to be inefficient at gtk level
+                    // Limit progress events, because they seem to be inefficient at gtk level
                     if (file_size as f32 / size as f32) > 0.01 {
-                        notify_progress(&sender_queue, counter, size, &direction).await;
+                        let now = Instant::now();
+                        let speed_bps = last_notify.map(|prev| {
+                            let elapsed = now.duration_since(prev).as_secs_f64();
+                            if elapsed > 0.0 {
+                                bytes_since_notify as f64 / elapsed
+                            } else {
+                                0.0
+                            }
+                        });
+                        last_notify = Some(now);
+                        bytes_since_notify = 0;
+                        notify_progress(&sender_queue, counter, size, &direction, speed_bps).await;
                     }
                 }
             }

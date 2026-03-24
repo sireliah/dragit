@@ -64,13 +64,13 @@ pub fn build_window(
 
     let window_weak = window.downgrade();
     gtk_receiver.attach(None, move |values| match values {
-        PeerEvent::TransferProgress((v, t, direction)) => {
+        PeerEvent::TransferProgress((v, t, direction, speed_bps)) => {
             alert_notif.hide(&overlay);
             let size = v as f64;
             let total = t as f64;
             match direction {
-                Direction::Incoming => progress.show_incoming(&overlay, size, total),
-                Direction::Outgoing => progress.show_outgoing(&overlay, size, total),
+                Direction::Incoming => progress.show_incoming(&overlay, size, total, speed_bps),
+                Direction::Outgoing => progress.show_outgoing(&overlay, size, total, speed_bps),
             }
             Continue(true)
         }

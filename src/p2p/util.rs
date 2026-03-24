@@ -28,8 +28,9 @@ pub async fn notify_progress(
     counter: usize,
     total_size: usize,
     direction: &Direction,
+    speed_bps: Option<f64>,
 ) {
-    let event = PeerEvent::TransferProgress((counter, total_size, direction.to_owned()));
+    let event = PeerEvent::TransferProgress((counter, total_size, direction.to_owned(), speed_bps));
     notify(sender_queue, event).await;
 }
 

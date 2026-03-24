@@ -125,7 +125,7 @@ impl TransferPayload {
         let counter = futio::copy(&mut progress_reader, &mut buf_file).await?;
         buf_file.close().await?;
 
-        util::notify_progress(&self.sender_queue, counter as usize, size, direction).await;
+        util::notify_progress(&self.sender_queue, counter as usize, size, direction, None).await;
 
         // Recover the HashingReader from inside the ProgressReader, then
         // unwrap the Take to finalise the digest.
@@ -198,7 +198,7 @@ impl TransferPayload {
             TransferCommand::Accept(hash) => {
                 Answer::write(&mut socket, true, hash).await?;
 
-                util::notify_progress(&self.sender_queue, 0, meta.size, &direction).await;
+                util::notify_progress(&self.sender_queue, 0, meta.size, &direction, None).await;
 
                 let (counter, path) = match self
                     .read_file_payload(socket, &meta, meta.size, &direction)
@@ -290,7 +290,7 @@ impl TransferOut {
         direction: Direction,
     ) -> Result<(), io::Error> {
         let mut writer = futio::BufWriter::new(&mut socket);
-        util::notify_progress(&self.sender_queue, 0, size, &direction).await;
+        util::notify_progress(&self.sender_queue, 0, size, &direction, None).await;
 
         // HashingReader sits between the file and the network writer so that
         // we compute the digest in the same pass as the transfer.

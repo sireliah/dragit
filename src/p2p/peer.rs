@@ -23,7 +23,7 @@ pub enum PeerEvent {
     PeersUpdated(CurrentPeers),
     WaitingForAnswer,
     TransferRejected,
-    TransferProgress((usize, usize, Direction)),
+    TransferProgress((usize, usize, Direction, Option<f64>)),
     TransferCompleted,
     FileCorrect(String, Payload),
     FileIncorrect,
