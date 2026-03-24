@@ -16,7 +16,7 @@ use crate::user_data::UserConfig;
 pub use commands::TransferCommand;
 pub use discovery::{DiscoveryBehaviour, DiscoveryEvent};
 pub use peer::{CurrentPeers, OperatingSystem, Peer, PeerEvent, TransferType};
-pub use transfer::metadata::hash_contents;
+
 pub use transfer::{FileToSend, Payload, TransferBehaviour, TransferOut, TransferPayload};
 
 #[derive(libp2p::swarm::NetworkBehaviour)]
@@ -130,28 +130,15 @@ async fn execute_swarm(
                     }
                     SwarmEvent::Behaviour(MyBehaviourEvent::Transfer(event)) => {
                         info!("Transfer event: {}", event);
-                        match event.check_file().await {
-                            Ok(_) => {
-                                info!("File correct");
-                                if let Err(e) = event.cleanup() {
-                                    error!("Could not clean up file: {:?}", e);
-                                };
-                                if let Err(e) = event
-                                    .sender_queue
-                                    .try_send(PeerEvent::FileCorrect(event.name, event.payload))
-                                {
-                                    error!("{:?}", e);
-                                }
-                            }
-                            Err(e) => {
-                                warn!("File not correct: {:?}", e);
-                                if let Err(e) = event.sender_queue.try_send(PeerEvent::FileIncorrect) {
-                                    error!("{:?}", e);
-                                }
-                                if let Err(e) = event.cleanup() {
-                                    error!("Could not clean up file: {:?}", e);
-                                };
-                            }
+                        // Hash verified in-flight during transfer; no second disk read needed.
+                        if let Err(e) = event.cleanup() {
+                            error!("Could not clean up file: {:?}", e);
+                        };
+                        if let Err(e) = event
+                            .sender_queue
+                            .try_send(PeerEvent::FileCorrect(event.name, event.payload))
+                        {
+                            error!("{:?}", e);
                         }
                     }
                     SwarmEvent::Behaviour(MyBehaviourEvent::TransferOut(event)) => {

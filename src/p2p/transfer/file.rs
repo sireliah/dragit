@@ -10,7 +10,6 @@ use tokio_util::compat::TokioAsyncReadCompatExt;
 use walkdir::WalkDir;
 
 use crate::p2p::transfer::directory::{MaybeTaskHandle, ZipStream};
-use crate::p2p::transfer::metadata::hash_contents;
 use crate::p2p::TransferType;
 
 #[derive(Debug, Clone)]
@@ -100,6 +99,30 @@ impl FileToSend {
         }
     }
 
+    /// Returns the byte size of the payload without reading file contents.
+    /// For files and directories this is a metadata-only operation (stat or walkdir).
+    /// For text payloads the size is derived from the in-memory string length.
+    pub async fn get_size(&self) -> Result<u64, io::Error> {
+        match &self.payload {
+            Payload::File(path) => {
+                let meta = tokio::fs::metadata(path).await?;
+                Ok(meta.len())
+            }
+            Payload::Dir(path) => {
+                let mut total: u64 = 0;
+                for entry in WalkDir::new(path) {
+                    let entry = entry?;
+                    match metadata(entry.path()) {
+                        Ok(m) => total += m.len(),
+                        Err(e) => warn!("Can't estimate size of {:?}, {}", entry.path(), e),
+                    }
+                }
+                Ok(total)
+            }
+            Payload::Text(text) => Ok(text.len() as u64),
+        }
+    }
+
     pub async fn get_file_stream(&self) -> Result<StreamOption, io::Error> {
         match &self.payload {
             Payload::Dir(path) => {
@@ -117,10 +140,6 @@ impl FileToSend {
                 Ok(StreamOption::File(Box::new(tokio_file.compat())))
             }
         }
-    }
-
-    pub async fn calculate_hash(&self) -> Result<(String, u64), io::Error> {
-        get_hash_from_payload(&self.payload).await
     }
 
     /// Creates temporary file from text payload, so this kind of payload
@@ -164,42 +183,6 @@ impl fmt::Display for Payload {
             Self::Dir(path) => write!(f, "DirPayload({})", path),
             Self::File(path) => write!(f, "FilePayload({})", path),
             Self::Text(text) => write!(f, "TextPayload({})", text.len()),
-        }
-    }
-}
-
-fn check_directory_size(path: &str) -> Result<u64, io::Error> {
-    let mut total_size = 0;
-    for entry in WalkDir::new(path) {
-        let entry = entry?;
-        match metadata(entry.path()) {
-            Ok(meta) => total_size += meta.len(),
-            Err(e) => warn!("Can't estimate size of {:?}, {}", entry.path(), e),
-        };
-    }
-    Ok(total_size)
-}
-
-pub async fn get_hash_from_payload(payload: &Payload) -> Result<(String, u64), io::Error> {
-    match payload {
-        Payload::Dir(path) => {
-            let size = check_directory_size(path)?;
-            // Zip internally maintains the (CRC) hash of the zipped content, no need to calculate the hash here
-            Ok(("directory".to_string(), size))
-        }
-        Payload::File(path) => {
-            let tokio_file = tokio::fs::File::open(&path).await?;
-            let compat_file = tokio_file.compat();
-            let meta = tokio::fs::metadata(path).await?;
-            let (hash, _) = hash_contents(compat_file).await?;
-            Ok((hash, meta.len()))
-        }
-        Payload::Text(text) => {
-            let std_file = FileToSend::create_temp_file(text)?;
-            let tokio_file = tokio::fs::File::from_std(std_file);
-            let compat_file = tokio_file.compat();
-            let (hash, _) = hash_contents(compat_file).await?;
-            Ok((hash, text.len() as u64))
         }
     }
 }

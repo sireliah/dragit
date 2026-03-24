@@ -3,6 +3,7 @@ use std::{io, pin::Pin};
 
 use async_channel::Sender;
 use futures::prelude::*;
+use md5::{Digest, Md5};
 
 use crate::p2p::peer::{Direction, PeerEvent};
 use crate::p2p::util;
@@ -32,6 +33,13 @@ impl<R: AsyncRead + Unpin> ProgressReader<R> {
             direction,
         }
     }
+
+    /// Consumes the `ProgressReader` and returns the wrapped inner reader.
+    /// Use this after the copy is complete to recover e.g. a [`HashingReader`]
+    /// and call its `finish()` method.
+    pub fn into_inner(self) -> R {
+        self.inner
+    }
 }
 
 impl<R: AsyncRead + Unpin> AsyncRead for ProgressReader<R> {
@@ -54,6 +62,43 @@ impl<R: AsyncRead + Unpin> AsyncRead for ProgressReader<R> {
                 });
                 self.current_size = 0;
             }
+        }
+        result
+    }
+}
+
+/// Wraps an `AsyncRead` and computes an MD5 digest of all bytes that pass
+/// through it. Call [`HashingReader::finish`] after the stream reaches EOF
+/// to obtain the hex-encoded digest.
+pub struct HashingReader<R> {
+    inner: R,
+    state: Md5,
+}
+
+impl<R: AsyncRead + Unpin> HashingReader<R> {
+    pub fn new(inner: R) -> Self {
+        Self {
+            inner,
+            state: Md5::new(),
+        }
+    }
+
+    /// Consumes the reader and returns the hex-encoded MD5 digest of all bytes
+    /// that were read through it so far.
+    pub fn finish(self) -> String {
+        hex::encode(self.state.finalize())
+    }
+}
+
+impl<R: AsyncRead + Unpin> AsyncRead for HashingReader<R> {
+    fn poll_read(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut [u8],
+    ) -> Poll<io::Result<usize>> {
+        let result = Pin::new(&mut self.inner).poll_read(cx, buf);
+        if let Poll::Ready(Ok(n)) = &result {
+            self.state.update(&buf[..*n]);
         }
         result
     }

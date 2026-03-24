@@ -17,9 +17,9 @@ use tokio::fs::OpenOptions;
 use crate::p2p::commands::TransferCommand;
 use crate::p2p::peer::{Direction, PeerEvent};
 use crate::p2p::transfer::directory::unzip_stream;
-use crate::p2p::transfer::file::{get_hash_from_payload, FileToSend, Payload, StreamOption};
-use crate::p2p::transfer::metadata::{Answer, Metadata};
-use crate::p2p::transfer::reader::ProgressReader;
+use crate::p2p::transfer::file::{FileToSend, Payload, StreamOption};
+use crate::p2p::transfer::metadata::{Answer, Metadata, Trailer};
+use crate::p2p::transfer::reader::{HashingReader, ProgressReader};
 use crate::p2p::util::{self, TSocketAlias};
 use crate::p2p::TransferType;
 use crate::user_data;
@@ -50,16 +50,6 @@ pub struct TransferPayload {
 }
 
 impl TransferPayload {
-    pub async fn check_file(&self) -> Result<(), io::Error> {
-        let (hash_from_disk, _) = get_hash_from_payload(&self.payload).await?;
-
-        if hash_from_disk != self.hash {
-            Err(io::Error::new(ErrorKind::InvalidData, "File corrupted!"))
-        } else {
-            Ok(())
-        }
-    }
-
     pub fn cleanup(&self) -> Result<(), io::Error> {
         if let Payload::Text(_) = self.payload {
             return match &self.target_path {
@@ -75,10 +65,9 @@ impl TransferPayload {
 
     async fn notify_incoming_file_event(&self, meta: &Metadata) {
         let name = meta.name.to_string();
-        let hash = meta.hash.to_string();
         let size = meta.size;
         let transfer_type = meta.transfer_type;
-        let event = PeerEvent::FileIncoming(name, hash, size, transfer_type);
+        let event = PeerEvent::FileIncoming(name, String::new(), size, transfer_type);
         util::notify(&self.sender_queue, event).await;
     }
 
@@ -102,10 +91,13 @@ impl TransferPayload {
         }
     }
 
+    /// Stream file data from `reader` into `path`, computing an MD5 hash
+    /// in-flight, then read the sender's trailer and verify the hash matches.
+    /// Returns the number of bytes written.
     async fn stream_file(
         &mut self,
         path: &str,
-        reader: impl AsyncRead + Unpin,
+        mut socket: impl TSocketAlias,
         size: usize,
         direction: &Direction,
     ) -> Result<usize, io::Error> {
@@ -121,12 +113,40 @@ impl TransferPayload {
         use tokio_util::compat::TokioAsyncWriteCompatExt;
         let mut buf_file = futio::BufWriter::new(file.compat_write());
 
+        // .take(size) bounds the copy to exactly the file bytes so that the
+        // socket is not read past the end of the data into the trailer region.
+        // HashingReader observes every byte in that bounded window.
+        // ProgressReader is stacked on top so all three run in one copy pass.
+        let bounded = (&mut socket).take(size as u64);
+        let hashing = HashingReader::new(bounded);
         let mut progress_reader =
-            ProgressReader::new(reader, size, self.sender_queue.clone(), direction.clone());
+            ProgressReader::new(hashing, size, self.sender_queue.clone(), direction.clone());
+
         let counter = futio::copy(&mut progress_reader, &mut buf_file).await?;
         buf_file.close().await?;
 
         util::notify_progress(&self.sender_queue, counter as usize, size, direction).await;
+
+        // Recover the HashingReader from inside the ProgressReader, then
+        // unwrap the Take to finalise the digest.
+        let local_hash = progress_reader.into_inner().finish();
+        info!("Computed local hash: {}", local_hash);
+
+        // The sender writes a fixed-size trailer packet right after the data.
+        // The socket is still open and positioned right at the trailer now.
+        let sender_hash = Trailer::read(&mut socket).await?;
+        info!("Received sender hash: {}", sender_hash);
+
+        if local_hash != sender_hash {
+            return Err(io::Error::new(
+                ErrorKind::InvalidData,
+                format!(
+                    "Hash mismatch: expected {}, got {}",
+                    sender_hash, local_hash
+                ),
+            ));
+        }
+
         Ok(counter as usize)
     }
 
@@ -150,15 +170,14 @@ impl TransferPayload {
         size: usize,
         direction: &Direction,
     ) -> Result<(usize, String), io::Error> {
-        let reader = futures::io::BufReader::new(socket);
-
         let path =
             user_data::get_target_path(&meta.get_safe_file_name(), self.target_path.as_ref())?;
 
         let counter = match meta.transfer_type {
-            TransferType::File => self.stream_file(&path, reader, size, direction).await?,
-            TransferType::Text => self.stream_file(&path, reader, size, direction).await?,
+            TransferType::File => self.stream_file(&path, socket, size, direction).await?,
+            TransferType::Text => self.stream_file(&path, socket, size, direction).await?,
             TransferType::Dir => {
+                let reader = futures::io::BufReader::new(socket);
                 self.stream_dir(path.clone(), reader, size, direction)
                     .await?
             }
@@ -176,7 +195,7 @@ impl TransferPayload {
         let rec_cp = Arc::clone(&self.receiver);
 
         match self.block_for_answer(rec_cp).await {
-            TransferCommand::Accept(hash) if hash == meta.hash => {
+            TransferCommand::Accept(hash) => {
                 Answer::write(&mut socket, true, hash).await?;
 
                 util::notify_progress(&self.sender_queue, 0, meta.size, &direction).await;
@@ -188,13 +207,19 @@ impl TransferPayload {
                     Ok((counter, path)) => (counter, path),
                     Err(err) => {
                         error!("Reading payload failed: {:?}", err);
-                        util::notify_error(&self.sender_queue, "Reading payload failed").await;
+                        if err.kind() == ErrorKind::InvalidData {
+                            util::notify(&self.sender_queue, PeerEvent::FileIncorrect).await;
+                        } else {
+                            util::notify_error(&self.sender_queue, "Reading payload failed").await;
+                        }
                         return Err(err);
                     }
                 };
 
                 self.name = meta.name;
-                self.hash = meta.hash;
+                // hash is now verified in-flight; store an empty sentinel so
+                // the field stays populated for Display / callers that read it.
+                self.hash = String::new();
                 self.payload = Payload::new(meta.transfer_type, path.clone())?;
                 self.size_bytes = counter;
 
@@ -202,14 +227,6 @@ impl TransferPayload {
                 self.target_path = Some(path);
 
                 Ok(())
-            }
-            TransferCommand::Accept(hash) => {
-                warn!("Accepted hash does not match: {} {}", hash, meta.hash);
-                Answer::write(&mut socket, false, hash).await?;
-                Err(io::Error::new(
-                    ErrorKind::PermissionDenied,
-                    "Hash does not match",
-                ))
             }
             TransferCommand::Deny(hash) => {
                 warn!("Denied hash: {}", hash);
@@ -225,7 +242,7 @@ impl UpgradeInfo for TransferPayload {
     type InfoIter = iter::Once<Self::Info>;
 
     fn protocol_info(&self) -> Self::InfoIter {
-        std::iter::once("/transfer/1.1")
+        std::iter::once("/transfer/1.2")
     }
 }
 
@@ -262,19 +279,35 @@ impl TransferOut {
         }
     }
 
+    /// Stream `file` to `socket`, computing an MD5 hash in-flight, then send
+    /// a trailer packet containing the hash so the receiver can verify without
+    /// re-reading from disk.
     async fn stream_data(
         &self,
-        socket: impl TSocketAlias,
+        mut socket: impl TSocketAlias,
         file: impl AsyncRead + Unpin,
         size: usize,
         direction: Direction,
     ) -> Result<(), io::Error> {
-        let mut writer = futio::BufWriter::new(socket);
+        let mut writer = futio::BufWriter::new(&mut socket);
         util::notify_progress(&self.sender_queue, 0, size, &direction).await;
 
-        let mut reader = ProgressReader::new(file, size, self.sender_queue.clone(), direction);
+        // HashingReader sits between the file and the network writer so that
+        // we compute the digest in the same pass as the transfer.
+        let hashing = HashingReader::new(file);
+        let mut reader = ProgressReader::new(hashing, size, self.sender_queue.clone(), direction);
+
         futio::copy(&mut reader, &mut writer).await?;
-        writer.close().await?;
+        // Flush the BufWriter's internal buffer to the socket without closing
+        // the underlying connection — the trailer still needs to be written.
+        writer.flush().await?;
+
+        // Retrieve the digest now that all bytes have been written to the socket.
+        let hash = reader.into_inner().finish();
+        info!("Sending trailer hash: {}", hash);
+
+        // Send the trailer so the receiver can verify without a second disk read.
+        Trailer::write(&mut socket, hash).await?;
 
         util::notify_completed(&self.sender_queue).await;
         Ok(())
@@ -286,7 +319,7 @@ impl UpgradeInfo for TransferOut {
     type InfoIter = iter::Once<Self::Info>;
 
     fn protocol_info(&self) -> Self::InfoIter {
-        std::iter::once("/transfer/1.1")
+        std::iter::once("/transfer/1.2")
     }
 }
 

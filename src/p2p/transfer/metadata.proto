@@ -10,9 +10,12 @@ enum TransferType {
 
 message Metadata {
     string name = 1;
-    string hash = 2;
     uint64 size = 3;
     TransferType transfer_type = 4;
+}
+
+message Trailer {
+    string hash = 1;
 }
 
 message Answer {
