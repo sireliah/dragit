@@ -84,5 +84,5 @@ pub fn setup_logger() {
     env_logger::Builder::from_env(env)
         .is_test(true)
         .try_init()
-        .unwrap();
+        .ok();
 }

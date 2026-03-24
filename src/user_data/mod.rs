@@ -1,3 +1,4 @@
+use std::env;
 use std::fs;
 use std::io::{Error, ErrorKind, Read, Write};
 use std::path::{Path, PathBuf};
@@ -68,8 +69,9 @@ impl UserConfig {
             .ok_or_else(|| Error::new(ErrorKind::Other, "Problem opening base dirs"))?;
         let base_config_path = base_dirs.config_dir();
 
+        let dragit_dir = env::var("DRAGIT_DIR").unwrap_or("dragit".to_string());
         let path = Path::new(base_config_path);
-        let config_dir = path.join("dragit");
+        let config_dir = path.join(dragit_dir);
 
         if !config_dir.exists() {
             info!("Creating {:?} directory", config_dir);

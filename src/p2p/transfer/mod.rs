@@ -3,6 +3,7 @@ pub mod directory;
 pub mod file;
 pub mod metadata;
 pub mod protocol;
+pub mod reader;
 
 pub use behaviour::TransferBehaviour;
 pub use file::{FileToSend, Payload};

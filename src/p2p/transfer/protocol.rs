@@ -19,7 +19,8 @@ use crate::p2p::peer::{Direction, PeerEvent};
 use crate::p2p::transfer::directory::unzip_stream;
 use crate::p2p::transfer::file::{get_hash_from_payload, FileToSend, Payload, StreamOption};
 use crate::p2p::transfer::metadata::{Answer, Metadata};
-use crate::p2p::util::{self, TSocketAlias, CHUNK_SIZE};
+use crate::p2p::transfer::reader::ProgressReader;
+use crate::p2p::util::{self, TSocketAlias};
 use crate::p2p::TransferType;
 use crate::user_data;
 
@@ -104,7 +105,7 @@ impl TransferPayload {
     async fn stream_file(
         &mut self,
         path: &str,
-        mut reader: impl AsyncRead + Unpin,
+        reader: impl AsyncRead + Unpin,
         size: usize,
         direction: &Direction,
     ) -> Result<usize, io::Error> {
@@ -116,37 +117,17 @@ impl TransferPayload {
             .await
             .expect("Opening failed!");
 
-        // Wrap tokio file as futures AsyncWrite
+        // Wrap tokio file as futures AsyncWrite, then buffer writes to disk
         use tokio_util::compat::TokioAsyncWriteCompatExt;
-        let mut compat_file = file.compat_write();
+        let mut buf_file = futio::BufWriter::new(file.compat_write());
 
-        let mut counter: usize = 0;
-        let mut current_size: usize = 0;
-        loop {
-            let mut buff = vec![0u8; CHUNK_SIZE];
-            match reader.read(&mut buff).await {
-                Ok(n) => {
-                    if n > 0 {
-                        counter += n;
-                        current_size += n;
+        let mut progress_reader =
+            ProgressReader::new(reader, size, self.sender_queue.clone(), direction.clone());
+        let counter = futio::copy(&mut progress_reader, &mut buf_file).await?;
+        buf_file.close().await?;
 
-                        compat_file.write(&buff[..n]).await?;
-
-                        if util::time_to_notify(current_size, size) {
-                            util::notify_progress(&self.sender_queue, counter, size, &direction)
-                                .await;
-                            current_size = 0;
-                        }
-                    } else {
-                        compat_file.close().await?;
-                        util::notify_progress(&self.sender_queue, counter, size, &direction).await;
-                        break;
-                    }
-                }
-                Err(e) => return Err(e),
-            }
-        }
-        Ok(counter)
+        util::notify_progress(&self.sender_queue, counter as usize, size, direction).await;
+        Ok(counter as usize)
     }
 
     async fn stream_dir(
@@ -284,34 +265,17 @@ impl TransferOut {
     async fn stream_data(
         &self,
         socket: impl TSocketAlias,
-        mut file: impl AsyncRead + Unpin,
+        file: impl AsyncRead + Unpin,
         size: usize,
         direction: Direction,
     ) -> Result<(), io::Error> {
         let mut writer = futio::BufWriter::new(socket);
         util::notify_progress(&self.sender_queue, 0, size, &direction).await;
-        let mut counter: usize = 0;
-        let mut current_size: usize = 0;
-        loop {
-            let mut buff = vec![0u8; 1024];
-            match file.read(&mut buff).await {
-                Ok(n) if n > 0 => {
-                    writer.write_all(&buff[..n]).await?;
-                    counter += buff.len();
-                    current_size += buff.len();
 
-                    if util::time_to_notify(current_size, size) {
-                        util::notify_progress(&self.sender_queue, counter, size, &direction).await;
-                        current_size = 0;
-                    }
-                }
-                Ok(_) => {
-                    writer.close().await?;
-                    break;
-                }
-                Err(e) => return Err(e),
-            }
-        }
+        let mut reader = ProgressReader::new(file, size, self.sender_queue.clone(), direction);
+        futio::copy(&mut reader, &mut writer).await?;
+        writer.close().await?;
+
         util::notify_completed(&self.sender_queue).await;
         Ok(())
     }

@@ -15,7 +15,7 @@ use super::peer::{Direction, PeerEvent};
 pub trait TSocketAlias: AsyncRead + AsyncWrite + Send + Unpin {}
 impl<T: AsyncRead + AsyncWrite + Send + Unpin> TSocketAlias for T {}
 
-pub const CHUNK_SIZE: usize = 4096;
+pub const CHUNK_SIZE: usize = 1024;
 
 pub async fn notify(sender_queue: &AsyncSender<PeerEvent>, event: PeerEvent) {
     if let Err(err) = sender_queue.to_owned().send(event).await {
