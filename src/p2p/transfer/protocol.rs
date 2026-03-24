@@ -16,7 +16,7 @@ use tokio::fs::OpenOptions;
 
 use crate::p2p::commands::TransferCommand;
 use crate::p2p::peer::{Direction, PeerEvent};
-use crate::p2p::transfer::directory::unzip_stream;
+use crate::p2p::transfer::directory::untar_stream;
 use crate::p2p::transfer::file::{FileToSend, Payload, StreamOption};
 use crate::p2p::transfer::metadata::{Answer, Metadata, Trailer};
 use crate::p2p::transfer::reader::{HashingReader, ProgressReader};
@@ -158,7 +158,7 @@ impl TransferPayload {
         direction: &Direction,
     ) -> Result<usize, io::Error> {
         let sender_copy = self.sender_queue.clone();
-        let task = unzip_stream(path, reader, sender_copy, size, direction.clone()).await?;
+        let task = untar_stream(path, reader, sender_copy, size, direction.clone()).await?;
         let received_bytes = task.await??;
         Ok(received_bytes)
     }
@@ -265,7 +265,7 @@ impl TransferOut {
                     self.stream_data(socket, file, size, direction).await?;
                     Ok(())
                 }
-                StreamOption::Zip(file, task_handle) => {
+                StreamOption::Tar(file, task_handle) => {
                     self.stream_data(socket, file, size, direction).await?;
                     if let Some(handle) = task_handle {
                         let _ = handle.await?;

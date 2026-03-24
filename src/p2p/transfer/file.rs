@@ -4,13 +4,11 @@ use std::fs::{metadata, File};
 use std::io::{self, Read, Write};
 use std::path::Path;
 
+use crate::p2p::transfer::directory::{MaybeTaskHandle, TarStream};
+use crate::p2p::TransferType;
 use libp2p::core::PeerId;
 use tempfile::NamedTempFile;
 use tokio_util::compat::TokioAsyncReadCompatExt;
-use walkdir::WalkDir;
-
-use crate::p2p::transfer::directory::{MaybeTaskHandle, ZipStream};
-use crate::p2p::TransferType;
 
 #[derive(Debug, Clone)]
 pub enum Payload {
@@ -44,7 +42,7 @@ impl Payload {
 }
 
 pub enum StreamOption {
-    Zip(ZipStream, MaybeTaskHandle),
+    Tar(TarStream, MaybeTaskHandle),
     File(Box<dyn futures::AsyncRead + Send + Unpin>),
 }
 
@@ -109,15 +107,21 @@ impl FileToSend {
                 Ok(meta.len())
             }
             Payload::Dir(path) => {
-                let mut total: u64 = 0;
-                for entry in WalkDir::new(path) {
-                    let entry = entry?;
-                    match metadata(entry.path()) {
-                        Ok(m) => total += m.len(),
-                        Err(e) => warn!("Can't estimate size of {:?}, {}", entry.path(), e),
+                fn dir_size(path: &Path) -> u64 {
+                    let mut total = 0u64;
+                    if let Ok(entries) = std::fs::read_dir(path) {
+                        for entry in entries.flatten() {
+                            let p = entry.path();
+                            match std::fs::symlink_metadata(&p) {
+                                Ok(m) if m.is_dir() => total += dir_size(&p),
+                                Ok(m) => total += m.len(),
+                                Err(e) => warn!("Can't estimate size of {:?}: {}", p, e),
+                            }
+                        }
                     }
+                    total
                 }
-                Ok(total)
+                Ok(dir_size(Path::new(path)))
             }
             Payload::Text(text) => Ok(text.len() as u64),
         }
@@ -126,9 +130,9 @@ impl FileToSend {
     pub async fn get_file_stream(&self) -> Result<StreamOption, io::Error> {
         match &self.payload {
             Payload::Dir(path) => {
-                let mut zip_stream = ZipStream::new(path.to_owned());
-                let handle = zip_stream.take_handle();
-                Ok(StreamOption::Zip(zip_stream, handle))
+                let mut tar_stream = TarStream::new(path.to_owned());
+                let handle = tar_stream.take_handle();
+                Ok(StreamOption::Tar(tar_stream, handle))
             }
             Payload::Text(text) => {
                 let std_file = Self::create_temp_file(text)?;

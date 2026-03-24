@@ -140,12 +140,21 @@ fn bench_directory_transfer() {
         // Ensure the empty dir exists (git does not track empty dirs)
         fs::create_dir_all("tests/data/test_dir/empty_dir").unwrap();
 
-        let dir_size: u64 = walkdir::WalkDir::new(&dir_path)
-            .into_iter()
-            .filter_map(|e| e.ok())
-            .filter_map(|e| e.metadata().ok())
-            .map(|m| m.len())
-            .sum();
+        fn dir_size(path: &std::path::Path) -> u64 {
+            let mut total = 0u64;
+            if let Ok(entries) = std::fs::read_dir(path) {
+                for entry in entries.flatten() {
+                    let p = entry.path();
+                    match std::fs::symlink_metadata(&p) {
+                        Ok(m) if m.is_dir() => total += dir_size(&p),
+                        Ok(m) => total += m.len(),
+                        Err(_) => {}
+                    }
+                }
+            }
+            total
+        }
+        let dir_size: u64 = dir_size(std::path::Path::new(&dir_path));
 
         let addr = "/ip4/127.0.0.1/tcp/3011".parse().unwrap();
         swarm1.listen_on(addr).unwrap();
