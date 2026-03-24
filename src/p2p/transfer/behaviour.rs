@@ -17,8 +17,6 @@ use crate::p2p::commands::TransferCommand;
 use crate::p2p::peer::PeerEvent;
 use crate::p2p::transfer::file::{FileToSend, Payload};
 
-const TIMEOUT: u64 = 600;
-
 use crate::p2p::discovery::handler::KeepAliveHandler;
 
 type Handler = KeepAliveHandler<TransferPayload, TransferOut, ProtocolEvent>;
@@ -62,7 +60,6 @@ impl NetworkBehaviour for TransferBehaviour {
         _local_addr: &Multiaddr,
         _remote_addr: &Multiaddr,
     ) -> Result<THandler<Self>, ConnectionDenied> {
-        let timeout = Duration::from_secs(TIMEOUT);
         let tp = TransferPayload {
             name: "default".to_string(),
             hash: "".to_string(),
@@ -72,8 +69,9 @@ impl NetworkBehaviour for TransferBehaviour {
             receiver: Arc::clone(&self.receiver),
             target_path: self.target_path.clone(),
         };
-        let proto = libp2p::swarm::SubstreamProtocol::new(tp, ()).with_timeout(timeout);
-        Ok(Handler::new(proto, timeout))
+        let proto = libp2p::swarm::SubstreamProtocol::new(tp, ())
+            .with_timeout(Duration::from_secs(30 * 365 * 24 * 60 * 60));
+        Ok(Handler::new(proto))
     }
 
     fn handle_established_outbound_connection(
@@ -84,7 +82,6 @@ impl NetworkBehaviour for TransferBehaviour {
         _role_override: libp2p::core::Endpoint,
         _port_use: libp2p::swarm::derive_prelude::PortUse,
     ) -> Result<THandler<Self>, ConnectionDenied> {
-        let timeout = Duration::from_secs(TIMEOUT);
         let tp = TransferPayload {
             name: "default".to_string(),
             hash: "".to_string(),
@@ -94,8 +91,9 @@ impl NetworkBehaviour for TransferBehaviour {
             receiver: Arc::clone(&self.receiver),
             target_path: self.target_path.clone(),
         };
-        let proto = libp2p::swarm::SubstreamProtocol::new(tp, ()).with_timeout(timeout);
-        Ok(Handler::new(proto, timeout))
+        let proto = libp2p::swarm::SubstreamProtocol::new(tp, ())
+            .with_timeout(Duration::from_secs(30 * 365 * 24 * 60 * 60));
+        Ok(Handler::new(proto))
     }
 
     fn on_swarm_event(&mut self, event: FromSwarm) {

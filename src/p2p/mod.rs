@@ -154,15 +154,23 @@ async fn execute_swarm(
 }
 
 fn handle_mdns_event(swarm: &mut Swarm<MyBehaviour>, event: mdns::Event) {
+    let local_peer_id = *swarm.local_peer_id();
     match event {
         mdns::Event::Discovered(list) => {
             for (peer_id, addr) in list {
+                if peer_id == local_peer_id {
+                    info!("Ignoring self-discovery from mDNS: {}", peer_id);
+                    continue;
+                }
                 info!("Discovered peer_id: {}", peer_id);
                 swarm.behaviour_mut().discovery.add_peer(peer_id, addr);
             }
         }
         mdns::Event::Expired(list) => {
             for (peer_id, _addr) in list {
+                if peer_id == local_peer_id {
+                    continue;
+                }
                 info!("Address expired: {:?}", peer_id);
                 match swarm.behaviour_mut().discovery.remove_peer(&peer_id) {
                     Ok(_) => (),

@@ -200,8 +200,8 @@ impl NetworkBehaviour for DiscoveryBehaviour {
             },
             (),
         );
-        let outbound_substream_timeout = Duration::from_secs(2);
-        Ok(Handler::new(substream_proto, outbound_substream_timeout))
+        let substream_proto = substream_proto.with_timeout(Duration::from_secs(2));
+        Ok(Handler::new(substream_proto))
     }
 
     fn handle_established_outbound_connection(
@@ -229,8 +229,8 @@ impl NetworkBehaviour for DiscoveryBehaviour {
             },
             (),
         );
-        let outbound_substream_timeout = Duration::from_secs(2);
-        Ok(Handler::new(substream_proto, outbound_substream_timeout))
+        let substream_proto = substream_proto.with_timeout(Duration::from_secs(2));
+        Ok(Handler::new(substream_proto))
     }
 
     fn on_swarm_event(&mut self, event: FromSwarm) {

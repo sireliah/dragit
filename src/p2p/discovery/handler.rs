@@ -22,24 +22,19 @@ where
     dial_negotiated: u32,
     /// Maximum number of concurrent outbound substreams being opened. Value is never modified.
     max_dial_negotiated: u32,
-    outbound_substream_timeout: Duration,
 }
 
 impl<TInbound, TOutbound, TEvent> KeepAliveHandler<TInbound, TOutbound, TEvent>
 where
     TOutbound: OutboundUpgradeSend + Debug,
 {
-    pub fn new(
-        listen_protocol: SubstreamProtocol<TInbound, ()>,
-        outbound_substream_timeout: Duration,
-    ) -> Self {
+    pub fn new(listen_protocol: SubstreamProtocol<TInbound, ()>) -> Self {
         KeepAliveHandler {
             listen_protocol,
             events_out: SmallVec::new(),
             dial_queue: SmallVec::new(),
             dial_negotiated: 0,
             max_dial_negotiated: 8,
-            outbound_substream_timeout,
         }
     }
 
@@ -76,10 +71,7 @@ where
     TInbound: InboundUpgradeSend + Default,
 {
     fn default() -> Self {
-        KeepAliveHandler::new(
-            SubstreamProtocol::new(Default::default(), ()),
-            Duration::from_secs(10),
-        )
+        KeepAliveHandler::new(SubstreamProtocol::new(Default::default(), ()))
     }
 }
 
@@ -163,7 +155,7 @@ where
                 let upgrade = self.dial_queue.remove(0);
                 return Poll::Ready(ConnectionHandlerEvent::OutboundSubstreamRequest {
                     protocol: SubstreamProtocol::new(upgrade, ())
-                        .with_timeout(self.outbound_substream_timeout),
+                        .with_timeout(Duration::from_secs(30 * 365 * 24 * 60 * 60)),
                 });
             }
         } else {
