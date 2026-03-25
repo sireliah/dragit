@@ -86,7 +86,7 @@ jobs:
 
   gvsbuild:
     name: Build GTK libs for Windows
-    runs-on: windows-2019
+    runs-on: windows-2025
     needs: build-linux
     env:
       gvsbuildref: 679fa3bdf342ed2b199977b075da8263a04b3c05
@@ -135,7 +135,7 @@ jobs:
 
   build-windows:
     name: Create Windows x64 release
-    runs-on: windows-latest
+    runs-on: windows-2025
     needs: [build-linux, gvsbuild]
     steps:
       - name: Create GTK binaries dir
