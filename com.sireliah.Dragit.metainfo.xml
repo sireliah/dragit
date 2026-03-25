@@ -14,6 +14,25 @@
     <p>The file transfer is encrypted and there are no external servers involved - Dragit was designed with privacy in mind.</p>
   </description>
   <releases>
+    <release version="1.0.0" date="2026-03-26">
+        <description>
+        <p>Major update of the network engine with significant performance and stability improvements.</p>
+        <p>**WARNING**: This version is **not backward compatible** with previous versions of Dragit.</p>
+        <p>When transferring files, please make sure you're running the newest version on both machines.</p>
+        <p>Updates:</p>
+        <ul>
+            <li>Optimized single file transfers with around 600% improvement in benchmarks.</li>
+            <li>Optimized directory transfers with around 375% improvement in benchmarks.</li>
+            <li>Changed async runtime from async-std to tokio.</li>
+            <li>Updated libp2p to the newest (0.56.0) version.</li>
+            <li>Switched multiplexing to yamux.</li>
+            <li>Switched async-zip to tokio-tar for directories.</li>
+            <li>Replaced the hash check before the transfer with an incremental one.</li>
+            <li>Included transfer speed in the progress bar.</li>
+            <li>Added error handling for terminated transfers.</li>
+        </ul>
+        </description>
+    </release>
     <release version="0.7.2" date="2026-03-08">
         <description>
         <p>Update of the Flatpak runtime and minor dependencies</p>
