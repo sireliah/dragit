@@ -260,7 +260,7 @@ impl TransferOut {
         info!("File accepted? {:?}", accepted);
 
         if accepted {
-            match self.file.get_file_stream().await? {
+            let result = match self.file.get_file_stream().await? {
                 StreamOption::File(file) => {
                     self.stream_data(socket, file, size, direction).await?;
                     Ok(())
@@ -272,7 +272,13 @@ impl TransferOut {
                     }
                     Ok(())
                 }
+            };
+            if let Err(ref e) = result {
+                error!("Stream data failed: {:?}", e);
+                util::notify_error(&self.sender_queue, "Transfer failed at the receiver end.")
+                    .await;
             }
+            result
         } else {
             util::notify_rejected(&self.sender_queue).await;
             Ok(())

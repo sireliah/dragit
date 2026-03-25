@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 use std::time::Duration;
@@ -6,6 +7,7 @@ use async_channel::{Receiver, Sender};
 use tokio::sync::Mutex;
 
 use libp2p::core::Multiaddr;
+use libp2p::swarm::behaviour::ConnectionClosed;
 use libp2p::swarm::{
     ConnectionDenied, ConnectionId, FromSwarm, NetworkBehaviour, NotifyHandler, THandler,
     THandlerInEvent, THandlerOutEvent, ToSwarm,
@@ -27,6 +29,9 @@ pub struct TransferBehaviour {
     pub sender: Sender<PeerEvent>,
     receiver: Arc<Mutex<Receiver<TransferCommand>>>,
     pub target_path: Option<String>,
+    /// Tracks peers that currently have an outbound transfer in flight,
+    /// so that a sudden ConnectionClosed can be reported to the UI.
+    active_transfers: HashMap<PeerId, FileToSend>,
 }
 
 impl TransferBehaviour {
@@ -41,6 +46,7 @@ impl TransferBehaviour {
             sender,
             receiver,
             target_path,
+            active_transfers: HashMap::new(),
         }
     }
 
@@ -104,6 +110,26 @@ impl NetworkBehaviour for TransferBehaviour {
                     info.peer_id, info.endpoint, info.connection_id
                 )
             }
+            FromSwarm::ConnectionClosed(ConnectionClosed {
+                peer_id,
+                remaining_established,
+                ..
+            }) => {
+                // Only act when this was the very last connection to that peer,
+                // so we don't fire prematurely when there are redundant connections.
+                if remaining_established == 0 {
+                    if let Some(file) = self.active_transfers.remove(&peer_id) {
+                        warn!(
+                            "Connection to peer {} closed while transfer of '{}' was in flight",
+                            peer_id, file.name
+                        );
+                        let _ = self.sender.try_send(PeerEvent::TransferFailed {
+                            file_name: file.name,
+                            reason: "Receiver disconnected during transfer".to_string(),
+                        });
+                    }
+                }
+            }
             FromSwarm::DialFailure(info) => {
                 warn!("Dial failure: {:?}, {:?}", info.peer_id, info.error);
             }
@@ -113,7 +139,7 @@ impl NetworkBehaviour for TransferBehaviour {
 
     fn on_connection_handler_event(
         &mut self,
-        _peer: PeerId,
+        peer: PeerId,
         _connection: ConnectionId,
         event: THandlerOutEvent<Self>,
     ) {
@@ -122,13 +148,20 @@ impl NetworkBehaviour for TransferBehaviour {
                 info!("Inject event: {}", data);
                 self.events.push(ToSwarm::GenerateEvent(data));
             }
-            ProtocolEvent::Sent => {}
+            ProtocolEvent::Sent => {
+                // Transfer completed successfully — remove from the active set so
+                // a subsequent ConnectionClosed doesn't trigger a false error.
+                self.active_transfers.remove(&peer);
+            }
         };
     }
 
     fn poll(&mut self, _: &mut Context) -> Poll<ToSwarm<TransferPayload, THandlerInEvent<Self>>> {
         if let Some(file) = self.payloads.pop() {
             let peer_id = file.peer.clone();
+            // Register as active before handing off to the handler, so that
+            // any ConnectionClosed arriving from this point onwards is caught.
+            self.active_transfers.insert(peer_id, file.clone());
             let transfer = TransferOut {
                 file,
                 sender_queue: self.sender.clone(),

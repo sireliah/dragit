@@ -116,6 +116,16 @@ pub fn build_window(
             }
             Continue(true)
         }
+        PeerEvent::TransferFailed { file_name, reason } => {
+            error!("Transfer of '{}' failed: {}", file_name, reason);
+            progress.progress_bar.set_fraction(0.0);
+            progress.hide(&overlay);
+            error_notif.show_text(
+                &overlay,
+                &format!("Failed to send '{}': {}", file_name, reason),
+            );
+            Continue(true)
+        }
         PeerEvent::Error(error) => {
             error!("Got error: {}", error);
             progress.hide(&overlay);

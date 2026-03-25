@@ -28,6 +28,7 @@ pub enum PeerEvent {
     FileCorrect(String, Payload),
     FileIncorrect,
     FileIncoming(String, String, usize, TransferType),
+    TransferFailed { file_name: String, reason: String },
     Error(String),
 }
 
