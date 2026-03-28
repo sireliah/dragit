@@ -1,6 +1,6 @@
 use std::io::{Error, ErrorKind};
 
-use async_std::channel::Sender as AsyncSender;
+use async_channel::Sender as AsyncSender;
 use futures::prelude::*;
 
 #[cfg(unix)]
@@ -15,7 +15,7 @@ use super::peer::{Direction, PeerEvent};
 pub trait TSocketAlias: AsyncRead + AsyncWrite + Send + Unpin {}
 impl<T: AsyncRead + AsyncWrite + Send + Unpin> TSocketAlias for T {}
 
-pub const CHUNK_SIZE: usize = 4096;
+pub const CHUNK_SIZE: usize = 1024;
 
 pub async fn notify(sender_queue: &AsyncSender<PeerEvent>, event: PeerEvent) {
     if let Err(err) = sender_queue.to_owned().send(event).await {
@@ -28,8 +28,9 @@ pub async fn notify_progress(
     counter: usize,
     total_size: usize,
     direction: &Direction,
+    speed_bps: Option<f64>,
 ) {
-    let event = PeerEvent::TransferProgress((counter, total_size, direction.to_owned()));
+    let event = PeerEvent::TransferProgress((counter, total_size, direction.to_owned(), speed_bps));
     notify(sender_queue, event).await;
 }
 

@@ -5,13 +5,15 @@ use std::{
     time::Duration,
 };
 
-use async_std::channel::Sender;
+use async_channel::Sender;
 use hostname;
-use libp2p::core::{connection::ConnectionId, ConnectedPoint, Multiaddr, PeerId};
+use libp2p::core::Multiaddr;
 use libp2p::swarm::{
     dial_opts::{DialOpts, PeerCondition},
-    NetworkBehaviour, NetworkBehaviourAction, NotifyHandler, PollParameters, SubstreamProtocol,
+    ConnectionDenied, ConnectionId, FromSwarm, NetworkBehaviour, THandler, THandlerInEvent,
+    THandlerOutEvent, ToSwarm,
 };
+use libp2p::PeerId;
 
 use crate::p2p::discovery::handler::KeepAliveHandler;
 use crate::p2p::discovery::protocol::{Discovery, DiscoveryEvent};
@@ -20,7 +22,7 @@ use crate::p2p::peer::{CurrentPeers, OperatingSystem, Peer, PeerEvent};
 type Handler = KeepAliveHandler<Discovery, Discovery, Discovery>;
 
 pub struct DiscoveryBehaviour {
-    events: VecDeque<NetworkBehaviourAction<DiscoveryEvent, Handler>>,
+    events: VecDeque<ToSwarm<DiscoveryEvent, THandlerInEvent<Self>>>,
     peers: HashMap<PeerId, Peer>,
     hostname: String,
     os: OperatingSystem,
@@ -72,15 +74,11 @@ impl DiscoveryBehaviour {
     }
 
     fn dial_peer(&mut self, peer_id: PeerId, addr: Multiaddr, insert_peer: bool) {
-        self.events.push_back(NetworkBehaviourAction::Dial {
+        self.events.push_back(ToSwarm::Dial {
             opts: DialOpts::peer_id(peer_id)
                 .addresses(vec![addr.clone()])
                 .condition(PeerCondition::NotDialing)
                 .build(),
-            // Discovery behaviour doesn't care about closed connections or connection failures,
-            // because dialing is done frequently enough on each peer discovered by mdns.
-            // That is why the default handler is fine to be passed here.
-            handler: Handler::default(),
         });
 
         if insert_peer {
@@ -135,123 +133,142 @@ impl DiscoveryBehaviour {
             error!("Failed to notify the frontend: {:?}", e);
         }
     }
+
+    /// Queue a NotifyHandler event that triggers the discovery substream exchange
+    /// on the given connection. Both inbound and outbound connections call this so
+    /// that discovery succeeds on whichever connection survives simultaneous-dial
+    /// resolution. The handler routes the event into its dial_queue, which opens an
+    /// outbound substream and runs upgrade_outbound (writes first, then reads).
+    /// The remote's handler accepts it as an inbound substream and runs
+    /// upgrade_inbound (reads first, then writes). The two sides never block each
+    /// other waiting for the other to go first.
+    fn queue_discovery_notify(&mut self, peer_id: PeerId, connection_id: ConnectionId) {
+        let event = ToSwarm::NotifyHandler {
+            peer_id,
+            handler: libp2p::swarm::NotifyHandler::One(connection_id),
+            event: Discovery {
+                hostname: self.hostname.clone(),
+                os: self.os,
+            },
+        };
+        self.events.push_back(event);
+    }
 }
 
 impl NetworkBehaviour for DiscoveryBehaviour {
     type ConnectionHandler = Handler;
-    type OutEvent = DiscoveryEvent;
+    type ToSwarm = DiscoveryEvent;
 
-    fn new_handler(&mut self) -> Self::ConnectionHandler {
-        let substream_proto = SubstreamProtocol::new(
+    fn handle_established_inbound_connection(
+        &mut self,
+        connection_id: ConnectionId,
+        peer_id: PeerId,
+        _local_addr: &Multiaddr,
+        remote_addr: &Multiaddr,
+    ) -> Result<THandler<Self>, ConnectionDenied> {
+        info!(
+            "Inbound connection established: peer={:?}, connection={:?}",
+            peer_id, connection_id
+        );
+
+        match self.peers.get_mut(&peer_id) {
+            Some(peer) => {
+                info!("Listener: peer exists, updating address.");
+                peer.address = remote_addr.clone();
+            }
+            None => {
+                info!("Listener: peer not found, adding new one.");
+                let peer = Peer {
+                    name: peer_id.to_base58(),
+                    peer_id,
+                    address: remote_addr.clone(),
+                    hostname: "Not known yet".to_string(),
+                    os: OperatingSystem::Unknown,
+                };
+                self.peers.insert(peer_id, peer);
+            }
+        }
+
+        // The listener side does NOT trigger an outbound substream. It waits
+        // passively for the dialer to open one, which will be handled by
+        // upgrade_inbound (reads the dialer's data, then writes back ours).
+
+        let substream_proto = libp2p::swarm::SubstreamProtocol::new(
             Discovery {
                 hostname: self.hostname.clone(),
                 os: self.os,
             },
             (),
         );
-        let outbound_substream_timeout = Duration::from_secs(2);
-        Self::ConnectionHandler::new(substream_proto, outbound_substream_timeout)
+        let substream_proto = substream_proto.with_timeout(Duration::from_secs(2));
+        Ok(Handler::new(substream_proto))
     }
 
-    fn addresses_of_peer(&mut self, _peer_id: &PeerId) -> Vec<Multiaddr> {
-        Vec::new()
-    }
-
-    fn inject_connection_established(
+    fn handle_established_outbound_connection(
         &mut self,
-        peer_id: &PeerId,
-        c: &ConnectionId,
-        endpoint: &ConnectedPoint,
-        _failed_addresses: Option<&Vec<Multiaddr>>,
-        _other_established: usize,
-    ) {
-        info!("Connection established: {:?}, c: {:?}", endpoint, c);
-        match endpoint {
-            ConnectedPoint::Dialer {
-                address,
-                role_override: _,
-            } => {
-                if let Some(peer) = self.peers.get_mut(peer_id) {
-                    info!("Dialer, updating the address");
-                    peer.address = address.clone();
-                };
-            }
-            ConnectedPoint::Listener {
-                local_addr,
-                send_back_addr,
-            } => {
-                info!(
-                    "Listener: remote: {:?}, local: {:?}",
-                    send_back_addr, local_addr
-                );
-                // Once connection is established, the listener initiates
-                // the connection upgrade handshake.
+        connection_id: ConnectionId,
+        peer_id: PeerId,
+        addr: &Multiaddr,
+        _role_override: libp2p::core::Endpoint,
+        _port_use: libp2p::swarm::derive_prelude::PortUse,
+    ) -> Result<THandler<Self>, ConnectionDenied> {
+        info!("Outbound connection established: peer={:?}", peer_id);
 
-                let event = NetworkBehaviourAction::NotifyHandler {
-                    peer_id: peer_id.to_owned(),
-                    handler: NotifyHandler::One(*c),
-                    event: Discovery {
-                        hostname: self.hostname.clone(),
-                        os: self.os.clone(),
-                    },
-                };
-                self.events.push_back(event);
+        if let Some(peer) = self.peers.get_mut(&peer_id) {
+            info!("Dialer, updating the address");
+            peer.address = addr.clone();
+        }
 
-                match self.peers.get_mut(peer_id) {
-                    Some(peer) => {
-                        info!("Listener: peer exists, updating address.");
-                        peer.address = send_back_addr.to_owned();
-                    }
-                    // It may happen that listener didn't have enough time
-                    // to discover the dialer through mdns, so here we
-                    // make sure to add new peer.
-                    None => {
-                        info!("Listener: peer not found, adding new one.");
-                        let peer = Peer {
-                            name: peer_id.to_base58(),
-                            peer_id: peer_id.clone(),
-                            address: send_back_addr.to_owned(),
-                            hostname: "Not known yet".to_string(),
-                            os: OperatingSystem::Unknown,
-                        };
-                        self.peers.insert(peer_id.to_owned(), peer);
-                    }
+        // Trigger discovery on the outbound connection.
+        self.queue_discovery_notify(peer_id, connection_id);
+
+        let substream_proto = libp2p::swarm::SubstreamProtocol::new(
+            Discovery {
+                hostname: self.hostname.clone(),
+                os: self.os,
+            },
+            (),
+        );
+        let substream_proto = substream_proto.with_timeout(Duration::from_secs(2));
+        Ok(Handler::new(substream_proto))
+    }
+
+    fn on_swarm_event(&mut self, event: FromSwarm) {
+        match event {
+            FromSwarm::ConnectionClosed(info) => {
+                info!("Peer disconnected: {:?}", info.peer_id);
+                self.peers.remove(&info.peer_id);
+
+                if let Err(e) = self.notify_frontend() {
+                    error!("Failed to notify the frontend: {:?}", e);
                 }
             }
-        };
-    }
-
-    fn inject_connection_closed(
-        &mut self,
-        peer: &PeerId,
-        _connection_id: &ConnectionId,
-        _connected_point: &ConnectedPoint,
-        _handler: Handler,
-        _remaining_established: usize,
-    ) {
-        info!("Peer disconnected: {:?}", peer);
-        self.peers.remove(peer);
-
-        if let Err(e) = self.notify_frontend() {
-            error!("Failed to notify the frontend: {:?}", e);
+            FromSwarm::ConnectionEstablished(info) => {
+                info!(
+                    "Connection established event: peer={:?}, endpoint={:?}",
+                    info.peer_id, info.endpoint
+                );
+                let _ = info;
+            }
+            _ => {}
         }
     }
 
-    fn inject_event(&mut self, peer: PeerId, _connection: ConnectionId, event: Discovery) {
+    fn on_connection_handler_event(
+        &mut self,
+        peer: PeerId,
+        _connection: ConnectionId,
+        event: THandlerOutEvent<Self>,
+    ) {
         let message = DiscoveryEvent {
             peer,
             hostname: event.hostname,
             os: event.os,
         };
-        self.events
-            .push_back(NetworkBehaviourAction::GenerateEvent(message));
+        self.events.push_back(ToSwarm::GenerateEvent(message));
     }
 
-    fn poll(
-        &mut self,
-        _: &mut Context<'_>,
-        _: &mut impl PollParameters,
-    ) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ConnectionHandler>> {
+    fn poll(&mut self, _: &mut Context<'_>) -> Poll<ToSwarm<Self::ToSwarm, THandlerInEvent<Self>>> {
         if let Some(event) = self.events.pop_front() {
             Poll::Ready(event)
         } else {

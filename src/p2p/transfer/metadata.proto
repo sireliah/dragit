@@ -2,26 +2,33 @@ syntax = "proto3";
 package dragit.p2p.transfer.metadata;
 
 enum TransferType {
-    FILE = 0;
-    TEXT = 1;
-    DIRECTORY = 2;
-    OTHER = 3;
+  FILE = 0;
+  TEXT = 1;
+  DIRECTORY = 2;
+  OTHER = 3;
 }
 
+// Incoming new transfer announcement.
 message Metadata {
-    string name = 1;
-    string hash = 2;
-    uint64 size = 3;
-    TransferType transfer_type = 4;
+  string name = 1;
+  uint64 size = 3;
+  TransferType transfer_type = 4;
+  // 2 was used for pre-computation of the hash in the past.
+  reserved 2;
+}
+
+// Sent at the end of the transfer to confirm the correctness of the file.
+message Trailer {
+  string hash = 1;
 }
 
 message Answer {
-    // Protobuf 3 uses default values for different data types, including bools.
-    // This means that "true" value is encoded using 2 bytes, but "false" is 0 bytes.
-    // Sending 0 bytes over the socket is problematic, that's why extra field "hash"
-    // was added here. Removing the field will likely cause your connection to hang.
-    //
-    // https://developers.google.com/protocol-buffers/docs/proto3#default
-    bool accepted = 1;
-    string hash = 2;
+  // Protobuf 3 uses default values for different data types, including bools.
+  // This means that "true" value is encoded using 2 bytes, but "false" is 0 bytes.
+  // Sending 0 bytes over the socket is problematic, that's why extra field "hash"
+  // was added here. Removing the field will likely cause your connection to hang.
+  //
+  // https://developers.google.com/protocol-buffers/docs/proto3#default
+  bool accepted = 1;
+  string hash = 2;
 }

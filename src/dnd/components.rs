@@ -2,7 +2,7 @@ use std::error::Error;
 use std::io;
 use std::sync::{Arc, Mutex};
 
-use async_std::channel::Sender;
+use async_channel::Sender;
 
 use std::string::ToString;
 

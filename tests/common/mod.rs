@@ -2,15 +2,13 @@ use std::io::{Error, Read};
 use std::sync::Arc;
 use std::time::Duration;
 
-use async_std::channel::{bounded, Receiver, Sender};
-use async_std::sync::Mutex;
+use async_channel::{bounded, Receiver, Sender};
 use hex;
 use md5::{Digest, Md5};
 use tempfile::{tempdir, TempDir};
+use tokio::sync::Mutex;
 
-use libp2p::{
-    core::transport::Transport, core::upgrade, identity, mplex, noise, tcp, PeerId, Swarm,
-};
+use libp2p::{identity, noise, tcp, yamux, PeerId, Swarm, SwarmBuilder};
 
 use dragit::p2p::transfer::metadata::HASH_BUFFER_SIZE;
 use dragit::p2p::{FileToSend, PeerEvent, TransferBehaviour, TransferCommand};
@@ -52,41 +50,33 @@ pub fn build_swarm() -> (
     let command_receiver = Arc::new(Mutex::new(command_receiver));
 
     let dir = tempdir().unwrap();
+    let target_path = Some(dir.path().to_string_lossy().to_string());
 
-    let transfer_behaviour = TransferBehaviour::new(
-        peer_sender.clone(),
-        command_receiver,
-        Some(dir.path().to_string_lossy().to_string()),
-    );
+    let peer_sender_clone = peer_sender.clone();
+    let command_receiver_clone = Arc::clone(&command_receiver);
+    let target_path_clone = target_path.clone();
 
-    let timeout = Duration::from_secs(60);
-    let transport = tcp::TcpConfig::new().nodelay(true);
-    let mut mplex_config = mplex::MplexConfig::new();
+    let swarm = SwarmBuilder::with_existing_identity(local_keys)
+        .with_tokio()
+        .with_tcp(
+            tcp::Config::default().nodelay(true),
+            noise::Config::new,
+            yamux::Config::default,
+        )
+        .unwrap()
+        .with_behaviour(move |_key| {
+            TransferBehaviour::new(
+                peer_sender_clone.clone(),
+                command_receiver_clone.clone(),
+                target_path_clone.clone(),
+            )
+        })
+        .unwrap()
+        .with_swarm_config(|cfg| cfg.with_idle_connection_timeout(Duration::from_secs(60)))
+        .build();
 
-    let mp = mplex_config
-        .set_max_buffer_size(40960)
-        .set_split_send_size(1024 * 512);
-
-    let noise_keys = noise::Keypair::<noise::X25519Spec>::new()
-        .into_authentic(&local_keys)
-        .unwrap();
-
-    let noise = noise::NoiseConfig::xx(noise_keys).into_authenticated();
-
-    let transport = transport
-        .upgrade(upgrade::Version::V1)
-        .authenticate(noise)
-        .multiplex(mp.clone())
-        .timeout(timeout)
-        .boxed();
     let peer_id = local_peer_id.clone();
-    (
-        peer_id,
-        command_sender,
-        peer_receiver,
-        Swarm::new(transport, transfer_behaviour, local_peer_id),
-        dir, // return tmp dir to test function; after value is dropped, directory will be cleaned up
-    )
+    (peer_id, command_sender, peer_receiver, swarm, dir)
 }
 
 pub fn setup_logger() {
@@ -94,5 +84,5 @@ pub fn setup_logger() {
     env_logger::Builder::from_env(env)
         .is_test(true)
         .try_init()
-        .unwrap();
+        .ok();
 }

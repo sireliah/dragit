@@ -1,17 +1,13 @@
 [package]
 name = "dragit"
-version = "0.7.2"
+version = "1.0.0"
 authors = ["sireliah"]
 edition = "2021"
 build = "build.rs"
 
 [dependencies]
-async-std = { version = "1.11.0", features = [
-    "unstable",
-    "tokio1",
-    "attributes",
-] }
-async_zip = "0.0.9"
+async-channel = "2.3.1"
+tokio-tar = "0.3"
 bytesize = "2.3.1"
 directories-next = "2.0.0"
 futures = "0.3.5"
@@ -21,13 +17,13 @@ glib = "0.15.4"
 gtk = "0.15.4"
 hex = "0.4.2"
 hostname = "0.4.2"
-libp2p = { version = "0.44.0", features = [
-    "dns-async-std",
-    "websocket",
-    "mplex",
+libp2p = { version = "0.56.0", features = [
+    "tcp",
     "mdns",
-    "tcp-async-io",
     "noise",
+    "yamux",
+    "macros",
+    "tokio",
 ], default-features = false }
 log = "0.4.8"
 env_logger = "0.11.9"
@@ -36,12 +32,11 @@ pnet = "0.35.0"
 prost = "0.14.3"
 serde = { version = "1.0", features = ["derive"] }
 tempfile = "3.2.0"
-tokio = { version = "1.29.1", features = ["io-util", "macros"] }
+tokio = { version = "1.29.1", features = ["rt-multi-thread", "io-util", "macros", "fs", "sync", "time"] }
 tokio-util = { version = "0.7.3", features = ["compat"] }
 toml = "1.0.3"
 smallvec = "1.6.1"
-walkdir = "2.3.2"
-zeroize_derive = "1.1.1"
+
 rand_core = "0.6.2"
 
 [build-dependencies]

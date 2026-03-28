@@ -23,11 +23,12 @@ pub enum PeerEvent {
     PeersUpdated(CurrentPeers),
     WaitingForAnswer,
     TransferRejected,
-    TransferProgress((usize, usize, Direction)),
+    TransferProgress((usize, usize, Direction, Option<f64>)),
     TransferCompleted,
     FileCorrect(String, Payload),
     FileIncorrect,
     FileIncoming(String, String, usize, TransferType),
+    TransferFailed { file_name: String, reason: String },
     Error(String),
 }
 

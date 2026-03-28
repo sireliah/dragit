@@ -1,153 +1,82 @@
-use std::convert::TryFrom;
-use std::io::{Error, ErrorKind, Result as IOResult};
+use std::io::{Error, Result as IOResult};
 use std::path::Path;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
-use async_std::channel::Sender;
-use async_std::fs::{create_dir, create_dir_all};
-use async_std::io::BufReader;
-use async_std::task::{spawn, JoinHandle};
-use async_zip::error::ZipError;
-use async_zip::read::stream::ZipFileReader;
-use async_zip::write::ZipFileWriter;
-use async_zip::Compression;
-use async_zip::ZipEntryBuilder;
+use async_channel::Sender;
+use futures::io::BufReader;
 use futures::AsyncRead;
-use tokio::fs::File;
-use tokio::io::{copy_buf, duplex, BufReader as TokioBufReader, DuplexStream};
+use tokio::io::{duplex, DuplexStream};
+use tokio::task::{spawn, JoinHandle};
+use tokio_tar::{Archive, Builder};
 use tokio_util::compat::{Compat, FuturesAsyncReadCompatExt, TokioAsyncReadCompatExt};
-use walkdir::WalkDir;
+
+use crate::p2p::transfer::reader::ProgressReader;
 
 use crate::p2p::peer::Direction;
 use crate::p2p::util::{notify_progress, TSocketAlias};
 use crate::p2p::PeerEvent;
 
-const ZIP_BUFFER_SIZE: usize = 1024 * 64;
+/// Capacity of the duplex pipe between the tar builder task and the network sender.
+const DUPLEX_CHANNEL_SIZE: usize = 1024 * 512; // 512 KiB
 
-// Slower than Stored, but more doesn't cause any CRC32 check errors
-const DEFAULT_COMPRESSION: Compression = Compression::Deflate;
+/// Read buffer size used when opening individual source files.
+#[allow(dead_code)]
+const FILE_READ_BUFFER: usize = 1024 * 256; // 256 KiB
 
 pub type MaybeTaskHandle = Option<JoinHandle<Result<(), Error>>>;
 
-pub struct ZipStream {
+/// An `AsyncRead` that yields a tar archive of `source_path` produced on the
+/// fly in a background task.  The archive is written into the writer half of a
+/// `tokio::io::duplex` channel; this struct exposes the reader half.
+pub struct TarStream {
     reader: Compat<DuplexStream>,
     task_handle: MaybeTaskHandle,
 }
 
-impl ZipStream {
-    pub fn new(source_path: String) -> ZipStream {
-        let (reader, mut writer) = duplex(ZIP_BUFFER_SIZE);
+impl TarStream {
+    pub fn new(source_path: String) -> TarStream {
+        let (reader, writer) = duplex(DUPLEX_CHANNEL_SIZE);
 
         let task_handle = spawn(async move {
-            let mut zip = ZipFileWriter::new(&mut writer);
-            let base_path = Path::new(&source_path).parent();
+            let src = Path::new(&source_path);
 
-            for entry in WalkDir::new(&source_path) {
-                let entry = entry?;
-                let file_path = entry.path();
-                debug!("{:?}", file_path);
+            // Use the directory's own name as the top-level entry inside the
+            // archive so the receiver unpacks into e.g. `test_dir/` rather
+            // than `.`.
+            let archive_name = src.file_name().map(Path::new).unwrap_or(src);
 
-                if !file_path.exists() {
-                    continue;
-                }
+            let mut builder = Builder::new(writer);
 
-                let rel_path = match base_path {
-                    Some(base) => file_path
-                        .strip_prefix(base)
-                        .map_err(|err| Error::new(ErrorKind::Other, err.to_string()))?,
-                    None => file_path,
-                };
-                let path_string = rel_path
-                    .to_str()
-                    .unwrap_or(&rel_path.to_string_lossy())
-                    .to_owned();
-                debug!("{:?}", rel_path);
+            // Store symlinks as symlink entries rather than following them.
+            // With follow_symlinks(true) (the default) a dangling symlink
+            // causes fs::metadata to return NotFound, which aborts the task
+            // before into_inner() can write the end-of-archive blocks,
+            // producing a truncated stream and a guaranteed MD5 mismatch.
+            builder.follow_symlinks(false);
 
-                // Only files and empty directories are supported for now. Symlinks are ignored.
-                if file_path.is_file() {
-                    if file_path.metadata()?.len() > 0 {
-                        debug!("Writing file: {}", path_string);
-                        Self::write_file(&mut zip, path_string, &file_path).await?;
-                    } else {
-                        debug!("Writing empty file: {}", path_string);
-                        Self::write_empty_file(&mut zip, path_string).await?;
-                    }
-                } else {
-                    if file_path.read_dir()?.next().is_none() {
-                        debug!("Writing empty directory: {}", path_string);
-                        Self::write_empty_dir(&mut zip, path_string).await?;
-                    }
-                }
-            }
-            zip.close().await.map_err(|err| zip_error(err))?;
+            builder.append_dir_all(archive_name, src).await?;
+
+            // Flush and write the two 512-byte end-of-archive blocks.
+            builder.into_inner().await?;
+
             Ok::<(), Error>(())
         });
-        let compat = reader.compat();
-        ZipStream {
-            reader: compat,
+
+        TarStream {
+            reader: reader.compat(),
             task_handle: Some(task_handle),
         }
     }
 
-    async fn write_empty_dir(
-        zip: &mut ZipFileWriter<&mut DuplexStream>,
-        rel_path: String,
-    ) -> Result<(), Error> {
-        let dir_path = if cfg!(windows) {
-            format!(r"{}\", rel_path)
-        } else {
-            format!("{}/", rel_path)
-        };
-
-        let opts = ZipEntryBuilder::new(dir_path, DEFAULT_COMPRESSION);
-        zip.write_entry_stream(opts)
-            .await
-            .map_err(|err| zip_error(err))?;
-        Ok(())
-    }
-
-    async fn write_empty_file(
-        zip: &mut ZipFileWriter<&mut DuplexStream>,
-        rel_path: String,
-    ) -> Result<(), Error> {
-        // Trying to unzip the empty file at the reader end makes tokio error with "early eof".
-        // This might be an async-zip bug, but as a workaround it's enough to create empty entry here.
-        let opts = ZipEntryBuilder::new(rel_path, DEFAULT_COMPRESSION);
-        zip.write_entry_whole(opts, &[])
-            .await
-            .map_err(|err| zip_error(err))?;
-        Ok(())
-    }
-
-    async fn write_file(
-        zip: &mut ZipFileWriter<&mut DuplexStream>,
-        rel_path: String,
-        file_path: &Path,
-    ) -> Result<(), Error> {
-        let opts = ZipEntryBuilder::new(rel_path, DEFAULT_COMPRESSION);
-
-        let mut entry_writer = zip
-            .write_entry_stream(opts)
-            .await
-            .map_err(|err| zip_error(err))?;
-
-        let mut file = File::open(&file_path).await?;
-        let mut buf_reader = TokioBufReader::with_capacity(ZIP_BUFFER_SIZE, &mut file);
-        copy_buf(&mut buf_reader, &mut entry_writer).await?;
-        entry_writer.close().await.map_err(|err| zip_error(err))?;
-        Ok(())
-    }
-
+    /// Removes and returns the background task handle so the caller can await
+    /// it for error propagation after the stream has been fully consumed.
     pub fn take_handle(&mut self) -> MaybeTaskHandle {
-        let handle = &mut self.task_handle;
-        let inner = handle.take();
-        self.task_handle = None;
-        inner
+        self.task_handle.take()
     }
 }
 
-impl AsyncRead for ZipStream {
+impl AsyncRead for TarStream {
     fn poll_read(
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
@@ -157,136 +86,46 @@ impl AsyncRead for ZipStream {
     }
 }
 
-fn zip_error(err: ZipError) -> Error {
-    Error::new(ErrorKind::Other, format!("Zip error: {}", err.to_string()))
-}
-
-fn is_zip_dir(path: &Path) -> bool {
-    let path = path.to_string_lossy();
-    path.ends_with(r"\") || path.ends_with("/")
-}
-
-#[cfg(not(windows))]
-fn normalize_zip_path(path_name: &str) -> String {
-    path_name.replace(r"\\", "/").replace(r"\", "/")
-}
-
-#[cfg(windows)]
-fn normalize_zip_path(path_name: &str) -> String {
-    // Windows recognizes both back and forward slashes
-    path_name.to_string()
-}
-
-pub async fn unzip_stream(
+/// Receives a tar byte stream from `buf_reader` and unpacks it into the
+/// directory that is the parent of `target_path`.
+///
+/// Returns a `JoinHandle` that resolves to the number of bytes announced by
+/// the sender (used by callers for consistency; the actual byte count is not
+/// re-measured here since `unpack_in` manages I/O internally).
+pub async fn untar_stream(
     target_path: String,
     buf_reader: BufReader<impl TSocketAlias + 'static>,
     sender_queue: Sender<PeerEvent>,
     size: usize,
     direction: Direction,
 ) -> Result<JoinHandle<Result<usize, Error>>, Error> {
-    let mut compat_reader = buf_reader.compat();
-
     let task = spawn(async move {
         let base_path = Path::new(&target_path)
             .parent()
             .unwrap_or(Path::new(&target_path));
-        let mut zip = ZipFileReader::new(&mut compat_reader);
-        let mut counter: usize = 0;
-        while !zip.finished() {
-            if let Some(reader) = zip.entry_reader().await.map_err(|err| zip_error(err))? {
-                let entry = reader.entry();
-                let path = base_path.join(normalize_zip_path(entry.filename()));
-                if let Some(parent) = path.parent() {
-                    create_dir_all(parent).await?;
-                }
-                debug!("Unzip: {:?}", path.to_string_lossy());
 
-                if is_zip_dir(&path) {
-                    debug!("Creating dir {:?}", path);
-                    if let Err(e) = create_dir(path).await {
-                        warn!("Could not create directory: {:?}", e);
-                    };
-                } else {
-                    debug!("Creating file {:?}", path);
-                    let mut file = File::create(&path).await?;
-                    reader
-                        .copy_to_end_crc(&mut file, ZIP_BUFFER_SIZE)
-                        .await
-                        .map_err(|err| zip_error(err))?;
+        // Stack ProgressReader on top of the socket reader (still in
+        // futures::AsyncRead land) so that every byte tokio-tar reads fires
+        // throttled TransferProgress events to the UI.  The compat() call
+        // then crosses the boundary into tokio::AsyncRead, which Archive
+        // requires.
+        let progress_reader =
+            ProgressReader::new(buf_reader, size, sender_queue.clone(), direction.clone());
+        let compat_reader = progress_reader.compat();
 
-                    let meta = file.metadata().await?;
-                    let file_size = usize::try_from(meta.len())
-                        .map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?;
-                    counter += file_size;
+        let mut archive = Archive::new(compat_reader);
 
-                    // Limit progress events, because they seem to be to be inefficient at gtk level
-                    if (file_size as f32 / size as f32) > 0.01 {
-                        notify_progress(&sender_queue, counter, size, &direction).await;
-                    }
-                }
-            }
-        }
-        Ok::<usize, Error>(counter)
+        // Extracts into base_path, creating the top-level directory
+        // (the archive name) automatically and handling files, empty
+        // directories, and symlinks natively.
+        archive.unpack(base_path).await?;
+
+        // Final 100 % event — ensures the bar reaches the end even if the
+        // last ProgressReader notification fired slightly below 100 %.
+        notify_progress(&sender_queue, size, size, &direction, None).await;
+
+        Ok::<usize, Error>(size)
     });
+
     Ok(task)
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::p2p::transfer::directory::{is_zip_dir, normalize_zip_path};
-    use std::path::Path;
-
-    #[cfg(not(windows))]
-    #[test]
-    fn test_is_zip_dir_unix() {
-        let path = Path::new("this/is/a/directory/");
-        assert!(is_zip_dir(path));
-    }
-
-    #[cfg(not(windows))]
-    #[test]
-    fn test_is_not_zip_dir_unix() {
-        let path = Path::new("this/is/a/file.txt");
-        assert!(!is_zip_dir(path));
-    }
-
-    #[test]
-    fn test_is_zip_dir_windows() {
-        let path = Path::new(r"this\is\directory\");
-        assert!(is_zip_dir(path));
-    }
-
-    #[test]
-    fn test_is_zip_dir_windows_double() {
-        let path = Path::new(r"this\\is\\directory\\");
-        assert!(is_zip_dir(path));
-    }
-
-    #[test]
-    fn test_is_not_zip_dir_windows() {
-        let path = Path::new(r"this\is\file.txt");
-        assert!(!is_zip_dir(path));
-    }
-
-    #[cfg(not(windows))]
-    #[test]
-    fn test_normalize_zip_path_windows_to_unix() {
-        assert_eq!(
-            normalize_zip_path(r"dir\\subdir\\file.txt"),
-            "dir/subdir/file.txt"
-        );
-        assert_eq!(
-            normalize_zip_path(r"dir\subdir\file.txt"),
-            "dir/subdir/file.txt"
-        );
-    }
-
-    #[cfg(windows)]
-    #[test]
-    fn test_normalize_zip_path_unix_to_windows() {
-        assert_eq!(
-            normalize_zip_path("dir/subdir/file.txt"),
-            "dir/subdir/file.txt"
-        );
-    }
 }
