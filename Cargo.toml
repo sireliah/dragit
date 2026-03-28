@@ -7,7 +7,7 @@ build = "build.rs"
 
 [dependencies]
 async-channel = "2.3.1"
-tokio-tar = "0.3"
+tokio-tar = "0.3.1"
 bytesize = "2.3.1"
 directories-next = "2.0.0"
 futures = "0.3.5"
@@ -27,7 +27,7 @@ libp2p = { version = "0.56.0", features = [
 ], default-features = false }
 log = "0.4.8"
 env_logger = "0.11.9"
-md-5 = "0.10.1"
+md-5 = "0.11.0"
 pnet = "0.35.0"
 prost = "0.14.3"
 serde = { version = "1.0", features = ["derive"] }
